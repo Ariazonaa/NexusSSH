@@ -1,0 +1,48 @@
+<Project>
+
+  <!--
+    Baut den Rust-Kern (backend/nexus-core) vor der App und legt nexus_core.dll neben die EXE.
+    Gebaut wird nur der Kern, nicht der Testserver – der kann gerade laufen und wäre dann gesperrt.
+    cargo entscheidet selbst, ob etwas neu zu bauen ist; das Zielverzeichnis liegt wie bin/obj außerhalb des Repos.
+    NexusCargoExe überschreibt den Pfad zu cargo, falls es nicht im PATH liegt.
+
+    Für Windows auf ARM (RuntimeIdentifier win-arm64) baut cargo für aarch64-pc-windows-msvc; die DLL liegt dann in
+    einem Unterordner mit dem Namen des Ziels. Das braucht `rustup target add aarch64-pc-windows-msvc`, die
+    ARM64-Werkzeuge von MSVC und clang (die Krypto-Bibliothek ring baut für dieses Ziel nur damit).
+  -->
+  <PropertyGroup>
+    <NexusCargoExe Condition="'$(NexusCargoExe)' == ''">cargo</NexusCargoExe>
+    <NexusBackendDir>$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)', '..', '..', 'backend'))</NexusBackendDir>
+    <NexusCargoTargetDir Condition="'$(NexusArtifactsRoot)' != ''">$(NexusArtifactsRoot)\cargo</NexusCargoTargetDir>
+    <NexusCargoTargetDir Condition="'$(NexusCargoTargetDir)' == ''">$(NexusBackendDir)target</NexusCargoTargetDir>
+    <NexusCargoProfileDir Condition="'$(Configuration)' == 'Release'">release</NexusCargoProfileDir>
+    <NexusCargoProfileDir Condition="'$(NexusCargoProfileDir)' == ''">debug</NexusCargoProfileDir>
+    <NexusCargoProfileArg Condition="'$(Configuration)' == 'Release'">--release</NexusCargoProfileArg>
+    <NexusCargoTarget Condition="'$(RuntimeIdentifier)' == 'win-arm64'">aarch64-pc-windows-msvc</NexusCargoTarget>
+    <NexusCargoTargetArg Condition="'$(NexusCargoTarget)' != ''">--target $(NexusCargoTarget)</NexusCargoTargetArg>
+    <NexusCargoOutDir Condition="'$(NexusCargoTarget)' != ''">$(NexusCargoTargetDir)\$(NexusCargoTarget)\$(NexusCargoProfileDir)</NexusCargoOutDir>
+    <NexusCargoOutDir Condition="'$(NexusCargoOutDir)' == ''">$(NexusCargoTargetDir)\$(NexusCargoProfileDir)</NexusCargoOutDir>
+    <NexusCoreDll>$(NexusCargoOutDir)\nexus_core.dll</NexusCoreDll>
+  </PropertyGroup>
+
+  <Target Name="BuildRustCore" BeforeTargets="AssignTargetPaths" Condition="'$(DesignTimeBuild)' != 'true'">
+    <Exec
+      Command="&quot;$(NexusCargoExe)&quot; build --locked -p nexus-core --manifest-path &quot;$(NexusBackendDir)Cargo.toml&quot; --target-dir &quot;$(NexusCargoTargetDir)&quot; $(NexusCargoProfileArg) $(NexusCargoTargetArg)"
+      IgnoreStandardErrorWarningFormat="true"
+      ContinueOnError="true">
+      <Output TaskParameter="ExitCode" PropertyName="NexusCargoExitCode" />
+    </Exec>
+    <Error
+      Condition="'$(NexusCargoExitCode)' != '0' And '$(NexusCargoTarget)' != ''"
+      Text="Der Rust-Kern ließ sich für $(NexusCargoTarget) nicht bauen (cargo, Exit-Code $(NexusCargoExitCode)). Dafür braucht es: rustup target add $(NexusCargoTarget), die ARM64-Werkzeuge von MSVC und clang (LLVM)." />
+    <Error
+      Condition="'$(NexusCargoExitCode)' != '0'"
+      Text="Der Rust-Kern ließ sich nicht bauen (cargo, Exit-Code $(NexusCargoExitCode)). Ist Rust installiert und cargo im PATH? Sonst die Property NexusCargoExe auf cargo.exe setzen." />
+    <Error Condition="!Exists('$(NexusCoreDll)')" Text="cargo lief durch, aber $(NexusCoreDll) fehlt." />
+
+    <ItemGroup>
+      <None Include="$(NexusCoreDll)" Link="nexus_core.dll" Visible="false" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    </ItemGroup>
+  </Target>
+
+</Project>

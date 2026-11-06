@@ -1,0 +1,9 @@
+/target/
+**/*.rs.bk
+*.profraw
+.idea/
+.vscode/
+/fuzz/artifacts/
+/fuzz/corpus/
+/fuzz/coverage/
+/fuzz/target/

@@ -1,0 +1,202 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Die Protokolle eines Servers – eine Karte über den Bereichen, wie der Betrachter (ShellViewModel.Logs): das
+    Journal von systemd nach Zeitraum, Schwere und Einheit, oder die letzten Zeilen einer Datei unter /var/log.
+    Was hier steht, ist Ausgabe des Servers: reiner Text, nichts davon wird ausgeführt oder als Markup gelesen.
+-->
+<UserControl
+    x:Class="NexusSSH.App.Views.ServerLogsView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:app="using:NexusSSH.App"
+    xmlns:loc="using:NexusSSH.App.Localization"
+    xmlns:models="using:NexusSSH.Core.Models"
+    KeyDown="OnKeyDown">
+
+    <Grid Style="{StaticResource CardStyle}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Grid
+            Padding="24,10,10,10"
+            BorderBrush="{ThemeResource CardBorderBrush}"
+            BorderThickness="0,0,0,1"
+            ColumnSpacing="12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel VerticalAlignment="Center" Spacing="0">
+                <TextBlock
+                    x:Name="TitleText"
+                    Style="{StaticResource BodyStrongTextBlockStyle}"
+                    TextTrimming="CharacterEllipsis" />
+                <TextBlock
+                    x:Name="StatusText"
+                    AutomationProperties.LiveSetting="Polite"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    TextTrimming="CharacterEllipsis" />
+            </StackPanel>
+            <StackPanel
+                Grid.Column="1"
+                VerticalAlignment="Center"
+                Orientation="Horizontal"
+                Spacing="4">
+                <ProgressRing
+                    x:Name="BusyRing"
+                    Width="16"
+                    Height="16"
+                    Margin="0,0,6,0"
+                    IsActive="False" />
+                <Button
+                    x:Name="LogsRefreshButton"
+                    AutomationProperties.Name="{loc:Loc Key=LogsRefresh}"
+                    Click="OnRefreshClicked"
+                    Style="{StaticResource IconButtonStyle}"
+                    ToolTipService.ToolTip="{loc:Loc Key=LogsRefresh}">
+                    <FontIcon FontSize="14" Glyph="&#xE72C;" />
+                </Button>
+                <Button
+                    x:Name="LogsCopyButton"
+                    AutomationProperties.Name="{loc:Loc Key=LogsCopy}"
+                    Click="OnCopyClicked"
+                    Style="{StaticResource IconButtonStyle}"
+                    ToolTipService.ToolTip="{loc:Loc Key=LogsCopy}">
+                    <FontIcon FontSize="14" Glyph="&#xE8C8;" />
+                </Button>
+                <Button
+                    x:Name="LogsCloseButton"
+                    AutomationProperties.Name="{loc:Loc Key=LogsClose}"
+                    Click="OnCloseClicked"
+                    Style="{StaticResource IconButtonStyle}"
+                    ToolTipService.ToolTip="{loc:Loc Key=LogsClose}">
+                    <FontIcon FontSize="12" Glyph="&#xE711;" />
+                </Button>
+            </StackPanel>
+        </Grid>
+
+        <!--  Die Auswahl: Zeitraum, Schwere und Einheit gelten nur dem Journal und verschwinden bei einer Datei  -->
+        <StackPanel
+            Grid.Row="1"
+            Padding="24,10,16,10"
+            Orientation="Horizontal"
+            Spacing="8">
+            <ComboBox
+                x:Name="LogsSourceBox"
+                Width="230"
+                AutomationProperties.Name="{loc:Loc Key=LogsSource}"
+                SelectionChanged="OnSourceChanged"
+                ToolTipService.ToolTip="{loc:Loc Key=LogsSource}" />
+            <ComboBox
+                x:Name="LogsSinceBox"
+                Width="170"
+                AutomationProperties.Name="{loc:Loc Key=LogsSince}"
+                SelectionChanged="OnChoiceChanged"
+                ToolTipService.ToolTip="{loc:Loc Key=LogsSince}" />
+            <ComboBox
+                x:Name="LogsPriorityBox"
+                Width="170"
+                AutomationProperties.Name="{loc:Loc Key=LogsPriority}"
+                SelectionChanged="OnChoiceChanged"
+                ToolTipService.ToolTip="{loc:Loc Key=LogsPriority}" />
+            <TextBox
+                x:Name="LogsUnitBox"
+                Width="210"
+                AutomationProperties.Name="{loc:Loc Key=LogsUnit}"
+                IsSpellCheckEnabled="False"
+                KeyDown="OnUnitKeyDown"
+                LostFocus="OnUnitLostFocus"
+                PlaceholderText="{loc:Loc Key=LogsUnit}" />
+            <ComboBox
+                x:Name="LogsLinesBox"
+                Width="100"
+                AutomationProperties.Name="{loc:Loc Key=LogsLines}"
+                SelectionChanged="OnChoiceChanged"
+                ToolTipService.ToolTip="{loc:Loc Key=LogsLines}" />
+            <TextBox
+                x:Name="LogsFilterBox"
+                Width="220"
+                AutomationProperties.Name="{loc:Loc Key=LogsFilter}"
+                IsSpellCheckEnabled="False"
+                PlaceholderText="{loc:Loc Key=LogsFilter}"
+                TextChanged="OnFilterChanged" />
+        </StackPanel>
+
+        <!--  Hinweise: warum nichts da ist, oder dass das Konto nur einen Teil sieht  -->
+        <StackPanel Grid.Row="2" Padding="24,0,16,8" Spacing="4">
+            <TextBlock
+                x:Name="LimitedText"
+                Foreground="{ThemeResource SystemFillColorCautionBrush}"
+                Style="{StaticResource CaptionTextBlockStyle}"
+                Text="{loc:Loc Key=LogsLimited}"
+                TextWrapping="Wrap"
+                Visibility="Collapsed" />
+            <TextBlock
+                x:Name="ErrorText"
+                AutomationProperties.LiveSetting="Polite"
+                IsTextSelectionEnabled="True"
+                TextWrapping="Wrap"
+                Visibility="Collapsed" />
+        </StackPanel>
+
+        <!--  Die Zeilen, älteste oben; die Farbe zeigt die Schwere, der Name der Zeile nennt sie Screenreadern  -->
+        <ListView
+            x:Name="LinesList"
+            Grid.Row="3"
+            Padding="12,0,8,8"
+            AutomationProperties.Name="{loc:Loc Key=LogsLinesName}"
+            SelectionMode="Extended">
+            <ListView.ItemContainerStyle>
+                <Style BasedOn="{StaticResource DefaultListViewItemStyle}" TargetType="ListViewItem">
+                    <Setter Property="MinHeight" Value="22" />
+                    <Setter Property="Padding" Value="12,1,8,1" />
+                </Style>
+            </ListView.ItemContainerStyle>
+            <ListView.ItemTemplate>
+                <DataTemplate x:DataType="models:ServerLogLine">
+                    <Grid ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock
+                            FontFamily="Cascadia Mono, Consolas"
+                            FontSize="12"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Text="{x:Bind TimeText}"
+                            Visibility="{x:Bind HasTime}" />
+                        <TextBlock
+                            Grid.Column="1"
+                            Width="130"
+                            FontFamily="Cascadia Mono, Consolas"
+                            FontSize="12"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Text="{x:Bind Source}"
+                            TextTrimming="CharacterEllipsis"
+                            Visibility="{x:Bind HasSource}" />
+                        <TextBlock
+                            Grid.Column="2"
+                            FontFamily="Cascadia Mono, Consolas"
+                            FontSize="12"
+                            Foreground="{x:Bind app:Ui.LogBrush(Level)}"
+                            Text="{x:Bind Message}"
+                            TextWrapping="Wrap" />
+                    </Grid>
+                </DataTemplate>
+            </ListView.ItemTemplate>
+        </ListView>
+        <TextBlock
+            x:Name="EmptyText"
+            Grid.Row="3"
+            Margin="24,12,24,0"
+            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+            Text="{loc:Loc Key=LogsEmpty}"
+            Visibility="Collapsed" />
+    </Grid>
+</UserControl>

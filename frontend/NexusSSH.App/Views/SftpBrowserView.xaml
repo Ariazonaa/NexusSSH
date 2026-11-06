@@ -1,0 +1,738 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Linke Seite: Dateien der aktiven Sitzung, schlicht wie bei MobaXterm (Entwurf A): oben
+    sechs Symbole und „⋯“ mit der Ansicht und dem Seltenen, darunter der Pfad als Feld und „Terminal-Ordner folgen“,
+    dann die Liste. Was wo steht, sagt FileMenus (Core).
+-->
+<UserControl
+    x:Class="NexusSSH.App.Views.SftpBrowserView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:app="using:NexusSSH.App"
+    xmlns:controls="using:NexusSSH.App.Controls"
+    xmlns:core="using:NexusSSH.Core"
+    xmlns:loc="using:NexusSSH.App.Localization"
+    xmlns:models="using:NexusSSH.Core.Models"
+    xmlns:views="using:NexusSSH.App.Views"
+    xmlns:vm="using:NexusSSH.Core.ViewModels">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.ThemeDictionaries>
+                <!--  Im Kontrastdesign gelten die Farben von WinUI: Dort zeigt die Farbe für Hervorgehobenes die Auswahl  -->
+                <ResourceDictionary x:Key="HighContrast" />
+                <ResourceDictionary x:Key="Default">
+                    <!--  Zeilen wie im Entwurf: Auswahl als dunkelblaue Fläche ohne Strich davor, beim Überfahren etwas heller  -->
+                    <StaticResource x:Key="ListViewItemBackgroundPointerOver" ResourceKey="RowHoverBrush" />
+                    <StaticResource x:Key="ListViewItemBackgroundPressed" ResourceKey="RowHoverBrush" />
+                    <StaticResource x:Key="ListViewItemBackgroundSelected" ResourceKey="ListSelectedBrush" />
+                    <StaticResource x:Key="ListViewItemBackgroundSelectedPointerOver" ResourceKey="ListSelectedBrush" />
+                    <StaticResource x:Key="ListViewItemBackgroundSelectedPressed" ResourceKey="ListSelectedBrush" />
+                    <x:Boolean x:Key="ListViewItemSelectionIndicatorVisualEnabled">False</x:Boolean>
+                    <!--  Felder (Pfad, Filter, Suche): dunkle Fläche mit Rand, auch mit dem Fokus  -->
+                    <StaticResource x:Key="TextControlBackground" ResourceKey="FieldBackgroundBrush" />
+                    <StaticResource x:Key="TextControlBackgroundPointerOver" ResourceKey="FieldBackgroundBrush" />
+                    <StaticResource x:Key="TextControlBackgroundFocused" ResourceKey="FieldBackgroundBrush" />
+                    <StaticResource x:Key="TextControlBorderBrush" ResourceKey="FieldBorderBrush" />
+                    <StaticResource x:Key="TextControlBorderBrushPointerOver" ResourceKey="FieldBorderBrush" />
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+
+            <!--  Symbolknopf der Zeile oben: 32 × 30, Rundung 6, ohne Fläche  -->
+            <Style
+                x:Key="FileToolButtonStyle"
+                BasedOn="{StaticResource SubtleButtonStyle}"
+                TargetType="Button">
+                <Setter Property="Width" Value="32" />
+                <Setter Property="Height" Value="30" />
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="CornerRadius" Value="6" />
+                <Setter Property="Foreground" Value="{ThemeResource IconBrush}" />
+            </Style>
+
+            <!--
+                Zeile der Liste: 28 hoch, Auswahl mit Rundung 6 (die Vorlage von WinUI nimmt die Rundung aus der
+                Ressource, nicht vom Element) und etwas eingerückt vom Rand der Karte; der Text steht 12 vom Rand wie
+                die Spaltenköpfe.
+            -->
+            <CornerRadius x:Key="ListViewItemCornerRadius">6</CornerRadius>
+            <Style
+                x:Key="FileRowStyle"
+                BasedOn="{StaticResource DefaultListViewItemStyle}"
+                TargetType="ListViewItem">
+                <Setter Property="MinHeight" Value="28" />
+                <Setter Property="Padding" Value="12,0" />
+                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            </Style>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <Grid Style="{StaticResource CardStyle}">
+        <!--  Ohne aktive Sitzung ist der Bereich ausgeblendet (ShellViewModel.ShowsFiles)  -->
+        <Grid Visibility="{x:Bind Shell.HasActiveSession, Mode=OneWay}">
+
+            <!--  Ohne Verbindung oder ohne SFTP auf dem Server bleibt der Bereich leer und sagt, warum  -->
+            <StackPanel
+                Margin="14,12,12,0"
+                Spacing="8"
+                Visibility="{x:Bind Shell.ActiveSession.Files.IsUnavailable, Mode=OneWay, FallbackValue=Collapsed}">
+                <TextBlock
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Text="{x:Bind Shell.ActiveSession.Files.UnavailableText, Mode=OneWay, FallbackValue=''}"
+                    TextWrapping="Wrap" />
+                <!--  Unter einem Mosh-Terminal ist die SSH-Verbindung weg: Der Kern versucht es von selbst, hier auch gleich  -->
+                <Button
+                    HorizontalAlignment="Left"
+                    Command="{x:Bind Shell.ActiveSession.RelinkCommand, Mode=OneWay}"
+                    Content="{loc:Loc Key=MoshRelink}"
+                    Visibility="{x:Bind Shell.ActiveSession.IsLinkLost, Mode=OneWay, FallbackValue=Collapsed}" />
+            </StackPanel>
+
+            <Grid Visibility="{x:Bind Shell.ActiveSession.Files.IsAvailable, Mode=OneWay, FallbackValue=Collapsed}">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition x:Name="TreeRow" Height="180" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <!--
+                    Symbolzeile (FileMenus.Toolbar): sechs Knöpfe ohne Text, rechts „⋯“. Das Tag nennt die Aktion –
+                    der Selbsttest prüft daran, dass jede da ist.
+                -->
+                <Grid
+                    x:Name="Toolbar"
+                    Padding="8,8,8,6"
+                    ColumnSpacing="2">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Button
+                        x:Name="UpButton"
+                        AutomationProperties.Name="{loc:Loc Key=Up}"
+                        Command="{x:Bind Shell.ActiveSession.Files.GoUpCommand, Mode=OneWay}"
+                        Style="{StaticResource FileToolButtonStyle}"
+                        Tag="Up"
+                        ToolTipService.ToolTip="{loc:Loc Key=Up}">
+                        <controls:LineIcon x:Name="UpIcon" Kind="Up" />
+                    </Button>
+                    <Button
+                        Grid.Column="1"
+                        AutomationProperties.Name="{loc:Loc Key=Refresh}"
+                        Command="{x:Bind Shell.ActiveSession.Files.RefreshCommand, Mode=OneWay}"
+                        Style="{StaticResource FileToolButtonStyle}"
+                        Tag="Refresh"
+                        ToolTipService.ToolTip="{loc:Loc Key=Refresh}">
+                        <controls:LineIcon Kind="Refresh" />
+                    </Button>
+                    <Button
+                        x:Name="DownloadButton"
+                        Grid.Column="2"
+                        AutomationProperties.Name="{loc:Loc Key=Download}"
+                        Click="OnDownloadClicked"
+                        IsEnabled="False"
+                        Style="{StaticResource FileToolButtonStyle}"
+                        Tag="Download"
+                        ToolTipService.ToolTip="{loc:Loc Key=Download}">
+                        <controls:LineIcon Kind="Download" />
+                    </Button>
+                    <Button
+                        x:Name="UploadButton"
+                        Grid.Column="3"
+                        AutomationProperties.Name="{loc:Loc Key=Upload}"
+                        Click="OnUploadClicked"
+                        Style="{StaticResource FileToolButtonStyle}"
+                        Tag="Upload"
+                        ToolTipService.ToolTip="{loc:Loc Key=Upload}">
+                        <controls:LineIcon Kind="Upload" />
+                    </Button>
+                    <Button
+                        Grid.Column="4"
+                        AutomationProperties.Name="{loc:Loc Key=NewFolder}"
+                        Click="OnNewFolderClicked"
+                        Style="{StaticResource FileToolButtonStyle}"
+                        Tag="NewFolder"
+                        ToolTipService.ToolTip="{loc:Loc Key=NewFolder}">
+                        <controls:LineIcon Kind="FolderPlus" />
+                    </Button>
+                    <Button
+                        x:Name="DeleteButton"
+                        Grid.Column="5"
+                        AutomationProperties.Name="{loc:Loc Key=Delete}"
+                        Click="OnDeleteClicked"
+                        IsEnabled="False"
+                        Style="{StaticResource FileToolButtonStyle}"
+                        Tag="Delete"
+                        ToolTipService.ToolTip="{loc:Loc Key=Delete}">
+                        <controls:LineIcon Kind="Delete" />
+                    </Button>
+
+                    <!--  „⋯“: Ansicht, Lesezeichen, das Seltene (FileMenus.ViewMenu); Lesezeichen entstehen beim Öffnen  -->
+                    <Button
+                        x:Name="ViewMenuButton"
+                        Grid.Column="7"
+                        AutomationProperties.Name="{loc:Loc Key=SftpViewMenu}"
+                        Style="{StaticResource FileToolButtonStyle}"
+                        ToolTipService.ToolTip="{loc:Loc Key=SftpViewMenu}">
+                        <TextBlock
+                            Margin="0,-4,0,0"
+                            CharacterSpacing="60"
+                            FontSize="16"
+                            Text="⋯" />
+                        <Button.Flyout>
+                            <MenuFlyout
+                                x:Name="ViewMenu"
+                                Opening="OnViewMenuOpening"
+                                Placement="BottomEdgeAlignedRight">
+                                <MenuFlyoutItem
+                                    Command="{x:Bind Shell.ActiveSession.Files.GoBackCommand, Mode=OneWay}"
+                                    KeyboardAcceleratorTextOverride="Alt+Left"
+                                    Tag="Back"
+                                    Text="{loc:Loc Key=Back}" />
+                                <MenuFlyoutItem
+                                    Command="{x:Bind Shell.ActiveSession.Files.GoForwardCommand, Mode=OneWay}"
+                                    KeyboardAcceleratorTextOverride="Alt+Right"
+                                    Tag="Forward"
+                                    Text="{loc:Loc Key=Forward}" />
+                                <MenuFlyoutSeparator />
+                                <MenuFlyoutItem
+                                    Click="OnSearchFilesClicked"
+                                    Tag="Search"
+                                    Text="{loc:Loc Key=SearchFiles}" />
+                                <!--  Gemerkte Ordner dieses Servers; entsteht bei jedem Öffnen neu (FillBookmarks)  -->
+                                <MenuFlyoutSubItem
+                                    x:Name="BookmarksMenu"
+                                    Tag="Bookmarks"
+                                    Text="{loc:Loc Key=Bookmarks}" />
+                                <MenuFlyoutSeparator />
+                                <MenuFlyoutItem
+                                    Click="OnUploadFolderClicked"
+                                    Tag="UploadFolder"
+                                    Text="{loc:Loc Key=UploadFolder}" />
+                                <MenuFlyoutItem
+                                    Click="OnNewFileClicked"
+                                    Tag="NewFile"
+                                    Text="{loc:Loc Key=NewFile}" />
+                                <MenuFlyoutSeparator />
+                                <ToggleMenuFlyoutItem
+                                    IsChecked="{x:Bind Shell.ShowHiddenFiles, Mode=TwoWay}"
+                                    Tag="ShowHidden"
+                                    Text="{loc:Loc Key=ShowHiddenFiles}" />
+                                <ToggleMenuFlyoutItem
+                                    IsChecked="{x:Bind Shell.ShowFilePermissions, Mode=TwoWay}"
+                                    Tag="ShowPermissions"
+                                    Text="{loc:Loc Key=ShowFilePermissions}" />
+                                <ToggleMenuFlyoutItem
+                                    IsChecked="{x:Bind Shell.ShowFileDates, Mode=TwoWay}"
+                                    Tag="ShowDates"
+                                    Text="{loc:Loc Key=ShowFileDates}" />
+                                <ToggleMenuFlyoutItem
+                                    IsChecked="{x:Bind Shell.ShowDirectoryTree, Mode=TwoWay}"
+                                    Tag="ShowTree"
+                                    Text="{loc:Loc Key=ShowDirectoryTree}" />
+                                <!--  Genau eine der drei Sortierungen ist gewählt (ShowSort), Ordner stehen immer vorn  -->
+                                <MenuFlyoutSubItem Tag="Sort" Text="{loc:Loc Key=SftpSort}">
+                                    <RadioMenuFlyoutItem
+                                        x:Name="SortNameItem"
+                                        Click="OnSortClicked"
+                                        GroupName="FileSort"
+                                        Tag="Name"
+                                        Text="{loc:Loc Key=SortFilesByName}" />
+                                    <RadioMenuFlyoutItem
+                                        x:Name="SortSizeItem"
+                                        Click="OnSortClicked"
+                                        GroupName="FileSort"
+                                        Tag="Size"
+                                        Text="{loc:Loc Key=SortFilesBySize}" />
+                                    <RadioMenuFlyoutItem
+                                        x:Name="SortModifiedItem"
+                                        Click="OnSortClicked"
+                                        GroupName="FileSort"
+                                        Tag="Modified"
+                                        Text="{loc:Loc Key=SortFilesByDate}" />
+                                    <MenuFlyoutSeparator />
+                                    <ToggleMenuFlyoutItem IsChecked="{x:Bind Shell.FileSortDescending, Mode=TwoWay}" Text="{loc:Loc Key=SortFilesDescending}" />
+                                </MenuFlyoutSubItem>
+                                <MenuFlyoutSeparator />
+                                <!--  Derselbe Eintrag führt hinein und heraus (ShowRoot); nur mit einer POSIX-Shell am Server  -->
+                                <MenuFlyoutItem
+                                    x:Name="RootMenuItem"
+                                    Click="OnRootClicked"
+                                    Tag="Root"
+                                    Text="{loc:Loc Key=RootEnter}" />
+                                <!--  Zurück holt ihn der Knopf der Titelleiste; in „Zwei Spalten“ gibt es den Eintrag nicht (Embedded)  -->
+                                <MenuFlyoutItem
+                                    x:Name="HideMenuItem"
+                                    Click="OnHideClicked"
+                                    Tag="HidePane"
+                                    Text="{loc:Loc Key=HidePane}" />
+                            </MenuFlyout>
+                        </Button.Flyout>
+                    </Button>
+                </Grid>
+
+                <!--
+                    Der Pfad als Feld (Enter wechselt, Esc verwirft), dahinter die Marke für „als root“. Darunter
+                    „Terminal-Ordner folgen“: nur, wenn die Shell ihren Ordner meldet (OSC 7) – die App tippt dafür
+                    nichts in die Shell. Ausgegraut sagt der Tooltip, warum; ein ausgegrautes Kästchen zeigt selbst
+                    keinen, deshalb steht er am Rahmen darum.
+                -->
+                <StackPanel
+                    Grid.Row="1"
+                    Padding="8,0,8,8"
+                    Spacing="6">
+                    <Grid ColumnSpacing="6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox
+                            x:Name="PathBox"
+                            MinHeight="28"
+                            Padding="8,4,8,3"
+                            AutomationProperties.Name="{loc:Loc Key=EditPath}"
+                            BorderThickness="1"
+                            CornerRadius="6"
+                            FontFamily="Cascadia Mono, Consolas"
+                            FontSize="12"
+                            IsSpellCheckEnabled="False"
+                            KeyDown="OnPathBoxKeyDown"
+                            LostFocus="OnPathBoxLostFocus" />
+                        <!--  Als root (sudo): steht da, solange alles hier mit dessen Rechten geschieht  -->
+                        <Border
+                            x:Name="RootBadge"
+                            Grid.Column="1"
+                            Padding="7,1,7,2"
+                            VerticalAlignment="Center"
+                            AutomationProperties.Name="{loc:Loc Key=RootBadgeTip}"
+                            Background="{ThemeResource SystemFillColorCriticalBackgroundBrush}"
+                            CornerRadius="8"
+                            ToolTipService.ToolTip="{loc:Loc Key=RootBadgeTip}"
+                            Visibility="{x:Bind Shell.ActiveSession.Files.IsRoot, Mode=OneWay, FallbackValue=Collapsed}">
+                            <TextBlock
+                                Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Text="{loc:Loc Key=RootBadge}" />
+                        </Border>
+                    </Grid>
+                    <StackPanel Orientation="Horizontal" Spacing="2">
+                        <Border
+                            Background="Transparent"
+                            ToolTipService.ToolTip="{x:Bind FollowTip(Shell.ActiveSession.CanFollowShell), Mode=OneWay, FallbackValue=''}">
+                            <CheckBox
+                                x:Name="FollowBox"
+                                MinHeight="24"
+                                AutomationProperties.HelpText="{x:Bind FollowTip(Shell.ActiveSession.CanFollowShell), Mode=OneWay, FallbackValue=''}"
+                                Content="{loc:Loc Key=SftpFollowShell}"
+                                IsChecked="{x:Bind Shell.ActiveSession.FollowsShell, Mode=TwoWay, FallbackValue=False}"
+                                IsEnabled="{x:Bind Shell.ActiveSession.CanFollowShell, Mode=OneWay, FallbackValue=False}"
+                                Style="{StaticResource SmallCheckBoxStyle}" />
+                        </Border>
+                        <!--  Meldet die Shell nichts: die Hilfe mit der Zeile für die .bashrc  -->
+                        <HyperlinkButton
+                            Padding="4,0"
+                            VerticalAlignment="Center"
+                            Click="OnFollowHowClicked"
+                            Content="{loc:Loc Key=SftpFollowShellHow}"
+                            FontSize="12"
+                            Visibility="{x:Bind app:Ui.CollapsedIf(Shell.ActiveSession.CanFollowShell), Mode=OneWay, FallbackValue=Collapsed}" />
+                    </StackPanel>
+                </StackPanel>
+
+                <!--  Was zuletzt schiefging  -->
+                <InfoBar
+                    Grid.Row="2"
+                    Margin="8,0,8,6"
+                    Closed="OnErrorClosed"
+                    IsOpen="{x:Bind Shell.ActiveSession.Files.HasError, Mode=OneWay, FallbackValue=False}"
+                    Message="{x:Bind Shell.ActiveSession.Files.Error, Mode=OneWay}"
+                    Severity="Error" />
+
+                <!--
+                    Baum der Verzeichnisse: lädt beim Aufklappen nach, folgt der Liste (aufgeklappt bis zum angezeigten
+                    Verzeichnis, das markiert ist) und wechselt beim Anklicken dorthin.
+                -->
+                <TreeView
+                    x:Name="DirectoryTree"
+                    Grid.Row="3"
+                    Padding="0,2,0,4"
+                    AutomationProperties.Name="{loc:Loc Key=DirectoryTree}"
+                    CanDragItems="False"
+                    CanReorderItems="False"
+                    Expanding="OnTreeExpanding"
+                    ItemInvoked="OnTreeItemInvoked"
+                    ItemsSource="{x:Bind Shell.ActiveSession.Files.TreeRoots, Mode=OneWay}"
+                    SelectionMode="Single">
+                    <TreeView.Resources>
+                        <!--  So dicht wie die Zeilen der Liste darunter  -->
+                        <x:Double x:Key="TreeViewItemMinHeight">28</x:Double>
+                    </TreeView.Resources>
+                    <TreeView.ItemTemplate>
+                        <DataTemplate x:DataType="vm:DirectoryNode">
+                            <TreeViewItem
+                                AutomationProperties.Name="{x:Bind DisplayName}"
+                                HasUnrealizedChildren="{x:Bind HasUnrealizedChildren, Mode=OneWay}"
+                                IsExpanded="{x:Bind IsExpanded, Mode=TwoWay}"
+                                ItemsSource="{x:Bind Children}">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <controls:LineIcon
+                                        VerticalAlignment="Center"
+                                        Filled="True"
+                                        Foreground="{ThemeResource FolderIconBrush}"
+                                        Kind="Folder"
+                                        Size="14" />
+                                    <TextBlock
+                                        VerticalAlignment="Center"
+                                        FontSize="13"
+                                        Text="{x:Bind DisplayName}"
+                                        TextTrimming="CharacterEllipsis" />
+                                </StackPanel>
+                            </TreeViewItem>
+                        </DataTemplate>
+                    </TreeView.ItemTemplate>
+                </TreeView>
+
+                <controls:PaneSplitter
+                    x:Name="TreeSplitter"
+                    Grid.Row="4"
+                    AutomationProperties.Name="{loc:Loc Key=DirectoryTree}"
+                    Orientation="Horizontal" />
+
+                <!--
+                    Spaltenköpfe (klein und grau wie im Entwurf): Klick sortiert, Rechtsklick wählt die Spalten, am
+                    linken Rand einer Spalte zieht man ihre Breite. Sie stehen wie die Spalten der Zeilenvorlage unten
+                    (Platz für das Symbol, Name, dann die übrigen); Rand und Abstand wie bei den Zeilen (4 + 8).
+                -->
+                <Border
+                    Grid.Row="5"
+                    Padding="12,4"
+                    BorderBrush="{ThemeResource CardBorderBrush}"
+                    BorderThickness="0,1,0,0">
+                    <Border.Resources>
+                        <ResourceDictionary>
+                            <ResourceDictionary.ThemeDictionaries>
+                                <ResourceDictionary x:Key="HighContrast" />
+                                <ResourceDictionary x:Key="Default">
+                                    <StaticResource x:Key="HyperlinkButtonForeground" ResourceKey="MutedTextBrush" />
+                                </ResourceDictionary>
+                            </ResourceDictionary.ThemeDictionaries>
+                            <x:Double x:Key="ControlContentThemeFontSize">11</x:Double>
+                        </ResourceDictionary>
+                    </Border.Resources>
+                    <controls:FileColumnHeaders
+                        x:Name="ColumnHeaders"
+                        FontSize="11"
+                        LeadWidth="14"
+                        Spacing="8" />
+                </Border>
+
+                <!--
+                    Dateien aus dem Explorer lassen sich auf die Liste ziehen: Upload ins angezeigte Verzeichnis.
+                    Und umgekehrt: Einträge der Liste lassen sich in den Explorer ziehen. Das Kontextmenü entsteht im
+                    Code aus FileMenus (BuildContextMenu).
+                -->
+                <ListView
+                    x:Name="EntryList"
+                    Grid.Row="6"
+                    Padding="0,0,0,8"
+                    AllowDrop="True"
+                    AutomationProperties.Name="{loc:Loc Key=SftpBrowser}"
+                    CanDragItems="True"
+                    CharacterReceived="OnEntryCharacterReceived"
+                    DoubleTapped="OnEntryDoubleTapped"
+                    DragItemsStarting="OnDragItemsStarting"
+                    DragOver="OnDragOver"
+                    Drop="OnDrop"
+                    ItemContainerStyle="{StaticResource FileRowStyle}"
+                    ItemsSource="{x:Bind Shell.ActiveSession.Files.Entries, Mode=OneWay}"
+                    KeyDown="OnEntryKeyDown"
+                    RightTapped="OnEntryRightTapped"
+                    SelectionChanged="OnSelectionChanged"
+                    SelectionMode="Extended">
+                    <ListView.ItemTemplate>
+                        <DataTemplate x:DataType="models:RemoteEntry">
+                            <Grid ToolTipService.ToolTip="{x:Bind core:Format.DateAndTime(Modified)}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="14" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <!--
+                                    Die Spalten rechts vom Namen sind wählbar und verstellbar (Spaltenköpfe, FileColumns).
+                                    Die Breite steht am Text, nicht an der Spalte: Ausgeblendet nimmt er keinen Platz.
+                                    Breite und Sichtbarkeit liest jede Zeile beim Entstehen (Ui.RemoteColumn…, die Zahl ist
+                                    der Wert von FileColumn, auch im Tag); nach einer Änderung ziehen die gebauten Zeilen
+                                    an Ort und Stelle nach (Ui.ApplyColumns), die Liste bleibt unberührt.
+                                -->
+                                <TextBlock
+                                    Grid.Column="3"
+                                    Width="{x:Bind app:Ui.RemoteColumnWidth(2)}"
+                                    Margin="8,0,0,0"
+                                    VerticalAlignment="Center"
+                                    Foreground="{ThemeResource SecondaryTextBrush}"
+                                    Style="{StaticResource CaptionTextBlockStyle}"
+                                    Tag="2"
+                                    Text="{x:Bind core:Format.DateAndTime(Modified)}"
+                                    TextTrimming="CharacterEllipsis"
+                                    Visibility="{x:Bind app:Ui.RemoteColumnVisibility(2)}" />
+                                <TextBlock
+                                    Grid.Column="4"
+                                    Width="{x:Bind app:Ui.RemoteColumnWidth(3)}"
+                                    Margin="8,0,0,0"
+                                    VerticalAlignment="Center"
+                                    FontFamily="Cascadia Mono, Consolas"
+                                    FontSize="11"
+                                    Foreground="{ThemeResource SecondaryTextBrush}"
+                                    Tag="3"
+                                    Text="{x:Bind core:Format.ModeText(Permissions, IsDirectory, IsLink)}"
+                                    TextTrimming="CharacterEllipsis"
+                                    Visibility="{x:Bind app:Ui.RemoteColumnVisibility(3)}" />
+                                <TextBlock
+                                    Grid.Column="5"
+                                    Width="{x:Bind app:Ui.RemoteColumnWidth(4)}"
+                                    Margin="8,0,0,0"
+                                    VerticalAlignment="Center"
+                                    Foreground="{ThemeResource SecondaryTextBrush}"
+                                    Style="{StaticResource CaptionTextBlockStyle}"
+                                    Tag="4"
+                                    Text="{x:Bind Owner}"
+                                    TextTrimming="CharacterEllipsis"
+                                    Visibility="{x:Bind app:Ui.RemoteColumnVisibility(4)}" />
+                                <TextBlock
+                                    Grid.Column="6"
+                                    Width="{x:Bind app:Ui.RemoteColumnWidth(5)}"
+                                    Margin="8,0,0,0"
+                                    VerticalAlignment="Center"
+                                    Foreground="{ThemeResource SecondaryTextBrush}"
+                                    Style="{StaticResource CaptionTextBlockStyle}"
+                                    Tag="5"
+                                    Text="{x:Bind Group}"
+                                    TextTrimming="CharacterEllipsis"
+                                    Visibility="{x:Bind app:Ui.RemoteColumnVisibility(5)}" />
+                                <TextBlock
+                                    Grid.Column="7"
+                                    Width="{x:Bind app:Ui.RemoteColumnWidth(6)}"
+                                    Margin="8,0,0,0"
+                                    VerticalAlignment="Center"
+                                    Foreground="{ThemeResource SecondaryTextBrush}"
+                                    Style="{StaticResource CaptionTextBlockStyle}"
+                                    Tag="6"
+                                    Text="{x:Bind TypeText}"
+                                    TextTrimming="CharacterEllipsis"
+                                    Visibility="{x:Bind app:Ui.RemoteColumnVisibility(6)}" />
+                                <!--
+                                    Symbol: Ordner gefüllt gelb, Datei als grauer Umriss (Entwurf A); Links, Pipes und
+                                    Links ins Leere behalten ihr eigenes Zeichen.
+                                -->
+                                <controls:LineIcon
+                                    VerticalAlignment="Center"
+                                    Filled="True"
+                                    Foreground="{ThemeResource FolderIconBrush}"
+                                    Kind="Folder"
+                                    Size="14"
+                                    Visibility="{x:Bind views:SftpBrowserView.FolderIconVisibility(IsDirectory, IsLink, IsSpecial)}" />
+                                <controls:LineIcon
+                                    VerticalAlignment="Center"
+                                    Foreground="{ThemeResource SecondaryTextBrush}"
+                                    Kind="File"
+                                    Size="14"
+                                    Visibility="{x:Bind views:SftpBrowserView.FileIconVisibility(IsDirectory, IsLink, IsSpecial)}" />
+                                <FontIcon
+                                    AutomationProperties.Name="{x:Bind app:Ui.DanglingTip(IsDangling)}"
+                                    FontSize="14"
+                                    Foreground="{ThemeResource SecondaryTextBrush}"
+                                    Glyph="{x:Bind app:Ui.EntryGlyph(IsDirectory, IsLink, IsSpecial, IsDangling)}"
+                                    ToolTipService.ToolTip="{x:Bind app:Ui.DanglingTip(IsDangling)}"
+                                    Visibility="{x:Bind views:SftpBrowserView.GlyphVisibility(IsLink, IsSpecial)}" />
+                                <!--
+                                    Bei einem Link steht sein Ziel gedimmt hinter dem Namen (RemoteEntry.LinkText, leer,
+                                    wo die Liste es nicht nennt). Alles ein Text mit mehreren Runs: Gekürzt wird mit „…“
+                                    am Ende, der Name steht vorn und bleibt am längsten.
+                                -->
+                                <TextBlock
+                                    Grid.Column="1"
+                                    Margin="8,0,0,0"
+                                    VerticalAlignment="Center"
+                                    FontSize="13"
+                                    TextTrimming="CharacterEllipsis"><Run Text="{x:Bind DisplayName}" /><Run Text="  " /><Run Foreground="{ThemeResource SecondaryTextBrush}" Text="{x:Bind LinkText}" /></TextBlock>
+                                <TextBlock
+                                    Grid.Column="2"
+                                    Width="{x:Bind app:Ui.RemoteColumnWidth(1)}"
+                                    Margin="8,0,0,0"
+                                    VerticalAlignment="Center"
+                                    FontSize="13"
+                                    Foreground="{ThemeResource SecondaryTextBrush}"
+                                    Tag="1"
+                                    Text="{x:Bind core:Format.FileSize(Size, IsDirectory)}"
+                                    TextAlignment="Right"
+                                    TextTrimming="CharacterEllipsis"
+                                    Visibility="{x:Bind app:Ui.RemoteColumnVisibility(1)}" />
+                            </Grid>
+                        </DataTemplate>
+                    </ListView.ItemTemplate>
+                </ListView>
+
+                <TextBlock
+                    Grid.Row="6"
+                    Margin="24"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Top"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    IsHitTestVisible="False"
+                    Text="{loc:Loc Key=EmptyFolder}"
+                    Visibility="{x:Bind Shell.ActiveSession.Files.IsEmpty, Mode=OneWay, FallbackValue=Collapsed}" />
+
+                <!--
+                    Suche auf dem Server: liegt über Liste und Fußzeile. Enter sucht, Esc schließt; ein Klick auf
+                    einen Treffer wechselt in dessen Ordner und wählt ihn in der Liste aus.
+                -->
+                <Grid
+                    Grid.Row="5"
+                    Grid.RowSpan="3"
+                    Background="{ThemeResource CardBackgroundBrush}"
+                    Canvas.ZIndex="1"
+                    Visibility="{x:Bind Shell.ActiveSession.Files.IsSearchOpen, Mode=OneWay, FallbackValue=Collapsed}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <Grid
+                        Padding="12,8,6,4"
+                        BorderBrush="{ThemeResource CardBorderBrush}"
+                        BorderThickness="0,1,0,0"
+                        ColumnSpacing="4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox
+                            x:Name="SearchFilesBox"
+                            AutomationProperties.Name="{loc:Loc Key=SearchFiles}"
+                            CornerRadius="6"
+                            IsSpellCheckEnabled="False"
+                            KeyDown="OnSearchFilesKeyDown"
+                            PlaceholderText="{loc:Loc Key=SearchFilesPlaceholder}"
+                            Text="{x:Bind Shell.ActiveSession.Files.SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                            TextChanged="OnSearchFilesTextChanged" />
+                        <Button
+                            Grid.Column="1"
+                            AutomationProperties.Name="{loc:Loc Key=FindClose}"
+                            Click="OnSearchFilesClosed"
+                            Style="{StaticResource IconButtonStyle}"
+                            ToolTipService.ToolTip="{loc:Loc Key=FindClose}">
+                            <FontIcon FontSize="12" Glyph="&#xE711;" />
+                        </Button>
+                    </Grid>
+                    <Grid Grid.Row="1" Padding="14,2,14,6">
+                        <TextBlock
+                            AutomationProperties.LiveSetting="Polite"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Text="{x:Bind Shell.ActiveSession.Files.SearchStatus, Mode=OneWay}"
+                            TextWrapping="Wrap" />
+                        <ProgressBar
+                            VerticalAlignment="Bottom"
+                            IsIndeterminate="True"
+                            Visibility="{x:Bind Shell.ActiveSession.Files.IsSearching, Mode=OneWay, FallbackValue=Collapsed}" />
+                    </Grid>
+                    <ListView
+                        x:Name="HitList"
+                        Grid.Row="2"
+                        Padding="0,0,0,8"
+                        AutomationProperties.Name="{loc:Loc Key=SearchFiles}"
+                        IsItemClickEnabled="True"
+                        ItemClick="OnHitClicked"
+                        ItemsSource="{x:Bind Shell.ActiveSession.Files.Hits, Mode=OneWay}"
+                        SelectionMode="None">
+                        <ListView.ItemContainerStyle>
+                            <Style BasedOn="{StaticResource DefaultListViewItemStyle}" TargetType="ListViewItem">
+                                <Setter Property="MinHeight" Value="40" />
+                                <Setter Property="Padding" Value="12,4" />
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                            </Style>
+                        </ListView.ItemContainerStyle>
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="vm:FileHit">
+                                <Grid ColumnSpacing="8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="14" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <FontIcon
+                                        FontSize="14"
+                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                        Glyph="{x:Bind app:Ui.EntryGlyph(IsDirectory, x:False, x:False, x:False)}" />
+                                    <StackPanel Grid.Column="1" Spacing="1">
+                                        <TextBlock Text="{x:Bind Name}" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock
+                                            Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                            Style="{StaticResource CaptionTextBlockStyle}"
+                                            Text="{x:Bind Location}"
+                                            TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                </Grid>
+
+                <!--
+                    Fußzeile: wie viele Einträge die Liste zeigt, daneben der Filter. Wer in der Liste tippt, springt
+                    zum Namen (OnEntryCharacterReceived); gefiltert wird mit Strg+F oder hier.
+
+                    Mit deckendem Hintergrund: Bei sehr vielen Einträgen (100 000) beschneidet WinUI die Liste
+                    unten nicht mehr, und ihre Zeilen stünden sonst mitten in der Fußzeile (gesehen am Bildschirm,
+                    2026-10-10; die Liste selbst ist richtig bemessen, und sie eigens zu beschneiden half nicht).
+                -->
+                <Grid
+                    Grid.Row="7"
+                    Padding="12,6,8,8"
+                    Background="{ThemeResource CardBackgroundBrush}"
+                    BorderBrush="{ThemeResource CardBorderBrush}"
+                    BorderThickness="0,1,0,0"
+                    ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock
+                        VerticalAlignment="Center"
+                        FontSize="11"
+                        Foreground="{ThemeResource MutedTextBrush}"
+                        Text="{x:Bind Shell.ActiveSession.Files.CountText, Mode=OneWay}"
+                        TextTrimming="CharacterEllipsis" />
+                    <TextBox
+                        x:Name="FilterBox"
+                        Grid.Column="1"
+                        Width="150"
+                        MinHeight="28"
+                        Padding="8,4,6,3"
+                        AutomationProperties.Name="{loc:Loc Key=FilterFiles}"
+                        CornerRadius="6"
+                        FontSize="12"
+                        IsSpellCheckEnabled="False"
+                        KeyDown="OnFilterKeyDown"
+                        PlaceholderText="{loc:Loc Key=FilterFilesHint}"
+                        TextChanged="OnFilterTextChanged" />
+                </Grid>
+            </Grid>
+        </Grid>
+    </Grid>
+</UserControl>

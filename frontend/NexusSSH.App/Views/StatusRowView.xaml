@@ -1,0 +1,206 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Die Zeile unten im Fenster (Entwurf A, statt der Statusleiste): links die Auslastung des Servers der aktiven
+    Sitzung mit dem Kästchen, das die Messung abschaltet (ShellViewModel.MonitorBar), rechts „Details“, „Transfers n“
+    und – nur, wenn es welche gibt – „Probleme n“. Ist das Fenster schmal, fallen hinten ganze Werte weg (FitPanel),
+    statt dass einer mitten im Text endet. Eine eigene Ansicht, weil x:Bind im Fenster selbst erst nach dem Aktivieren
+    erscheint.
+-->
+<UserControl
+    x:Class="NexusSSH.App.Views.StatusRowView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:app="using:NexusSSH.App"
+    xmlns:controls="using:NexusSSH.App.Controls"
+    xmlns:loc="using:NexusSSH.App.Localization">
+
+    <UserControl.Resources>
+        <!--  Ein Balken 40 × 6, wie im Bild  -->
+        <Style x:Key="BarTrackStyle" TargetType="Grid">
+            <Setter Property="Width" Value="40" />
+            <Setter Property="Height" Value="6" />
+            <Setter Property="CornerRadius" Value="3" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Background" Value="{ThemeResource BarTrackBrush}" />
+        </Style>
+        <!--  Eine Pille 22 hoch mit Rundung 11; die Zahl hell und fett  -->
+        <Style
+            x:Key="PillButtonStyle"
+            BasedOn="{StaticResource SubtleButtonStyle}"
+            TargetType="Button">
+            <Setter Property="MinHeight" Value="22" />
+            <Setter Property="Padding" Value="10,1" />
+            <Setter Property="CornerRadius" Value="11" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Background" Value="{ThemeResource ToggleOnBrush}" />
+            <Setter Property="Foreground" Value="{ThemeResource IconBrush}" />
+        </Style>
+    </UserControl.Resources>
+
+    <Grid
+        MinHeight="34"
+        Padding="14,0"
+        ColumnSpacing="18">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+
+        <!--  Ohne Beschriftung, wie im Bild – der Name steht für eine Sprachausgabe und im Tooltip  -->
+        <CheckBox
+            x:Name="MonitorToggle"
+            MinWidth="0"
+            Padding="0"
+            VerticalAlignment="Center"
+            AutomationProperties.Name="{loc:Loc Key=MonitorBarToggle}"
+            IsChecked="{x:Bind Shell.MonitorBar, Mode=TwoWay}"
+            ToolTipService.ToolTip="{loc:Loc Key=MonitorBarToggle}"
+            Visibility="{x:Bind Shell.ShowsMonitorBar, Mode=OneWay}" />
+
+        <controls:FitPanel
+            x:Name="MonitorValues"
+            Grid.Column="1"
+            VerticalAlignment="Center"
+            Visibility="{x:Bind app:Ui.VisibleIfAll(Shell.ShowsMonitorBar, Shell.MonitorBar, Shell.ActiveSession.Inspector.HasMetrics), Mode=OneWay, FallbackValue=Collapsed}">
+            <StackPanel
+                Margin="0,0,18,0"
+                Orientation="Horizontal"
+                Spacing="6">
+                <TextBlock
+                    VerticalAlignment="Center"
+                    FontSize="12"
+                    Foreground="{ThemeResource IconBrush}"
+                    Text="{loc:Loc Key=Cpu}" />
+                <Grid Style="{StaticResource BarTrackStyle}">
+                    <Rectangle
+                        Width="{x:Bind app:Ui.BarWidth(Shell.ActiveSession.Inspector.CpuPercent), Mode=OneWay, FallbackValue=0}"
+                        HorizontalAlignment="Left"
+                        Fill="{ThemeResource DraftAccentBrush}" />
+                </Grid>
+                <TextBlock
+                    VerticalAlignment="Center"
+                    FontSize="12"
+                    Foreground="{ThemeResource IconBrush}"
+                    Text="{x:Bind Shell.ActiveSession.Inspector.CpuText, Mode=OneWay}" />
+            </StackPanel>
+            <StackPanel
+                Margin="0,0,18,0"
+                Orientation="Horizontal"
+                Spacing="6">
+                <TextBlock
+                    VerticalAlignment="Center"
+                    FontSize="12"
+                    Foreground="{ThemeResource IconBrush}"
+                    Text="{loc:Loc Key=Memory}" />
+                <Grid Style="{StaticResource BarTrackStyle}">
+                    <Rectangle
+                        Width="{x:Bind app:Ui.BarWidth(Shell.ActiveSession.Inspector.MemoryPercent), Mode=OneWay, FallbackValue=0}"
+                        HorizontalAlignment="Left"
+                        Fill="{ThemeResource DraftAccentBrush}" />
+                </Grid>
+                <TextBlock
+                    VerticalAlignment="Center"
+                    FontSize="12"
+                    Foreground="{ThemeResource IconBrush}"
+                    Text="{x:Bind Shell.ActiveSession.Inspector.MemoryShortText, Mode=OneWay}" />
+            </StackPanel>
+            <StackPanel
+                Margin="0,0,18,0"
+                Orientation="Horizontal"
+                Spacing="4">
+                <TextBlock
+                    FontSize="12"
+                    Foreground="{ThemeResource IconBrush}"
+                    Text="{loc:Loc Key=BarNetwork}" />
+                <TextBlock
+                    FontSize="12"
+                    Foreground="{ThemeResource IconBrush}"
+                    Text="{x:Bind Shell.ActiveSession.Inspector.NetworkShortText, Mode=OneWay}" />
+            </StackPanel>
+            <StackPanel
+                Margin="0,0,18,0"
+                Orientation="Horizontal"
+                Spacing="4">
+                <TextBlock
+                    FontSize="12"
+                    Foreground="{ThemeResource IconBrush}"
+                    Text="{loc:Loc Key=BarDisk}" />
+                <TextBlock
+                    FontSize="12"
+                    Foreground="{ThemeResource IconBrush}"
+                    Text="{x:Bind Shell.ActiveSession.Inspector.DiskShortText, Mode=OneWay}" />
+            </StackPanel>
+            <TextBlock
+                Margin="0,0,18,0"
+                FontSize="12"
+                Foreground="{ThemeResource IconBrush}"
+                Text="{x:Bind Shell.ActiveSession.Profile.User, Mode=OneWay}"
+                ToolTipService.ToolTip="{loc:Loc Key=ProfileUser}" />
+            <TextBlock
+                FontSize="12"
+                Foreground="{ThemeResource IconBrush}"
+                Text="{x:Bind Shell.ActiveSession.Inspector.UptimeSinceText, Mode=OneWay}" />
+        </controls:FitPanel>
+
+        <!--  Bevor es Werte gibt: „Messe …“ oder warum es keine gibt  -->
+        <TextBlock
+            x:Name="MonitorWaiting"
+            Grid.Column="1"
+            VerticalAlignment="Center"
+            FontSize="12"
+            Foreground="{ThemeResource SecondaryTextBrush}"
+            Text="{x:Bind app:Ui.MonitorBarWaiting(Shell.ActiveSession.Inspector.IsUnavailable, Shell.ActiveSession.Inspector.UnavailableText), Mode=OneWay}"
+            TextTrimming="CharacterEllipsis"
+            Visibility="{x:Bind app:Ui.VisibleIfAllWithout(Shell.ShowsMonitorBar, Shell.MonitorBar, Shell.ActiveSession.Inspector.HasMetrics), Mode=OneWay, FallbackValue=Collapsed}" />
+
+        <StackPanel
+            Grid.Column="2"
+            VerticalAlignment="Center"
+            Orientation="Horizontal"
+            Spacing="12">
+            <HyperlinkButton
+                x:Name="DetailsButton"
+                Padding="4,1"
+                VerticalAlignment="Center"
+                AutomationProperties.AutomationId="DetailsButton"
+                Click="OnDetailsClicked"
+                Content="{loc:Loc Key=Details}"
+                FontSize="12"
+                Foreground="{ThemeResource DraftAccentBrush}"
+                ToolTipService.ToolTip="{loc:Loc Key=DetailsHint}"
+                Visibility="{x:Bind Shell.CanShowDetails, Mode=OneWay}" />
+            <Button
+                x:Name="TransfersPill"
+                AutomationProperties.AutomationId="TransfersPill"
+                AutomationProperties.Name="{x:Bind app:Ui.TransfersName(Shell.TransferCount), Mode=OneWay}"
+                Click="OnTransfersClicked"
+                Style="{StaticResource PillButtonStyle}"
+                ToolTipService.ToolTip="{loc:Loc Key=StatusShowTransfers}">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <TextBlock Text="{loc:Loc Key=Transfers}" />
+                    <TextBlock
+                        FontWeight="Bold"
+                        Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                        Text="{x:Bind app:Ui.Number(Shell.TransferCount), Mode=OneWay}" />
+                </StackPanel>
+            </Button>
+            <Button
+                x:Name="ProblemsPill"
+                AutomationProperties.AutomationId="ProblemsPill"
+                AutomationProperties.Name="{x:Bind app:Ui.ProblemsName(Shell.ProblemCount), Mode=OneWay}"
+                Background="{ThemeResource ProblemBackgroundBrush}"
+                Click="OnProblemsClicked"
+                Foreground="{ThemeResource ProblemTextBrush}"
+                Style="{StaticResource PillButtonStyle}"
+                ToolTipService.ToolTip="{loc:Loc Key=StatusShowProblems}"
+                Visibility="{x:Bind Shell.HasProblems, Mode=OneWay}">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <TextBlock Text="{loc:Loc Key=Problems}" />
+                    <TextBlock FontWeight="Bold" Text="{x:Bind app:Ui.Number(Shell.ProblemCount), Mode=OneWay}" />
+                </StackPanel>
+            </Button>
+        </StackPanel>
+    </Grid>
+</UserControl>

@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Die Knöpfe rechts in der Titelleiste (Entwurf A): Dateien und Snippets ein/aus, das Menü zum Teilen, Suchen im
+    Terminal. Nur mit einer aktiven Sitzung – auf der Startseite gibt es nichts, worauf sie wirken. MainWindow meldet
+    die Fläche dem Fenster als Aussparung (UpdateTitleBarRegions).
+-->
+<UserControl
+    x:Class="NexusSSH.App.Views.TitleButtonsView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:NexusSSH.App.Controls"
+    xmlns:loc="using:NexusSSH.App.Localization">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.ThemeDictionaries>
+                <!--  Im Kontrastdesign gelten die Farben von WinUI: Dort zeigt die Farbe für Hervorgehobenes, was eingeschaltet ist  -->
+                <ResourceDictionary x:Key="HighContrast" />
+                <ResourceDictionary x:Key="Default">
+                    <!--  Eingeschaltet: Symbol in der Akzentfarbe auf hellerer Fläche, sonst grau auf nichts  -->
+                    <StaticResource x:Key="ToggleButtonBackground" ResourceKey="SubtleFillColorTransparentBrush" />
+                    <StaticResource x:Key="ToggleButtonBackgroundPointerOver" ResourceKey="SubtleFillColorSecondaryBrush" />
+                    <StaticResource x:Key="ToggleButtonBackgroundPressed" ResourceKey="SubtleFillColorTertiaryBrush" />
+                    <StaticResource x:Key="ToggleButtonBackgroundChecked" ResourceKey="ToggleOnBrush" />
+                    <StaticResource x:Key="ToggleButtonBackgroundCheckedPointerOver" ResourceKey="SubtleFillColorSecondaryBrush" />
+                    <StaticResource x:Key="ToggleButtonBackgroundCheckedPressed" ResourceKey="SubtleFillColorTertiaryBrush" />
+                    <StaticResource x:Key="ToggleButtonForeground" ResourceKey="TitleIconBrush" />
+                    <StaticResource x:Key="ToggleButtonForegroundPointerOver" ResourceKey="TitleIconBrush" />
+                    <StaticResource x:Key="ToggleButtonForegroundPressed" ResourceKey="TitleIconBrush" />
+                    <StaticResource x:Key="ToggleButtonForegroundChecked" ResourceKey="DraftAccentBrush" />
+                    <StaticResource x:Key="ToggleButtonForegroundCheckedPointerOver" ResourceKey="DraftAccentBrush" />
+                    <StaticResource x:Key="ToggleButtonForegroundCheckedPressed" ResourceKey="DraftAccentBrush" />
+                    <StaticResource x:Key="ToggleButtonBorderBrush" ResourceKey="SubtleFillColorTransparentBrush" />
+                    <StaticResource x:Key="ToggleButtonBorderBrushPointerOver" ResourceKey="SubtleFillColorTransparentBrush" />
+                    <StaticResource x:Key="ToggleButtonBorderBrushPressed" ResourceKey="SubtleFillColorTransparentBrush" />
+                    <StaticResource x:Key="ToggleButtonBorderBrushChecked" ResourceKey="SubtleFillColorTransparentBrush" />
+                    <StaticResource x:Key="ToggleButtonBorderBrushCheckedPointerOver" ResourceKey="SubtleFillColorTransparentBrush" />
+                    <StaticResource x:Key="ToggleButtonBorderBrushCheckedPressed" ResourceKey="SubtleFillColorTransparentBrush" />
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+
+            <!--  34 × 32, Rundung 8, Symbol 16 – wie im Bild  -->
+            <Style x:Key="TitleToggleStyle" TargetType="ToggleButton">
+                <Setter Property="Width" Value="34" />
+                <Setter Property="MinHeight" Value="32" />
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="CornerRadius" Value="8" />
+                <Setter Property="BorderThickness" Value="0" />
+            </Style>
+            <Style
+                x:Key="TitleButtonStyle"
+                BasedOn="{StaticResource SubtleButtonStyle}"
+                TargetType="Button">
+                <Setter Property="Width" Value="34" />
+                <Setter Property="MinHeight" Value="32" />
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="CornerRadius" Value="8" />
+                <Setter Property="Foreground" Value="{ThemeResource TitleIconBrush}" />
+            </Style>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <StackPanel
+        x:Name="Buttons"
+        VerticalAlignment="Center"
+        Orientation="Horizontal"
+        Spacing="2"
+        Visibility="{x:Bind Shell.HasActiveSession, Mode=OneWay}">
+        <ToggleButton
+            x:Name="FilesToggle"
+            AutomationProperties.AutomationId="FilesToggle"
+            AutomationProperties.Name="{loc:Loc Key=ToggleSftp}"
+            IsChecked="{x:Bind Shell.IsSftpVisible, Mode=TwoWay}"
+            Style="{StaticResource TitleToggleStyle}"
+            ToolTipService.ToolTip="{loc:Loc Key=ToggleSftp}">
+            <controls:LineIcon Kind="Folder" Size="16" />
+        </ToggleButton>
+        <ToggleButton
+            x:Name="SnippetsToggle"
+            AutomationProperties.AutomationId="SnippetsToggle"
+            AutomationProperties.Name="{loc:Loc Key=ToggleSnippets}"
+            IsChecked="{x:Bind Shell.IsSnippetsVisible, Mode=TwoWay}"
+            Style="{StaticResource TitleToggleStyle}"
+            ToolTipService.ToolTip="{loc:Loc Key=ToggleSnippets}">
+            <controls:LineIcon Kind="Snippets" Size="16" />
+        </ToggleButton>
+        <!--  Teilen, an alle senden, zwei Spalten: ein Menü, das beim Öffnen aus den Befehlen entsteht  -->
+        <Button
+            x:Name="SplitButton"
+            AutomationProperties.AutomationId="SplitButton"
+            AutomationProperties.Name="{loc:Loc Key=SplitMenu}"
+            Style="{StaticResource TitleButtonStyle}"
+            ToolTipService.ToolTip="{loc:Loc Key=SplitMenu}">
+            <controls:LineIcon Kind="Split" Size="16" />
+            <Button.Flyout>
+                <MenuFlyout x:Name="SplitMenu" Opening="OnSplitMenuOpening" Placement="BottomEdgeAlignedRight" />
+            </Button.Flyout>
+        </Button>
+        <Button
+            x:Name="FindButton"
+            AutomationProperties.AutomationId="FindButton"
+            AutomationProperties.Name="{loc:Loc Key=CmdFind}"
+            Click="OnFindClicked"
+            Style="{StaticResource TitleButtonStyle}"
+            ToolTipService.ToolTip="{loc:Loc Key=CmdFind}">
+            <controls:LineIcon Kind="Search" Size="16" />
+        </Button>
+    </StackPanel>
+</UserControl>

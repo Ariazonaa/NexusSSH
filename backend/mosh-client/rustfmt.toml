@@ -1,0 +1,3 @@
+# NexusSSH (P7): Die eingecheckte Bibliothek behält die Zeilenbreite ihres Originals (Vorgabe von rustfmt);
+# der Arbeitsbereich nimmt sonst 120 (backend/rustfmt.toml).
+max_width = 100

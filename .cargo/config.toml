@@ -1,0 +1,9 @@
+# Die C-Laufzeit von MSVC wird fest eingebunden: Sonst braucht nexus_core.dll die VCRUNTIME140.dll, und die
+# bringt ein frisches Windows nicht mit – der Kern ließe sich dort nicht laden (gefunden 2026-10-12 in der
+# Windows-Sandbox). Die Datei liegt hier und nicht unter backend/: cargo sucht sie vom Arbeitsverzeichnis aus
+# nach oben, und gebaut wird aus public/ und (über MSBuild) aus frontend/NexusSSH.App.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+[target.aarch64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

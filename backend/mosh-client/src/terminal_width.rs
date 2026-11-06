@@ -1,0 +1,37 @@
+//! Cell width used by validation and the authoritative screen.
+//!
+//! The compatibility overrides are the finite-width differences observed
+//! between `unicode-width` 0.2.2 (`cjk`) and the UTF-8 libc profile used by
+//! the stock 1.4.0 server fixture. They do not redefine unassigned scalars.
+
+use unicode_width::UnicodeWidthChar as _;
+
+pub(crate) fn width(character: char) -> Option<usize> {
+    let codepoint = character as u32;
+    if codepoint == 0x2d7f {
+        return Some(0);
+    }
+    if matches!(codepoint, 0x302e..=0x302f | 0x16ff0..=0x16ff1 | 0x3248..=0x324f) {
+        return Some(2);
+    }
+    if matches!(
+        codepoint,
+        0x00ad | 0x0605 | 0x070f | 0x0890..=0x0891 | 0x08e2
+            | 0x09be | 0x09d7 | 0x0b3e | 0x0b57 | 0x0bbe | 0x0bd7
+            | 0x0cc0 | 0x0cc2 | 0x0cc7..=0x0cc8 | 0x0cca..=0x0ccb
+            | 0x0cd5..=0x0cd6 | 0x0d3e | 0x0d4e | 0x0d57 | 0x0dcf
+            | 0x0ddf | 0x1715 | 0x1734 | 0x1b35 | 0x1b3b | 0x1b3d
+            | 0x1b43..=0x1b44 | 0x1baa | 0x1bf2..=0x1bf3 | 0x17a4
+            | 0x17d8 | 0xa8fa | 0xa953 | 0xa9c0 | 0xff9e..=0xff9f
+            | 0x111c0 | 0x111c2..=0x111c3 | 0x11235 | 0x1133e
+            | 0x1134d | 0x11357 | 0x113b8 | 0x113c2 | 0x113c5
+            | 0x113c7..=0x113c9 | 0x113cf | 0x113d1 | 0x114b0
+            | 0x114bd | 0x115af | 0x116b6 | 0x11930 | 0x1193d
+            | 0x1193f | 0x11941 | 0x11a84..=0x11a89 | 0x11d46
+            | 0x11f02 | 0x11f41 | 0x1d165..=0x1d166
+            | 0x1d16d..=0x1d172
+    ) {
+        return Some(1);
+    }
+    character.width()
+}

@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/frontend/">
+    <Project Path="frontend/NexusSSH.App/NexusSSH.App.csproj" />
+    <Project Path="frontend/NexusSSH.Core/NexusSSH.Core.csproj" />
+    <Project Path="frontend/NexusSSH.Core.Tests/NexusSSH.Core.Tests.csproj" />
+    <Project Path="frontend/NexusSSH.Mcp/NexusSSH.Mcp.csproj" />
+  </Folder>
+</Solution>

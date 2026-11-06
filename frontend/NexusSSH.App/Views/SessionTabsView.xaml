@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--  Die Reiter der Sitzungen als Pillen; sie stehen in der Titelleiste des Fensters.  -->
+<UserControl
+    x:Class="NexusSSH.App.Views.SessionTabsView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:app="using:NexusSSH.App"
+    xmlns:controls="using:NexusSSH.App.Controls"
+    xmlns:loc="using:NexusSSH.App.Localization"
+    xmlns:vm="using:NexusSSH.Core.ViewModels">
+
+    <!--
+        Die TabView ist nur die Reiterleiste: Die Reiter haben keinen eigenen Inhalt, das Terminal aller Sitzungen
+        liegt in der Mitte des Fensters. Umsortiert wird über Befehle (Strg+Umschalt+Bild↑/↓, Kontextmenü) oder
+        durch Ziehen. Die Reihenfolge gehört der Sitzungsliste im ViewModel; die TabView bekommt eine eigene
+        Liste (TabStrip), weil sie beim Ziehen den Reiter herausnimmt und wieder einsetzt.
+    -->
+    <TabView
+        x:Name="Tabs"
+        Padding="0"
+        AutomationProperties.Name="{loc:Loc Key=OpenTabsName}"
+        CloseButtonOverlayMode="OnPointerOver"
+        VerticalAlignment="Center"
+        AddTabButtonClick="OnAddTabClicked"
+        CanDragTabs="True"
+        CanReorderTabs="True"
+        TabDroppedOutside="OnTabDroppedOutside"
+        IsAddTabButtonVisible="True"
+        SelectionChanged="OnTabSelectionChanged"
+        TabCloseRequested="OnTabCloseRequested"
+        TabItemsSource="{x:Bind Strip.Tabs}"
+        TabWidthMode="SizeToContent">
+        <TabView.Resources>
+            <!--  Keine Linie unter den Reitern: Darunter liegt kein Inhalt, sondern das Fenster  -->
+            <ResourceDictionary>
+                <ResourceDictionary.ThemeDictionaries>
+                    <ResourceDictionary x:Key="Default">
+                        <!--  WinUI führt unter diesem Namen eine Farbe, keinen Pinsel  -->
+                        <Color x:Key="TabViewBorderBrush">Transparent</Color>
+                    </ResourceDictionary>
+                </ResourceDictionary.ThemeDictionaries>
+                <Thickness x:Key="TabViewItemAddButtonContainerPadding">4,0,0,3</Thickness>
+            </ResourceDictionary>
+        </TabView.Resources>
+        <!--
+            „Start“ steht fest vor den Reitern: die Startseite mit den Servern, ohne dass eine Sitzung schließt.
+            Gewählt ist er, wenn kein Tab aktiv ist (SessionTabsView.ShowHomeState).
+        -->
+        <TabView.TabStripHeader>
+            <Button
+                x:Name="HomeButton"
+                Width="36"
+                MinHeight="36"
+                Margin="0,0,8,0"
+                Padding="0"
+                AutomationProperties.Name="{loc:Loc Key=CmdHome}"
+                BorderThickness="0"
+                Click="OnHomeClicked"
+                CornerRadius="8"
+                Style="{StaticResource SubtleButtonStyle}"
+                ToolTipService.ToolTip="{loc:Loc Key=CmdHome}">
+                <controls:LineIcon Kind="Home" Size="18" />
+            </Button>
+        </TabView.TabStripHeader>
+        <TabView.TabItemTemplate>
+            <DataTemplate x:DataType="vm:SessionViewModel">
+                <TabViewItem
+                    AutomationProperties.Name="{x:Bind app:Ui.TabName(Title, RetryText), Mode=OneWay}"
+                    AutomationProperties.ItemStatus="{x:Bind StateLabel, Mode=OneWay}"
+                    ContextRequested="OnTabContextRequested"
+                    Header="{x:Bind}"
+                    IsClosable="{x:Bind app:Ui.Not(IsPinned), Mode=OneWay}"
+                    Style="{StaticResource PillTabStyle}"
+                    ToolTipService.ToolTip="{x:Bind app:Ui.TabTip(Profile.Address, StateLabel, RetryText), Mode=OneWay}">
+                    <TabViewItem.HeaderTemplate>
+                        <!--  Punkt = Zustand der Verbindung; das Symbol daneben zeigt, dass das Terminal geteilt ist  -->
+                        <DataTemplate x:DataType="vm:SessionViewModel">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <!--  Kennfarbe des Profils: ein schmaler Streifen vor dem Zustandspunkt  -->
+                                <Rectangle
+                                    Width="3"
+                                    Height="16"
+                                    VerticalAlignment="Center"
+                                    Fill="{x:Bind app:Ui.ProfileFill(Profile.ShownColor)}"
+                                    RadiusX="1.5"
+                                    RadiusY="1.5"
+                                    Visibility="{x:Bind app:Ui.HasProfileColor(Profile.ShownColor)}" />
+                                <!--  Angeheftet: steht links und hat kein ×  -->
+                                <FontIcon
+                                    AutomationProperties.Name="{loc:Loc Key=TabPinned}"
+                                    FontSize="11"
+                                    Glyph="&#xE718;"
+                                    Visibility="{x:Bind IsPinned, Mode=OneWay}" />
+                                <Ellipse
+                                    Width="8"
+                                    Height="8"
+                                    VerticalAlignment="Center"
+                                    Fill="{x:Bind app:Ui.TabDot(Inspector.IsOnline, IsBusy, RetryText), Mode=OneWay}" />
+                                <!--  Eine Shell dieses Rechners, kein Server  -->
+                                <FontIcon
+                                    AutomationProperties.Name="{loc:Loc Key=TabLocal}"
+                                    FontSize="12"
+                                    Glyph="&#xE756;"
+                                    Visibility="{x:Bind Profile.IsLocal, Mode=OneWay}" />
+                                <FontIcon
+                                    FontSize="12"
+                                    Glyph="&#xE90D;"
+                                    Visibility="{x:Bind IsSplit, Mode=OneWay}" />
+                                <!--  Das Terminal dieses Tabs steht in einem eigenen Fenster  -->
+                                <FontIcon
+                                    AutomationProperties.Name="{loc:Loc Key=TabDetached}"
+                                    FontSize="12"
+                                    Glyph="&#xE8A7;"
+                                    Visibility="{x:Bind IsDetached, Mode=OneWay}" />
+                                <!--  Im Terminal hat die Glocke geläutet, während ein anderer Tab vorn war  -->
+                                <FontIcon
+                                    AutomationProperties.Name="{loc:Loc Key=TabBell}"
+                                    FontSize="12"
+                                    Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                                    Glyph="&#xEA8F;"
+                                    Visibility="{x:Bind HasBell, Mode=OneWay}" />
+                                <!--  Die Ausgabe dieser Sitzung wird gerade mitgeschrieben  -->
+                                <FontIcon
+                                    FontSize="10"
+                                    Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                                    Glyph="&#xE7C8;"
+                                    Visibility="{x:Bind IsLogging, Mode=OneWay}" />
+                                <!--  Ein KI-Programm arbeitet gerade auf dieser Sitzung  -->
+                                <FontIcon
+                                    AutomationProperties.Name="{loc:Loc Key=McpTabTip}"
+                                    FontSize="12"
+                                    Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                                    Glyph="&#xE99A;"
+                                    ToolTipService.ToolTip="{loc:Loc Key=McpTabTip}"
+                                    Visibility="{x:Bind IsMcpActive, Mode=OneWay}" />
+                                <TextBlock VerticalAlignment="Center" Text="{x:Bind Title, Mode=OneWay}" />
+                                <!--  Das Terminal läuft über Mosh (UDP), nicht über den Kanal von SSH  -->
+                                <TextBlock
+                                    VerticalAlignment="Center"
+                                    AutomationProperties.Name="{loc:Loc Key=TabMosh}"
+                                    FontSize="10"
+                                    FontWeight="SemiBold"
+                                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                    Text="Mosh"
+                                    Visibility="{x:Bind IsMosh, Mode=OneWay}" />
+                                <!--  Die Verbindung riss, und die Sitzung versucht es von selbst neu: „2. Versuch in 8 s“  -->
+                                <TextBlock
+                                    VerticalAlignment="Center"
+                                    FontSize="11"
+                                    Foreground="{ThemeResource SystemFillColorCautionBrush}"
+                                    Text="{x:Bind RetryText, Mode=OneWay}"
+                                    Visibility="{x:Bind app:Ui.VisibleIfText(RetryText), Mode=OneWay}" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </TabViewItem.HeaderTemplate>
+                </TabViewItem>
+            </DataTemplate>
+        </TabView.TabItemTemplate>
+    </TabView>
+</UserControl>

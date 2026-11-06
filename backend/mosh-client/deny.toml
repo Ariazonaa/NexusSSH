@@ -1,0 +1,26 @@
+[advisories]
+unmaintained = "workspace"
+unsound = "all"
+ignore = []
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+deny = []
+skip = []
+skip-tree = []
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+
+[licenses]
+confidence-threshold = 0.93
+include-dev = true
+unused-allowed-license = "allow"
+allow = [
+    "Apache-2.0",
+    "MIT",
+    "Unicode-3.0",
+]
+exceptions = []

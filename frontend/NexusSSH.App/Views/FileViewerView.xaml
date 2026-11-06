@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Eine Datei des Servers ansehen und bearbeiten – eine Karte über den Bereichen, wie die Einstellungen
+    (ShellViewModel.Viewer). Text mit Farben und in Seiten, Hex, Bild, PDF; „Bearbeiten“ macht aus dem Text ein
+    Eingabefeld, „Speichern“ schreibt zurück. Was der Server liefert, bleibt Text bzw. Bild: nichts wird ausgeführt.
+-->
+<UserControl
+    x:Class="NexusSSH.App.Views.FileViewerView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:loc="using:NexusSSH.App.Localization"
+    KeyDown="OnKeyDown">
+
+    <Grid Style="{StaticResource CardStyle}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Grid
+            Padding="24,10,10,10"
+            BorderBrush="{ThemeResource CardBorderBrush}"
+            BorderThickness="0,0,0,1"
+            ColumnSpacing="12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel VerticalAlignment="Center" Spacing="0">
+                <TextBlock
+                    x:Name="TitleText"
+                    Style="{StaticResource BodyStrongTextBlockStyle}"
+                    TextTrimming="CharacterEllipsis" />
+                <TextBlock
+                    x:Name="StatusText"
+                    AutomationProperties.LiveSetting="Polite"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    TextTrimming="CharacterEllipsis" />
+            </StackPanel>
+            <StackPanel
+                Grid.Column="1"
+                VerticalAlignment="Center"
+                Orientation="Horizontal"
+                Spacing="4">
+                <ProgressRing
+                    x:Name="BusyRing"
+                    Width="16"
+                    Height="16"
+                    Margin="0,0,6,0"
+                    IsActive="False" />
+                <Button
+                    x:Name="BackButton"
+                    AutomationProperties.Name="{loc:Loc Key=ViewerBack}"
+                    Click="OnBackClicked"
+                    Style="{StaticResource IconButtonStyle}"
+                    ToolTipService.ToolTip="{loc:Loc Key=ViewerBack}">
+                    <FontIcon FontSize="14" Glyph="&#xE76B;" />
+                </Button>
+                <Button
+                    x:Name="OnButton"
+                    AutomationProperties.Name="{loc:Loc Key=ViewerOn}"
+                    Click="OnOnClicked"
+                    Style="{StaticResource IconButtonStyle}"
+                    ToolTipService.ToolTip="{loc:Loc Key=ViewerOn}">
+                    <FontIcon FontSize="14" Glyph="&#xE76C;" />
+                </Button>
+                <ToggleButton
+                    x:Name="HexButton"
+                    Click="OnHexClicked"
+                    Content="Hex" />
+                <Button
+                    x:Name="EditButton"
+                    Click="OnEditClicked"
+                    Content="{loc:Loc Key=Edit}" />
+                <Button
+                    x:Name="SaveButton"
+                    Click="OnSaveClicked"
+                    Content="{loc:Loc Key=Save}"
+                    Style="{StaticResource AccentButtonStyle}" />
+                <Button
+                    x:Name="LeaveButton"
+                    Click="OnLeaveClicked"
+                    Content="{loc:Loc Key=ViewerLeaveEditor}" />
+                <Button
+                    x:Name="CloseButton"
+                    AutomationProperties.Name="{loc:Loc Key=Close}"
+                    Click="OnCloseClicked"
+                    Style="{StaticResource IconButtonStyle}"
+                    ToolTipService.ToolTip="{loc:Loc Key=Close}">
+                    <FontIcon FontSize="14" Glyph="&#xE711;" />
+                </Button>
+            </StackPanel>
+        </Grid>
+
+        <!--  Text (mit Farben) und Hex: reiner Text in fester Breite  -->
+        <ScrollViewer
+            x:Name="TextScroll"
+            Grid.Row="1"
+            Padding="24,10,16,12"
+            HorizontalScrollBarVisibility="Auto"
+            VerticalScrollBarVisibility="Auto">
+            <RichTextBlock
+                x:Name="TextView"
+                AutomationProperties.Name="{loc:Loc Key=ViewerContent}"
+                FontFamily="Cascadia Mono, Consolas"
+                FontSize="13"
+                IsTextSelectionEnabled="True"
+                TextWrapping="NoWrap" />
+        </ScrollViewer>
+
+        <!--  Bild und PDF-Seite  -->
+        <Grid
+            x:Name="ImagePane"
+            Grid.Row="1"
+            Padding="24,10,16,12"
+            RowSpacing="8"
+            Visibility="Collapsed">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <StackPanel
+                x:Name="PagePanel"
+                HorizontalAlignment="Center"
+                Orientation="Horizontal"
+                Spacing="8">
+                <Button
+                    x:Name="PreviousPageButton"
+                    AutomationProperties.Name="{loc:Loc Key=ViewerPreviousPage}"
+                    Click="OnPreviousPageClicked"
+                    Style="{StaticResource IconButtonStyle}"
+                    ToolTipService.ToolTip="{loc:Loc Key=ViewerPreviousPage}">
+                    <FontIcon FontSize="14" Glyph="&#xE76B;" />
+                </Button>
+                <TextBlock x:Name="PageText" VerticalAlignment="Center" />
+                <Button
+                    x:Name="NextPageButton"
+                    AutomationProperties.Name="{loc:Loc Key=ViewerNextPage}"
+                    Click="OnNextPageClicked"
+                    Style="{StaticResource IconButtonStyle}"
+                    ToolTipService.ToolTip="{loc:Loc Key=ViewerNextPage}">
+                    <FontIcon FontSize="14" Glyph="&#xE76C;" />
+                </Button>
+            </StackPanel>
+            <ScrollViewer
+                Grid.Row="1"
+                HorizontalScrollBarVisibility="Auto"
+                VerticalScrollBarVisibility="Auto"
+                ZoomMode="Enabled">
+                <Image
+                    x:Name="ImageView"
+                    AutomationProperties.Name="{loc:Loc Key=ViewerContent}"
+                    Stretch="None" />
+            </ScrollViewer>
+        </Grid>
+
+        <!--  Editor: der Inhalt der Datei, unverändert  -->
+        <TextBox
+            x:Name="Editor"
+            Grid.Row="1"
+            Margin="16,10,16,12"
+            AcceptsReturn="True"
+            AutomationProperties.Name="{loc:Loc Key=ViewerContent}"
+            FontFamily="Cascadia Mono, Consolas"
+            FontSize="13"
+            IsSpellCheckEnabled="False"
+            ScrollViewer.HorizontalScrollBarVisibility="Auto"
+            ScrollViewer.VerticalScrollBarVisibility="Auto"
+            TextChanged="OnEditorTextChanged"
+            TextWrapping="NoWrap"
+            Visibility="Collapsed" />
+    </Grid>
+</UserControl>

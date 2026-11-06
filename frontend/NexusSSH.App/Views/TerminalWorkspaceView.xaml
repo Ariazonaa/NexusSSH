@@ -1,0 +1,196 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Mitte: die Karte mit dem Terminal. Eine Kopfzeile gibt es nicht mehr – Name und Zustand stehen am Reiter, die
+    Knöpfe in der Titelleiste (TitleButtonsView), Trennen und Behalten im Menü des Reiters und in der Palette.
+-->
+<UserControl
+    x:Class="NexusSSH.App.Views.TerminalWorkspaceView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:app="using:NexusSSH.App"
+    xmlns:controls="using:NexusSSH.App.Controls"
+    xmlns:loc="using:NexusSSH.App.Localization"
+    xmlns:views="using:NexusSSH.App.Views">
+
+    <!--  Die Karte hat die Farbe des Terminals – sie folgt dem Farbschema, und die runden Ecken bleiben sauber  -->
+    <Grid Background="{StaticResource TerminalBackgroundBrush}" Style="{StaticResource CardStyle}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!--  Der Aufbau der aktiven Sitzung läuft  -->
+        <ProgressBar
+            VerticalAlignment="Top"
+            AutomationProperties.Name="{x:Bind Shell.ActiveSession.StatusText, Mode=OneWay}"
+            IsIndeterminate="True"
+            Visibility="{x:Bind Shell.ActiveSession.IsBusy, Mode=OneWay, FallbackValue=Collapsed}" />
+
+        <!--  Suchleiste für das aktive Terminal: Enter = weiter, Umschalt+Enter = zurück, Esc schließt  -->
+        <Grid
+            x:Name="FindBar"
+            Grid.Row="1"
+            Padding="12,6,8,6"
+            Background="{ThemeResource CardBackgroundBrush}"
+            BorderBrush="{ThemeResource CardBorderBrush}"
+            BorderThickness="0,0,0,1"
+            ColumnSpacing="6"
+            Visibility="{x:Bind Shell.Search.IsOpen, Mode=OneWay}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" MaxWidth="360" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBox
+                x:Name="FindBox"
+                AutomationProperties.Name="{loc:Loc Key=CmdFind}"
+                IsSpellCheckEnabled="False"
+                KeyDown="OnFindBoxKeyDown"
+                PlaceholderText="{loc:Loc Key=FindPlaceholder}"
+                Text="{x:Bind Shell.Search.Query, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+            <ToggleButton
+                Grid.Column="1"
+                Height="32"
+                MinWidth="36"
+                Padding="6,0"
+                AutomationProperties.Name="{loc:Loc Key=FindMatchCase}"
+                Content="Aa"
+                IsChecked="{x:Bind Shell.Search.MatchCase, Mode=TwoWay}"
+                ToolTipService.ToolTip="{loc:Loc Key=FindMatchCase}" />
+            <Button
+                Grid.Column="2"
+                AutomationProperties.Name="{loc:Loc Key=FindPrevious}"
+                Click="OnFindPreviousClicked"
+                Style="{StaticResource IconButtonStyle}"
+                ToolTipService.ToolTip="{loc:Loc Key=FindPrevious}">
+                <FontIcon FontSize="12" Glyph="&#xE70E;" />
+            </Button>
+            <Button
+                Grid.Column="3"
+                AutomationProperties.Name="{loc:Loc Key=FindNext}"
+                Click="OnFindNextClicked"
+                Style="{StaticResource IconButtonStyle}"
+                ToolTipService.ToolTip="{loc:Loc Key=FindNext}">
+                <FontIcon FontSize="12" Glyph="&#xE70D;" />
+            </Button>
+            <TextBlock
+                Grid.Column="4"
+                Margin="6,0,0,0"
+                VerticalAlignment="Center"
+                AutomationProperties.LiveSetting="Polite"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                Text="{x:Bind Shell.Search.Summary, Mode=OneWay}" />
+            <Button
+                Grid.Column="6"
+                AutomationProperties.Name="{loc:Loc Key=FindClose}"
+                Click="OnFindCloseClicked"
+                Style="{StaticResource IconButtonStyle}"
+                ToolTipService.ToolTip="{loc:Loc Key=FindClose}">
+                <FontIcon FontSize="12" Glyph="&#xE711;" />
+            </Button>
+        </Grid>
+
+        <!--
+            Ein WebView lässt sich nicht rund beschneiden: Das Terminal hält deshalb Abstand zum Rand der Karte,
+            die dieselbe Farbe hat.
+        -->
+        <Grid Grid.Row="2" Padding="6,4,4,6">
+            <controls:TerminalHost x:Name="Terminal" Visibility="{x:Bind Shell.ShowsTerminal, Mode=OneWay}" />
+
+            <!--
+                Mosh hört seit einer Weile nichts vom Server: Das Terminal wartet und versucht es weiter. Die Leiste
+                liegt über dem Terminal, nicht darüber in einer eigenen Zeile: Würde das Terminal für sie kleiner,
+                verwürfe Mosh mit der neuen Größe die Vorhersage beim Tippen – gerade dann, wenn sie hilft (gefunden
+                2026-10-24 im Gast). Deckender Hintergrund, sonst stünde sie mitten im Text.
+            -->
+            <InfoBar
+                x:Name="MoshNoteBar"
+                MaxWidth="560"
+                Margin="0,2,10,0"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Top"
+                Background="{ThemeResource CardBackgroundBrush}"
+                BorderBrush="{ThemeResource CardBorderBrush}"
+                IsClosable="False"
+                IsOpen="{x:Bind Shell.ActiveSession.HasMoshNote, Mode=OneWay, FallbackValue=False}"
+                Message="{x:Bind Shell.ActiveSession.MoshNote, Mode=OneWay}"
+                Severity="Informational"
+                Visibility="{x:Bind Shell.ShowsTerminal, Mode=OneWay}" />
+
+            <!--
+                Die Verbindung ist zu Ende: warum, und der Weg zurück. Wie die Leiste für Mosh liegt sie über dem
+                Terminal, statt es kleiner zu machen – der Verlauf darunter bleibt, wie er war.
+            -->
+            <InfoBar
+                x:Name="ReconnectBar"
+                Margin="10,2,10,0"
+                VerticalAlignment="Top"
+                Background="{ThemeResource CardBackgroundBrush}"
+                BorderBrush="{ThemeResource CardBorderBrush}"
+                IsClosable="False"
+                IsOpen="{x:Bind Shell.ActiveSession.IsClosed, Mode=OneWay, FallbackValue=False}"
+                Message="{x:Bind Shell.ActiveSession.StatusText, Mode=OneWay}"
+                Severity="Warning"
+                Visibility="{x:Bind Shell.ShowsTerminal, Mode=OneWay}">
+                <InfoBar.ActionButton>
+                    <Button
+                        x:Name="ReconnectButton"
+                        Click="OnReconnectClicked"
+                        Content="{loc:Loc Key=Reconnect}" />
+                </InfoBar.ActionButton>
+            </InfoBar>
+
+            <!--
+                Das Terminal des aktiven Tabs steht in einem eigenen Fenster: Hier steht nur, wo – Dateibrowser und
+                Server-Info daneben zeigen die Sitzung wie jede andere.
+            -->
+            <StackPanel
+                x:Name="DetachedNote"
+                MaxWidth="420"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Spacing="14"
+                Visibility="{x:Bind Shell.ShowsDetachedNote, Mode=OneWay}">
+                <FontIcon
+                    HorizontalAlignment="Center"
+                    FontSize="28"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Glyph="&#xE8A7;" />
+                <TextBlock
+                    HorizontalAlignment="Center"
+                    Text="{x:Bind app:Ui.DetachedNote(Shell.ActiveSession.Title), Mode=OneWay}"
+                    TextAlignment="Center"
+                    TextWrapping="Wrap" />
+                <StackPanel HorizontalAlignment="Center" Orientation="Horizontal" Spacing="8">
+                    <Button
+                        x:Name="DetachedShowButton"
+                        Click="OnDetachedShowClicked"
+                        Content="{loc:Loc Key=DetachedShow}"
+                        Style="{StaticResource AccentButtonStyle}" />
+                    <Button
+                        x:Name="DetachedReattachButton"
+                        Click="OnDetachedReattachClicked"
+                        Content="{loc:Loc Key=DetachedReattach}" />
+                </StackPanel>
+            </StackPanel>
+
+            <!--  „Zwei Spalten“ liegt an der Stelle des Terminals; die Sitzung läuft darunter weiter  -->
+            <views:DualFilesView x:Name="DualFiles" Visibility="{x:Bind Shell.ShowsDualFiles, Mode=OneWay}" />
+
+            <!--
+                Startseite, solange kein Tab aktiv ist: Seitenleiste und die Server oder eine der Verwaltungen. Sie
+                zeichnet ihre zwei Karten selbst und deckt diese Karte samt Rand ab: der Abstand dieses Rasters und
+                ein Punkt für den Rand, nach außen.
+            -->
+            <views:HomeView
+                x:Name="StartPage"
+                Margin="-7,-5,-5,-7"
+                Visibility="{x:Bind Shell.HasNoActiveSession, Mode=OneWay}" />
+        </Grid>
+    </Grid>
+</UserControl>

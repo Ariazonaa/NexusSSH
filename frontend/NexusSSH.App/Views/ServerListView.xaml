@@ -1,0 +1,966 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Serververwaltung (Spec §8): Profile nach Gruppen, verbinden, anlegen, ändern, löschen. Dient als Startseite,
+    solange keine Sitzung offen ist, und als Aufklapper hinter dem Server-Knopf in der Titelleiste.
+-->
+<UserControl
+    x:Class="NexusSSH.App.Views.ServerListView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:app="using:NexusSSH.App"
+    xmlns:controls="using:NexusSSH.App.Controls"
+    xmlns:core="using:NexusSSH.Core"
+    xmlns:loc="using:NexusSSH.App.Localization"
+    xmlns:models="using:NexusSSH.Core.Models"
+    xmlns:vm="using:NexusSSH.Core.ViewModels">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="HighContrast" />
+                <ResourceDictionary x:Key="Default">
+                    <!--  Das Suchfeld wie im Bild: dunkle Fläche, feiner Rand, auch beim Überfahren und mit Fokus  -->
+                    <StaticResource x:Key="TextControlBackground" ResourceKey="FieldBackgroundBrush" />
+                    <StaticResource x:Key="TextControlBackgroundPointerOver" ResourceKey="FieldBackgroundBrush" />
+                    <StaticResource x:Key="TextControlBackgroundFocused" ResourceKey="FieldBackgroundBrush" />
+                    <StaticResource x:Key="TextControlBorderBrush" ResourceKey="FieldBorderBrush" />
+                    <StaticResource x:Key="TextControlBorderBrushPointerOver" ResourceKey="FieldBorderBrush" />
+                    <StaticResource x:Key="TextControlPlaceholderForeground" ResourceKey="MutedTextBrush" />
+                    <StaticResource x:Key="TextControlPlaceholderForegroundPointerOver" ResourceKey="MutedTextBrush" />
+                    <StaticResource x:Key="TextControlPlaceholderForegroundFocused" ResourceKey="MutedTextBrush" />
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+
+            <!--  Jede Gruppe ist selbst die Liste ihrer Profile – ohne ItemsPath, der unter Native AOT nicht aufgelöst würde  -->
+            <CollectionViewSource
+                x:Name="Groups"
+                IsSourceGrouped="True"
+                Source="{x:Bind Shell.ProfileGroups, Mode=OneWay}" />
+
+            <!--  Die Kacheln der Startseite: Favoriten als eigener Abschnitt, gefiltert nach dem Feld darüber  -->
+            <CollectionViewSource
+                x:Name="HomeGroups"
+                IsSourceGrouped="True"
+                Source="{x:Bind Shell.HomeGroups, Mode=OneWay}" />
+
+            <!--  Die Überschrift einer Gruppe: schlichter Text samt kleinem Pfeil, beim Überfahren leicht hinterlegt  -->
+            <Style
+                x:Key="GroupHeaderButtonStyle"
+                BasedOn="{StaticResource SubtleButtonStyle}"
+                TargetType="Button">
+                <Setter Property="MinWidth" Value="0" />
+                <Setter Property="MinHeight" Value="0" />
+                <Setter Property="Padding" Value="4,2" />
+                <Setter Property="CornerRadius" Value="4" />
+            </Style>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <Grid RowSpacing="8">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Spacing="10">
+            <!--
+                Kopf wie im Bild: Titel, Suchfeld mit Lupe, ein Hauptknopf „+ Neuer Server“. Alles Weitere (Tabelle,
+                Auswahl, Reihenfolge, Importieren, lokales Terminal) steht im Menü „⋯“ daneben.
+            -->
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock
+                    VerticalAlignment="Center"
+                    FontSize="22"
+                    FontWeight="SemiBold"
+                    Text="{loc:Loc Key=Servers}"
+                    TextTrimming="CharacterEllipsis" />
+
+                <!--  Nur über den Kacheln: filtert beim Tippen nach Name, Host, Benutzer, Gruppe und Schlagwort  -->
+                <Grid
+                    x:Name="FilterPanel"
+                    Grid.Column="1"
+                    Width="300"
+                    VerticalAlignment="Center"
+                    Visibility="Collapsed">
+                    <TextBox
+                        x:Name="FilterBox"
+                        MinHeight="32"
+                        Padding="32,6,10,5"
+                        AutomationProperties.Name="{loc:Loc Key=HomeFilterPlaceholder}"
+                        CornerRadius="6"
+                        FontSize="13"
+                        IsSpellCheckEnabled="False"
+                        PlaceholderText="{loc:Loc Key=HomeFilterPlaceholder}"
+                        Text="{x:Bind Shell.HomeFilter, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    <controls:LineIcon
+                        Margin="11,0,0,0"
+                        HorizontalAlignment="Left"
+                        VerticalAlignment="Center"
+                        Foreground="{ThemeResource MutedTextBrush}"
+                        IsHitTestVisible="False"
+                        Kind="Search"
+                        Size="14" />
+                </Grid>
+
+                <!--  Der eine Hauptknopf: Fläche in der Farbe des Entwurfs, dunkle Schrift  -->
+                <Button
+                    x:Name="NewServerButton"
+                    Grid.Column="2"
+                    MinHeight="32"
+                    Padding="14,0"
+                    VerticalAlignment="Center"
+                    AutomationProperties.Name="{loc:Loc Key=NewServer}"
+                    Click="OnAddClicked"
+                    CornerRadius="6"
+                    FontWeight="SemiBold">
+                    <Button.Resources>
+                        <ResourceDictionary>
+                            <ResourceDictionary.ThemeDictionaries>
+                                <ResourceDictionary x:Key="HighContrast" />
+                                <ResourceDictionary x:Key="Default">
+                                    <StaticResource x:Key="ButtonBackground" ResourceKey="DraftAccentBrush" />
+                                    <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="DraftAccentHoverBrush" />
+                                    <StaticResource x:Key="ButtonBackgroundPressed" ResourceKey="DraftAccentBrush" />
+                                    <StaticResource x:Key="ButtonForeground" ResourceKey="OnDraftAccentBrush" />
+                                    <StaticResource x:Key="ButtonForegroundPointerOver" ResourceKey="OnDraftAccentBrush" />
+                                    <StaticResource x:Key="ButtonForegroundPressed" ResourceKey="OnDraftAccentBrush" />
+                                    <StaticResource x:Key="ButtonBorderBrush" ResourceKey="DraftAccentBrush" />
+                                    <StaticResource x:Key="ButtonBorderBrushPointerOver" ResourceKey="DraftAccentHoverBrush" />
+                                    <StaticResource x:Key="ButtonBorderBrushPressed" ResourceKey="DraftAccentBrush" />
+                                </ResourceDictionary>
+                            </ResourceDictionary.ThemeDictionaries>
+                        </ResourceDictionary>
+                    </Button.Resources>
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <TextBlock Text="+" />
+                        <TextBlock Text="{loc:Loc Key=NewServer}" />
+                    </StackPanel>
+                </Button>
+
+                <Button
+                    x:Name="HomeMoreButton"
+                    Grid.Column="3"
+                    MinWidth="32"
+                    MinHeight="32"
+                    Padding="0"
+                    VerticalAlignment="Center"
+                    AutomationProperties.Name="{loc:Loc Key=MoreActions}"
+                    Content="⋯"
+                    CornerRadius="6"
+                    FontSize="16"
+                    Foreground="{ThemeResource IconBrush}"
+                    Style="{StaticResource SubtleButtonStyle}"
+                    ToolTipService.ToolTip="{loc:Loc Key=MoreActions}">
+                    <Button.Flyout>
+                        <MenuFlyout
+                            x:Name="HomeMoreMenu"
+                            Opening="OnHomeMoreMenuOpening"
+                            Placement="BottomEdgeAlignedRight">
+                            <!--  Kacheln oder Tabelle  -->
+                            <ToggleMenuFlyoutItem x:Name="TableToggle" Text="{loc:Loc Key=HomeAsTable}" />
+                            <!--  Mehrere markieren: Ein Klick wählt dann aus, statt zu verbinden  -->
+                            <ToggleMenuFlyoutItem x:Name="SelectToggle" Text="{loc:Loc Key=HomeSelect}" />
+                            <!--  Reihenfolge der Profile innerhalb ihrer Gruppe; Favoriten stehen immer vorn  -->
+                            <MenuFlyoutSubItem x:Name="SortMenu" Text="{loc:Loc Key=SortProfiles}">
+                                <RadioMenuFlyoutItem
+                                    x:Name="SortSavedItem"
+                                    Click="OnSortClicked"
+                                    GroupName="ProfileSort"
+                                    Tag="Saved"
+                                    Text="{loc:Loc Key=SortSaved}" />
+                                <RadioMenuFlyoutItem
+                                    x:Name="SortNameItem"
+                                    Click="OnSortClicked"
+                                    GroupName="ProfileSort"
+                                    Tag="Name"
+                                    Text="{loc:Loc Key=SortName}" />
+                                <RadioMenuFlyoutItem
+                                    x:Name="SortRecentItem"
+                                    Click="OnSortClicked"
+                                    GroupName="ProfileSort"
+                                    Tag="Recent"
+                                    Text="{loc:Loc Key=SortRecent}" />
+                            </MenuFlyoutSubItem>
+                            <MenuFlyoutSeparator />
+                            <!--  Profile übernehmen: aus ~/.ssh/config oder aus einer Export-Datei einer anderen Installation  -->
+                            <MenuFlyoutSubItem
+                                x:Name="ImportMenu"
+                                Text="{loc:Loc Key=ImportShort}"
+                                ToolTipService.ToolTip="{loc:Loc Key=ImportTooltip}">
+                                <MenuFlyoutItem Click="OnImportClicked" Text="{loc:Loc Key=CmdImportSshConfig}" />
+                                <MenuFlyoutItem Click="OnImportSessionsClicked" Text="{loc:Loc Key=CmdImportSessions}" />
+                                <MenuFlyoutItem Click="OnImportSessionFileClicked" Text="{loc:Loc Key=CmdImportSessionFile}" />
+                                <MenuFlyoutItem Click="OnImportDataClicked" Text="{loc:Loc Key=ImportFromExport}" />
+                            </MenuFlyoutSubItem>
+                            <!--  Eine Shell dieses Rechners in einem neuen Tab – dasselbe wie Strg+Umschalt+T  -->
+                            <MenuFlyoutItem
+                                x:Name="LocalTerminalItem"
+                                Click="OnLocalTerminalClicked"
+                                Text="{loc:Loc Key=LocalTerminalButton}" />
+                        </MenuFlyout>
+                    </Button.Flyout>
+                </Button>
+            </Grid>
+
+            <!--  Was mit den markierten Servern geschehen soll – nur, solange „Mehrere auswählen“ an ist  -->
+            <StackPanel
+                x:Name="BulkBar"
+                Orientation="Horizontal"
+                Spacing="8"
+                Visibility="Collapsed">
+                <TextBlock
+                    x:Name="BulkCount"
+                    MinWidth="110"
+                    VerticalAlignment="Center"
+                    AutomationProperties.LiveSetting="Polite"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                <Button
+                    x:Name="BulkConnectButton"
+                    Click="OnBulkConnectClicked"
+                    Content="{loc:Loc Key=BulkConnect}" />
+                <Button
+                    x:Name="BulkGroupButton"
+                    Click="OnBulkGroupClicked"
+                    Content="{loc:Loc Key=BulkGroup}" />
+                <Button
+                    x:Name="BulkTagsButton"
+                    Click="OnBulkTagsClicked"
+                    Content="{loc:Loc Key=BulkTags}" />
+                <Button
+                    x:Name="BulkDeleteButton"
+                    Click="OnBulkDeleteClicked"
+                    Content="{loc:Loc Key=BulkDelete}" />
+                <Button
+                    x:Name="BulkAllButton"
+                    Click="OnBulkAllClicked"
+                    Content="{loc:Loc Key=BulkAll}" />
+            </StackPanel>
+
+            <!--  In einer Gruppe: der Weg dorthin; ein Klick führt wieder hinaus  -->
+            <BreadcrumbBar
+                x:Name="HomeCrumbBar"
+                AutomationProperties.Name="{loc:Loc Key=AllServers}"
+                ItemClicked="OnHomeCrumbClicked"
+                ItemsSource="{x:Bind Shell.HomeCrumbs, Mode=OneWay}"
+                Visibility="Collapsed">
+                <BreadcrumbBar.ItemTemplate>
+                    <DataTemplate x:DataType="vm:HomeCrumb">
+                        <TextBlock Text="{x:Bind Name}" />
+                    </DataTemplate>
+                </BreadcrumbBar.ItemTemplate>
+            </BreadcrumbBar>
+        </StackPanel>
+
+        <!--  Noch kein Profil: statt einer leeren Seite die drei ersten Schritte  -->
+        <StackPanel
+            x:Name="IntroPanel"
+            Grid.Row="1"
+            MaxWidth="620"
+            Margin="0,24,0,0"
+            HorizontalAlignment="Left"
+            Spacing="14"
+            Visibility="{x:Bind Shell.HasNoProfiles, Mode=OneWay}">
+            <StackPanel Spacing="4">
+                <TextBlock Style="{StaticResource SubtitleTextBlockStyle}" Text="{loc:Loc Key=IntroTitle}" />
+                <TextBlock
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Text="{loc:Loc Key=IntroLead}"
+                    TextWrapping="Wrap" />
+            </StackPanel>
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="28" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="1" />
+                <StackPanel Grid.Column="1" Spacing="6">
+                    <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="{loc:Loc Key=IntroStepAdd}" />
+                    <TextBlock
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Text="{loc:Loc Key=IntroStepAddText}"
+                        TextWrapping="Wrap" />
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button
+                            x:Name="IntroAddButton"
+                            Click="OnAddClicked"
+                            Content="{loc:Loc Key=AddServer}"
+                            Style="{StaticResource AccentButtonStyle}" />
+                        <Button
+                            x:Name="IntroImportButton"
+                            Click="OnImportClicked"
+                            Content="{loc:Loc Key=IntroImportConfig}" />
+                        <Button
+                            x:Name="IntroSessionsButton"
+                            Click="OnImportSessionsClicked"
+                            Content="{loc:Loc Key=IntroImportSessions}" />
+                    </StackPanel>
+                </StackPanel>
+            </Grid>
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="28" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="2" />
+                <StackPanel Grid.Column="1" Spacing="4">
+                    <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="{loc:Loc Key=IntroStepConnect}" />
+                    <TextBlock
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Text="{loc:Loc Key=IntroStepConnectText}"
+                        TextWrapping="Wrap" />
+                </StackPanel>
+            </Grid>
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="28" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="3" />
+                <StackPanel Grid.Column="1" Spacing="6">
+                    <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="{loc:Loc Key=IntroStepPalette}" />
+                    <TextBlock
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Text="{loc:Loc Key=IntroStepPaletteText}"
+                        TextWrapping="Wrap" />
+                    <Button
+                        x:Name="IntroPaletteButton"
+                        Click="OnIntroPaletteClicked"
+                        Content="{loc:Loc Key=IntroOpenPalette}" />
+                </StackPanel>
+            </Grid>
+        </StackPanel>
+
+        <!--  Es gibt Profile, aber der Filter über den Kacheln lässt keines übrig  -->
+        <TextBlock
+            x:Name="NoMatchesText"
+            Grid.Row="1"
+            Margin="0,24,0,0"
+            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+            Text="{loc:Loc Key=HomeNoMatches}"
+            Visibility="Collapsed" />
+
+        <!--
+            Startseite: die Server als Kacheln im Raster (Entwurf A: vier Spalten, die die Breite füllen, Lücke 10),
+            ein Klick verbindet. Die Breite einer Kachel setzt OnGridSizeChanged; der Rand von −5 links und rechts
+            gleicht den halben Abstand an den äußeren Kacheln aus. „⋯“ einer Kachel steht nur beim Überfahren und mit
+            Fokus da; ihr Menü öffnet auch ein Rechtsklick, die Menütaste oder Umschalt+F10 (OnGridContextRequested).
+        -->
+        <GridView
+            x:Name="ProfileGrid"
+            Grid.Row="1"
+            Margin="-5,2,-5,0"
+            AutomationProperties.Name="{loc:Loc Key=Servers}"
+            CanDragItems="True"
+            ContextRequested="OnGridContextRequested"
+            DragItemsStarting="OnCardDragStarting"
+            GotFocus="OnGridFocusChanged"
+            IsItemClickEnabled="True"
+            ItemClick="OnProfileCardClicked"
+            ItemsSource="{x:Bind HomeGroups.View, Mode=OneWay}"
+            LostFocus="OnGridFocusChanged"
+            SelectionMode="None"
+            SizeChanged="OnGridSizeChanged"
+            Visibility="Collapsed">
+            <GridView.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <ItemsWrapGrid
+                        GroupPadding="0"
+                        Loaded="OnTilePanelLoaded"
+                        Orientation="Horizontal" />
+                </ItemsPanelTemplate>
+            </GridView.ItemsPanel>
+            <GridView.ItemContainerStyle>
+                <Style BasedOn="{StaticResource DefaultGridViewItemStyle}" TargetType="GridViewItem">
+                    <Setter Property="Margin" Value="5,0,5,10" />
+                    <Setter Property="Padding" Value="0" />
+                    <Setter Property="CornerRadius" Value="10" />
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                    <Setter Property="VerticalContentAlignment" Value="Stretch" />
+                </Style>
+            </GridView.ItemContainerStyle>
+            <GridView.GroupStyle>
+                <GroupStyle>
+                    <!--  Die Überschrift ohne Linie darunter: nur ihr Inhalt  -->
+                    <GroupStyle.HeaderContainerStyle>
+                        <Style TargetType="GridViewHeaderItem">
+                            <Setter Property="Margin" Value="5,6,5,14" />
+                            <Setter Property="Padding" Value="0" />
+                            <Setter Property="MinHeight" Value="0" />
+                            <Setter Property="HorizontalContentAlignment" Value="Left" />
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="GridViewHeaderItem">
+                                        <ContentPresenter
+                                            Margin="{TemplateBinding Padding}"
+                                            HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                            Content="{TemplateBinding Content}"
+                                            ContentTemplate="{TemplateBinding ContentTemplate}"
+                                            ContentTransitions="{TemplateBinding ContentTransitions}" />
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </GroupStyle.HeaderContainerStyle>
+                    <GroupStyle.HeaderTemplate>
+                        <!--
+                            Überschrift eines Abschnitts wie im Bild: der Name, klein und halbfett. Ein Klick klappt ein
+                            (der kleine Pfeil daneben zeigt, wie es steht); ordnen, färben und das Zeichen der Gruppe
+                            über das Kontextmenü (Rechtsklick, Menütaste, Umschalt+F10). Liegen Gruppen darunter, führt
+                            der Pfeil rechts hinein. Eine Kachel lässt sich auf die Überschrift ziehen – sie wechselt
+                            die Gruppe.
+                        -->
+                        <DataTemplate x:DataType="vm:ProfileGroup">
+                            <StackPanel
+                                Margin="-4,0,0,0"
+                                AllowDrop="True"
+                                Background="Transparent"
+                                DragOver="OnGroupDragOver"
+                                Drop="OnGroupDrop"
+                                Orientation="Horizontal"
+                                Spacing="2"
+                                Tag="{x:Bind}">
+                                <Button
+                                    AutomationProperties.HelpText="{x:Bind app:Ui.GroupActionsName(Name)}"
+                                    AutomationProperties.Name="{x:Bind app:Ui.GroupToggleName(Name)}"
+                                    Click="OnGroupToggleClicked"
+                                    ContextRequested="OnGroupContextRequested"
+                                    Style="{StaticResource GroupHeaderButtonStyle}"
+                                    Tag="{x:Bind}"
+                                    ToolTipService.ToolTip="{x:Bind Summary}">
+                                    <FlyoutBase.AttachedFlyout>
+                                        <MenuFlyout Opening="OnGroupMenuOpening">
+                                            <MenuFlyoutItem
+                                                Click="OnGroupUpClicked"
+                                                Tag="{x:Bind}"
+                                                Text="{loc:Loc Key=GroupMoveUp}">
+                                                <MenuFlyoutItem.Icon>
+                                                    <FontIcon Glyph="&#xE74A;" />
+                                                </MenuFlyoutItem.Icon>
+                                            </MenuFlyoutItem>
+                                            <MenuFlyoutItem
+                                                Click="OnGroupDownClicked"
+                                                Tag="{x:Bind}"
+                                                Text="{loc:Loc Key=GroupMoveDown}">
+                                                <MenuFlyoutItem.Icon>
+                                                    <FontIcon Glyph="&#xE74B;" />
+                                                </MenuFlyoutItem.Icon>
+                                            </MenuFlyoutItem>
+                                            <MenuFlyoutSeparator />
+                                            <!--  Kennfarbe der Gruppe: gilt für alle Profile darin ohne eigene Farbe. Der Tag nennt die Farbe.  -->
+                                            <MenuFlyoutSubItem DataContext="{x:Bind}" Text="{loc:Loc Key=GroupColor}">
+                                                <MenuFlyoutSubItem.Icon>
+                                                    <FontIcon Glyph="&#xE790;" />
+                                                </MenuFlyoutSubItem.Icon>
+                                                <RadioMenuFlyoutItem
+                                                    Click="OnGroupColorClicked"
+                                                    GroupName="GroupColor"
+                                                    Tag=""
+                                                    Text="{loc:Loc Key=ColorNone}" />
+                                                <RadioMenuFlyoutItem
+                                                    Click="OnGroupColorClicked"
+                                                    GroupName="GroupColor"
+                                                    Tag="red"
+                                                    Text="{loc:Loc Key=AccentRed}" />
+                                                <RadioMenuFlyoutItem
+                                                    Click="OnGroupColorClicked"
+                                                    GroupName="GroupColor"
+                                                    Tag="orange"
+                                                    Text="{loc:Loc Key=AccentOrange}" />
+                                                <RadioMenuFlyoutItem
+                                                    Click="OnGroupColorClicked"
+                                                    GroupName="GroupColor"
+                                                    Tag="yellow"
+                                                    Text="{loc:Loc Key=ColorYellow}" />
+                                                <RadioMenuFlyoutItem
+                                                    Click="OnGroupColorClicked"
+                                                    GroupName="GroupColor"
+                                                    Tag="green"
+                                                    Text="{loc:Loc Key=AccentGreen}" />
+                                                <RadioMenuFlyoutItem
+                                                    Click="OnGroupColorClicked"
+                                                    GroupName="GroupColor"
+                                                    Tag="blue"
+                                                    Text="{loc:Loc Key=AccentBlue}" />
+                                                <RadioMenuFlyoutItem
+                                                    Click="OnGroupColorClicked"
+                                                    GroupName="GroupColor"
+                                                    Tag="violet"
+                                                    Text="{loc:Loc Key=AccentViolet}" />
+                                            </MenuFlyoutSubItem>
+                                            <!--  Zeichen der Gruppe: für die Kacheln aller Server darin ohne eigenes. Beim Öffnen gefüllt.  -->
+                                            <MenuFlyoutSubItem Tag="{x:Bind}" Text="{loc:Loc Key=GroupMark}">
+                                                <MenuFlyoutSubItem.Icon>
+                                                    <FontIcon Glyph="&#xE8B9;" />
+                                                </MenuFlyoutSubItem.Icon>
+                                            </MenuFlyoutSubItem>
+                                        </MenuFlyout>
+                                    </FlyoutBase.AttachedFlyout>
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <!--
+                                            Das Zeichen der Gruppe, klein in ihrer Kennfarbe: Auf den Kacheln steht
+                                            davor das Betriebssystem, hier bleibt es zu sehen. Ohne Zeichen steht nichts da.
+                                        -->
+                                        <Grid
+                                            Width="16"
+                                            Height="16"
+                                            VerticalAlignment="Center"
+                                            Visibility="{x:Bind app:Ui.VisibleIf(HasMark)}">
+                                            <FontIcon
+                                                FontSize="13"
+                                                Foreground="{x:Bind app:Ui.TileFore(Color)}"
+                                                Glyph="{x:Bind app:Ui.GroupMarkGlyph(Mark)}"
+                                                Visibility="{x:Bind app:Ui.ShowsGroupSymbol(Mark)}" />
+                                            <TextBlock
+                                                HorizontalAlignment="Center"
+                                                VerticalAlignment="Center"
+                                                FontSize="10"
+                                                FontWeight="Bold"
+                                                Foreground="{x:Bind app:Ui.TileFore(Color)}"
+                                                Text="{x:Bind app:Ui.GroupMarkLetters(Mark)}"
+                                                Visibility="{x:Bind app:Ui.ShowsGroupLetters(Mark)}" />
+                                        </Grid>
+                                        <TextBlock
+                                            VerticalAlignment="Center"
+                                            FontSize="12"
+                                            FontWeight="SemiBold"
+                                            Foreground="{ThemeResource SecondaryTextBrush}"
+                                            Text="{x:Bind Name}" />
+                                        <controls:LineIcon
+                                            VerticalAlignment="Center"
+                                            Foreground="{ThemeResource MutedTextBrush}"
+                                            Kind="{x:Bind app:Ui.CollapseIcon(IsCollapsed)}"
+                                            Size="10" />
+                                    </StackPanel>
+                                </Button>
+                                <Button
+                                    AutomationProperties.Name="{x:Bind app:Ui.GroupOpenName(Name)}"
+                                    Click="OnGroupOpenClicked"
+                                    Style="{StaticResource GroupHeaderButtonStyle}"
+                                    Tag="{x:Bind}"
+                                    ToolTipService.ToolTip="{loc:Loc Key=GroupOpen}"
+                                    Visibility="{x:Bind app:Ui.VisibleIf(HasSubgroups)}">
+                                    <controls:LineIcon
+                                        Foreground="{ThemeResource MutedTextBrush}"
+                                        Kind="ArrowRight"
+                                        Size="12" />
+                                </Button>
+                            </StackPanel>
+                        </DataTemplate>
+                    </GroupStyle.HeaderTemplate>
+                </GroupStyle>
+            </GridView.GroupStyle>
+            <GridView.ItemTemplate>
+                <DataTemplate x:DataType="models:ServerProfile">
+                    <Grid
+                        Padding="14"
+                        Background="{ThemeResource TileBackgroundBrush}"
+                        BorderBrush="{ThemeResource TileBorderBrush}"
+                        BorderThickness="1"
+                        ColumnSpacing="12"
+                        CornerRadius="10"
+                        PointerEntered="OnTilePointerEntered"
+                        PointerExited="OnTilePointerExited"
+                        ToolTipService.ToolTip="{x:Bind core:Format.ProfileSummary(Address, Tags)}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <!--
+                            Das Quadrat: das eigene Zeichen des Servers, sonst das Logo seines Betriebssystems (in dessen
+                            Markenfarbe), sonst das Zeichen der Gruppe, sonst bei einem lokalen Terminal dessen Symbol,
+                            sonst der Anfangsbuchstabe – auf einer Fläche, die zur Kennfarbe passt (TileMarks.Face).
+                        -->
+                        <Border
+                            Width="38"
+                            Height="38"
+                            VerticalAlignment="Center"
+                            Background="{x:Bind app:Ui.TileBack(ShownColor)}"
+                            BorderBrush="{x:Bind app:Ui.ChartFrameBrush}"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            ToolTipService.ToolTip="{x:Bind app:Ui.SystemName(System)}">
+                            <Grid>
+                                <TextBlock
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    FontSize="13"
+                                    FontWeight="Bold"
+                                    Foreground="{x:Bind app:Ui.TileFore(ShownColor)}"
+                                    Text="{x:Bind app:Ui.TileText(Mark, System, GroupMark, Name, IsLocal)}"
+                                    Visibility="{x:Bind app:Ui.ShowsTileLetters(Mark, System, GroupMark, Name, IsLocal)}" />
+                                <FontIcon
+                                    FontSize="15"
+                                    Foreground="{x:Bind app:Ui.TileFore(ShownColor)}"
+                                    Glyph="{x:Bind app:Ui.TileGlyph(Mark, System, GroupMark, Name, IsLocal, IsFavorite)}"
+                                    Visibility="{x:Bind app:Ui.ShowsTileSymbol(Mark, System, GroupMark, Name, IsLocal)}" />
+                                <controls:LineIcon
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    Foreground="{x:Bind app:Ui.TileFore(ShownColor)}"
+                                    Kind="Terminal"
+                                    Size="18"
+                                    Visibility="{x:Bind app:Ui.ShowsTileTerminal(Mark, System, GroupMark, Name, IsLocal)}" />
+                                <!--  Das Logo des Systems; der Tag lässt den Selbsttest es finden  -->
+                                <Path
+                                    Width="20"
+                                    Height="20"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    Data="{x:Bind app:Ui.SystemIcon(System)}"
+                                    Fill="{x:Bind app:Ui.TileSystemBrush(System)}"
+                                    Stretch="Uniform"
+                                    Tag="system"
+                                    Visibility="{x:Bind app:Ui.ShowsTileSystem(Mark, System, GroupMark, Name, IsLocal)}" />
+                            </Grid>
+                        </Border>
+                        <StackPanel
+                            Grid.Column="1"
+                            VerticalAlignment="Center"
+                            Spacing="2">
+                            <!--  Name, rechts davon – wenn eingeschaltet und geprüft – ein Punkt: antwortet der Server?  -->
+                            <Grid ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock
+                                    FontSize="13"
+                                    FontWeight="SemiBold"
+                                    Text="{x:Bind Name}"
+                                    TextTrimming="CharacterEllipsis"
+                                    TextWrapping="NoWrap" />
+                                <Ellipse
+                                    Grid.Column="1"
+                                    Width="7"
+                                    Height="7"
+                                    VerticalAlignment="Center"
+                                    AutomationProperties.Name="{x:Bind app:Ui.ReachText(Id)}"
+                                    Fill="{x:Bind app:Ui.ReachBrush(Id)}"
+                                    ToolTipService.ToolTip="{x:Bind app:Ui.ReachText(Id)}"
+                                    Visibility="{x:Bind app:Ui.ReachVisibility(Id)}" />
+                            </Grid>
+                            <!--  Eine Zeile, auch bei vergrößerter Schrift: Alle Kacheln sind so hoch wie die erste  -->
+                            <TextBlock
+                                FontSize="12"
+                                Foreground="{ThemeResource SecondaryTextBrush}"
+                                Text="{x:Bind app:Ui.TileSubtitle(IsLocal, Address)}"
+                                TextTrimming="CharacterEllipsis"
+                                TextWrapping="NoWrap" />
+                        </StackPanel>
+                        <Button
+                            Grid.Column="2"
+                            MinWidth="28"
+                            MinHeight="28"
+                            Padding="0"
+                            VerticalAlignment="Center"
+                            AutomationProperties.Name="{x:Bind app:Ui.MoreName(Name)}"
+                            CornerRadius="6"
+                            Foreground="{ThemeResource IconBrush}"
+                            Opacity="0"
+                            Style="{StaticResource SubtleButtonStyle}"
+                            ToolTipService.ToolTip="{loc:Loc Key=MoreActions}">
+                            <FontIcon FontSize="14" Glyph="&#xE712;" />
+                            <Button.Flyout>
+                                <MenuFlyout Opening="OnProfileMenuOpening" Placement="BottomEdgeAlignedRight">
+                                    <MenuFlyoutItem
+                                        Click="OnEditClicked"
+                                        Tag="{x:Bind}"
+                                        Text="{loc:Loc Key=Edit}">
+                                        <MenuFlyoutItem.Icon>
+                                            <FontIcon Glyph="&#xE70F;" />
+                                        </MenuFlyoutItem.Icon>
+                                    </MenuFlyoutItem>
+                                    <MenuFlyoutItem
+                                        Click="OnDuplicateClicked"
+                                        Tag="{x:Bind}"
+                                        Text="{loc:Loc Key=DuplicateProfile}">
+                                        <MenuFlyoutItem.Icon>
+                                            <FontIcon Glyph="&#xE8C8;" />
+                                        </MenuFlyoutItem.Icon>
+                                    </MenuFlyoutItem>
+                                    <MenuFlyoutItem
+                                        Click="OnForgetClicked"
+                                        IsEnabled="{x:Bind HasSavedSecret}"
+                                        Tag="{x:Bind}"
+                                        Text="{loc:Loc Key=ForgetPassword}">
+                                        <MenuFlyoutItem.Icon>
+                                            <FontIcon Glyph="&#xE785;" />
+                                        </MenuFlyoutItem.Icon>
+                                    </MenuFlyoutItem>
+                                    <!--  Die Gruppen stehen erst beim Öffnen des Menüs darin (OnProfileMenuOpening)  -->
+                                    <MenuFlyoutSubItem Tag="{x:Bind}" Text="{loc:Loc Key=MoveToGroup}">
+                                        <MenuFlyoutSubItem.Icon>
+                                            <FontIcon Glyph="&#xE8DE;" />
+                                        </MenuFlyoutSubItem.Icon>
+                                    </MenuFlyoutSubItem>
+                                    <!--  Eigenes Symbol oder Buchstaben für die Kachel, ebenfalls beim Öffnen gefüllt  -->
+                                    <MenuFlyoutSubItem Tag="{x:Bind}" Text="{loc:Loc Key=TileMark}">
+                                        <MenuFlyoutSubItem.Icon>
+                                            <FontIcon Glyph="&#xE8B9;" />
+                                        </MenuFlyoutSubItem.Icon>
+                                    </MenuFlyoutSubItem>
+                                    <MenuFlyoutSeparator />
+                                    <MenuFlyoutItem
+                                        Click="OnDeleteClicked"
+                                        Tag="{x:Bind}"
+                                        Text="{loc:Loc Key=Delete}">
+                                        <MenuFlyoutItem.Icon>
+                                            <FontIcon Glyph="&#xE74D;" />
+                                        </MenuFlyoutItem.Icon>
+                                    </MenuFlyoutItem>
+                                </MenuFlyout>
+                            </Button.Flyout>
+                        </Button>
+                    </Grid>
+                </DataTemplate>
+            </GridView.ItemTemplate>
+        </GridView>
+
+        <!--  Die Startseite als Tabelle: alle Server in einer Liste, ein Klick auf einen Spaltenkopf sortiert  -->
+        <Grid
+            x:Name="TablePanel"
+            Grid.Row="1"
+            Margin="0,12,0,0"
+            Visibility="Collapsed">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <Grid Padding="16,0,12,4" ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="260" />
+                    <ColumnDefinition Width="200" />
+                    <ColumnDefinition Width="130" />
+                    <ColumnDefinition Width="36" />
+                </Grid.ColumnDefinitions>
+                <HyperlinkButton
+                    x:Name="TableNameHeader"
+                    Padding="0"
+                    Click="OnTableHeaderClicked"
+                    Tag="Name" />
+                <HyperlinkButton
+                    x:Name="TableAddressHeader"
+                    Grid.Column="1"
+                    Padding="0"
+                    Click="OnTableHeaderClicked"
+                    Tag="Address" />
+                <HyperlinkButton
+                    x:Name="TableGroupHeader"
+                    Grid.Column="2"
+                    Padding="0"
+                    Click="OnTableHeaderClicked"
+                    Tag="Group" />
+                <HyperlinkButton
+                    x:Name="TableRecentHeader"
+                    Grid.Column="3"
+                    Padding="0"
+                    Click="OnTableHeaderClicked"
+                    Tag="Recent" />
+            </Grid>
+            <ListView
+                x:Name="ProfileTable"
+                Grid.Row="1"
+                AutomationProperties.Name="{loc:Loc Key=Servers}"
+                IsItemClickEnabled="True"
+                ItemClick="OnProfileCardClicked"
+                ItemContainerStyle="{StaticResource CompactListItemStyle}"
+                ItemsSource="{x:Bind Shell.HomeTable, Mode=OneWay}"
+                SelectionMode="None">
+                <ListView.ItemTemplate>
+                    <DataTemplate x:DataType="models:ServerProfile">
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="260" />
+                                <ColumnDefinition Width="200" />
+                                <ColumnDefinition Width="130" />
+                                <ColumnDefinition Width="36" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Rectangle
+                                    Width="3"
+                                    Height="16"
+                                    VerticalAlignment="Center"
+                                    Fill="{x:Bind app:Ui.ProfileFill(ShownColor)}"
+                                    RadiusX="1.5"
+                                    RadiusY="1.5" />
+                                <TextBlock
+                                    VerticalAlignment="Center"
+                                    Text="{x:Bind Name}"
+                                    TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
+                            <TextBlock
+                                Grid.Column="1"
+                                VerticalAlignment="Center"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Text="{x:Bind Address}"
+                                TextTrimming="CharacterEllipsis" />
+                            <TextBlock
+                                Grid.Column="2"
+                                VerticalAlignment="Center"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Text="{x:Bind Group}"
+                                TextTrimming="CharacterEllipsis" />
+                            <TextBlock
+                                Grid.Column="3"
+                                VerticalAlignment="Center"
+                                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                Text="{x:Bind core:Format.LastSeen(LastConnected)}" />
+                            <Button
+                                Grid.Column="4"
+                                VerticalAlignment="Center"
+                                AutomationProperties.Name="{x:Bind app:Ui.MoreName(Name)}"
+                                Style="{StaticResource IconButtonStyle}"
+                                ToolTipService.ToolTip="{loc:Loc Key=MoreActions}">
+                                <FontIcon FontSize="14" Glyph="&#xE712;" />
+                                <Button.Flyout>
+                                    <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                        <MenuFlyoutItem
+                                            Click="OnEditClicked"
+                                            Tag="{x:Bind}"
+                                            Text="{loc:Loc Key=Edit}" />
+                                        <MenuFlyoutItem
+                                            Click="OnDuplicateClicked"
+                                            Tag="{x:Bind}"
+                                            Text="{loc:Loc Key=DuplicateProfile}" />
+                                        <MenuFlyoutSeparator />
+                                        <MenuFlyoutItem
+                                            Click="OnDeleteClicked"
+                                            Tag="{x:Bind}"
+                                            Text="{loc:Loc Key=Delete}" />
+                                    </MenuFlyout>
+                                </Button.Flyout>
+                            </Button>
+                        </Grid>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+        </Grid>
+
+        <ListView
+            x:Name="ProfileList"
+            Grid.Row="1"
+            AutomationProperties.Name="{loc:Loc Key=Servers}"
+            DoubleTapped="OnProfileDoubleTapped"
+            ItemsSource="{x:Bind Groups.View, Mode=OneWay}"
+            KeyDown="OnProfileKeyDown"
+            SelectionMode="Single">
+            <ListView.ItemContainerStyle>
+                <Style BasedOn="{StaticResource DefaultListViewItemStyle}" TargetType="ListViewItem">
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                    <Setter Property="Padding" Value="12,6" />
+                </Style>
+            </ListView.ItemContainerStyle>
+            <ListView.GroupStyle>
+                <GroupStyle>
+                    <GroupStyle.HeaderTemplate>
+                        <DataTemplate x:DataType="vm:ProfileGroup">
+                            <TextBlock
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Style="{StaticResource BodyStrongTextBlockStyle}"
+                                Text="{x:Bind Name}" />
+                        </DataTemplate>
+                    </GroupStyle.HeaderTemplate>
+                </GroupStyle>
+            </ListView.GroupStyle>
+            <ListView.ItemTemplate>
+                <DataTemplate x:DataType="models:ServerProfile">
+                    <Grid ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <FontIcon
+                            FontSize="16"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Glyph="{x:Bind app:Ui.ProfileGlyph(IsFavorite)}" />
+                        <StackPanel Grid.Column="1" Spacing="1">
+                            <TextBlock Text="{x:Bind Name}" TextTrimming="CharacterEllipsis" />
+                            <TextBlock
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Text="{x:Bind core:Format.ProfileSummary(Address, Tags)}"
+                                TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                        <Button
+                            Grid.Column="2"
+                            VerticalAlignment="Center"
+                            Click="OnConnectClicked"
+                            AutomationProperties.Name="{x:Bind app:Ui.ConnectName(Name)}"
+                            Content="{loc:Loc Key=Connect}"
+                            Tag="{x:Bind}" />
+                        <Button
+                            Grid.Column="3"
+                            VerticalAlignment="Center"
+                            AutomationProperties.Name="{x:Bind app:Ui.MoreName(Name)}"
+                            Style="{StaticResource IconButtonStyle}"
+                            ToolTipService.ToolTip="{loc:Loc Key=MoreActions}">
+                            <FontIcon FontSize="14" Glyph="&#xE712;" />
+                            <Button.Flyout>
+                                <MenuFlyout Opening="OnProfileMenuOpening" Placement="BottomEdgeAlignedRight">
+                                    <MenuFlyoutItem
+                                        Click="OnEditClicked"
+                                        Tag="{x:Bind}"
+                                        Text="{loc:Loc Key=Edit}">
+                                        <MenuFlyoutItem.Icon>
+                                            <FontIcon Glyph="&#xE70F;" />
+                                        </MenuFlyoutItem.Icon>
+                                    </MenuFlyoutItem>
+                                    <MenuFlyoutItem
+                                        Click="OnDuplicateClicked"
+                                        Tag="{x:Bind}"
+                                        Text="{loc:Loc Key=DuplicateProfile}">
+                                        <MenuFlyoutItem.Icon>
+                                            <FontIcon Glyph="&#xE8C8;" />
+                                        </MenuFlyoutItem.Icon>
+                                    </MenuFlyoutItem>
+                                    <!--  Nur, wenn zu dem Profil ein Passwort oder eine Passphrase gespeichert ist  -->
+                                    <MenuFlyoutItem
+                                        Click="OnForgetClicked"
+                                        IsEnabled="{x:Bind HasSavedSecret}"
+                                        Tag="{x:Bind}"
+                                        Text="{loc:Loc Key=ForgetPassword}">
+                                        <MenuFlyoutItem.Icon>
+                                            <FontIcon Glyph="&#xE785;" />
+                                        </MenuFlyoutItem.Icon>
+                                    </MenuFlyoutItem>
+                                    <!--  Die Gruppen stehen erst beim Öffnen des Menüs darin (OnProfileMenuOpening)  -->
+                                    <MenuFlyoutSubItem Tag="{x:Bind}" Text="{loc:Loc Key=MoveToGroup}">
+                                        <MenuFlyoutSubItem.Icon>
+                                            <FontIcon Glyph="&#xE8DE;" />
+                                        </MenuFlyoutSubItem.Icon>
+                                    </MenuFlyoutSubItem>
+                                    <!--  Eigenes Symbol oder Buchstaben für die Kachel, ebenfalls beim Öffnen gefüllt  -->
+                                    <MenuFlyoutSubItem Tag="{x:Bind}" Text="{loc:Loc Key=TileMark}">
+                                        <MenuFlyoutSubItem.Icon>
+                                            <FontIcon Glyph="&#xE8B9;" />
+                                        </MenuFlyoutSubItem.Icon>
+                                    </MenuFlyoutSubItem>
+                                    <MenuFlyoutSeparator />
+                                    <MenuFlyoutItem
+                                        Click="OnDeleteClicked"
+                                        Tag="{x:Bind}"
+                                        Text="{loc:Loc Key=Delete}">
+                                        <MenuFlyoutItem.Icon>
+                                            <FontIcon Glyph="&#xE74D;" />
+                                        </MenuFlyoutItem.Icon>
+                                    </MenuFlyoutItem>
+                                </MenuFlyout>
+                            </Button.Flyout>
+                        </Button>
+                    </Grid>
+                </DataTemplate>
+            </ListView.ItemTemplate>
+        </ListView>
+    </Grid>
+</UserControl>

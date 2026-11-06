@@ -1,0 +1,7 @@
+{
+  "startMs": 1000,
+  "privateMb": 200,
+  "exeMb": 28,
+  "folderMb": 135,
+  "floodLinesPerSecond": 60000
+}

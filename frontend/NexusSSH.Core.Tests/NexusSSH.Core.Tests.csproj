@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <!-- xunit.v3 läuft auf Microsoft.Testing.Platform (siehe global.json) -->
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../NexusSSH.Core/NexusSSH.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- LocalizationTests sucht in den Quellen nach benutzten Schlüsseln ({loc:Loc Key=…}, L.Get("…")) -->
+    <None Include="../NexusSSH.App/**/*.xaml;../NexusSSH.App/**/*.cs" Exclude="../NexusSSH.App/bin/**;../NexusSSH.App/obj/**" LinkBase="Sources/App" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../NexusSSH.Core/**/*.cs" Exclude="../NexusSSH.Core/bin/**;../NexusSSH.Core/obj/**" LinkBase="Sources/Core" CopyToOutputDirectory="PreserveNewest" />
+    <!-- TerminalNoticeTests hält die Grenzen der Meldungen in der Terminal-Seite und in Core zusammen -->
+    <None Include="../NexusSSH.App/Assets/terminal/terminal.js" Link="Sources/App/Assets/terminal/terminal.js" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

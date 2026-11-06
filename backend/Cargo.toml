@@ -1,0 +1,51 @@
+[workspace]
+resolver = "3"
+members = ["nexus-core", "nexus-testserver", "mosh-client"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace.dependencies]
+# ring statt aws-lc-rs: baut unter Windows ohne NASM/CMake.
+russh = { version = "0.65", default-features = false, features = ["ring", "flate2", "rsa"] }
+russh-sftp = "3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "time", "macros", "io-util", "fs"] }
+# Nur der Testserver: Er spielt die Prüfsumme nach, die ein echter Server mit `sha256sum` errechnet.
+sha2 = "0.11"
+# FTP/FTPS als Dateiziel (2026-10-09): Client auf tokio, TLS über rustls mit ring wie russh.
+# „deprecated“ schaltet in der Bibliothek allein das implizite TLS frei (Port 990) – so nennt sie es selbst.
+suppaftp = { version = "12.2.0", default-features = false, features = ["tokio-rustls-ring", "deprecated"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
+rustls-platform-verifier = "0.7"
+# Nur für Tests und den Testserver: ein selbst signiertes Zertifikat für den kleinen FTP-Server.
+rcgen = "0.14"
+# Kern und eingecheckte Mosh-Bibliothek (`mosh-client`, siehe dort `PATCHES.md`). Wo `default-features = false`
+# steht, nennt jedes Mitglied die Features, die es braucht.
+aes = "0.9"
+zeroize = "1.9"
+# Nur `mosh-client`: AES-128-OCB3, protobuf und zlib des Mosh-Protokolls, Bildschirm (vte) und Zeichenbreite.
+base64 = { version = "0.23.1", default-features = false }
+itoa = "1.0.18"
+ocb3 = { version = "0.2.0", default-features = false }
+miniz_oxide = { version = "0.9.1", default-features = false }
+# Nicht das Feature `no-recursion-limit` einschalten: Ohne es begrenzt prost verschachtelte Nachrichten auf 100 Ebenen.
+prost = { version = "0.14.4", default-features = false }
+unicode-width = { version = "0.2.2", default-features = false }
+vte = "0.15.0"
+proptest = { version = "1.11.0", default-features = false }
+
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = "debuginfo"

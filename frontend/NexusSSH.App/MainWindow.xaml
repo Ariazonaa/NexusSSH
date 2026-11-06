@@ -1,0 +1,244 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Hauptlayout (Spec §3):
+        Titelleiste mit Suche
+        SFTP | Terminal | Server-Info
+        Transfers / Output / …
+-->
+<Window
+    x:Class="NexusSSH.App.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:NexusSSH.App.Controls"
+    xmlns:loc="using:NexusSSH.App.Localization"
+    xmlns:app="using:NexusSSH.App"
+    xmlns:settings="using:NexusSSH.Core.Settings"
+    xmlns:terminals="using:NexusSSH.Core.Terminals"
+    xmlns:views="using:NexusSSH.App.Views"
+    xmlns:vm="using:NexusSSH.Core.ViewModels"
+    Title="NexusSSH">
+
+    <!--  Kein Mica: reines Schwarz, durch das nichts vom Desktop schimmert  -->
+    <Grid x:Name="Root" Background="{ThemeResource WindowBackgroundBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" MinHeight="140" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition x:Name="BottomRow" Height="200" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!--
+            Titelleiste (Entwurf A): „Start“ und die Reiter, mittig die Befehlspalette, rechts die Knöpfe der Bereiche.
+            Die ganze Zeile zieht das Fenster; was sich darin bedienen lässt, meldet MainWindow.UpdateTitleBarRegions
+            dem Fenster als Aussparung. Die letzte Spalte hält den Platz der Fensterknöpfe frei. Im Bild ist die
+            Zeile 44 hoch – die Fensterknöpfe von Windows sind aber 48 hoch und ragten sonst in die Karten darunter.
+        -->
+        <Grid
+            x:Name="AppTitleBar"
+            Height="48"
+            Padding="10,0,0,0"
+            Background="Transparent"
+            ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition x:Name="CaptionInsetColumn" Width="138" />
+            </Grid.ColumnDefinitions>
+            <views:SessionTabsView
+                x:Name="TabsPane"
+                HorizontalAlignment="Left"
+                VerticalAlignment="Center" />
+
+            <!--
+                Befehlspalette (Spec §13): Server verbinden, Tabs wechseln, Befehle ausführen. Sie steht mittig im Platz
+                hinter den Reitern (PlacePalette); Lupe und Kürzel liegen über dem Feld und nehmen keine Klicks.
+            -->
+            <Grid
+                x:Name="PaletteBox"
+                Width="420"
+                HorizontalAlignment="Left"
+                VerticalAlignment="Center">
+                <AutoSuggestBox
+                    x:Name="CommandBox"
+                    CornerRadius="8"
+                    VerticalAlignment="Center"
+                    GotFocus="OnCommandBoxGotFocus"
+                    PlaceholderText="{loc:Loc Key=CommandBarPlaceholder}"
+                    QuerySubmitted="OnCommandBoxQuerySubmitted"
+                    TextChanged="OnCommandBoxTextChanged"
+                    ToolTipService.ToolTip="{loc:Loc Key=CommandBarHint}"
+                    UpdateTextOnSelect="False">
+                    <AutoSuggestBox.Resources>
+                        <ResourceDictionary>
+                            <ResourceDictionary.ThemeDictionaries>
+                                <ResourceDictionary x:Key="HighContrast" />
+                                <ResourceDictionary x:Key="Default">
+                                    <StaticResource x:Key="TextControlBackground" ResourceKey="RaisedBackgroundBrush" />
+                                    <StaticResource x:Key="TextControlBackgroundPointerOver" ResourceKey="RaisedBackgroundBrush" />
+                                    <StaticResource x:Key="TextControlBackgroundFocused" ResourceKey="RaisedBackgroundBrush" />
+                                    <StaticResource x:Key="TextControlBorderBrush" ResourceKey="FieldBorderBrush" />
+                                    <StaticResource x:Key="TextControlBorderBrushPointerOver" ResourceKey="FieldBorderBrush" />
+                                    <StaticResource x:Key="TextControlPlaceholderForeground" ResourceKey="MutedTextBrush" />
+                                    <StaticResource x:Key="TextControlPlaceholderForegroundPointerOver" ResourceKey="MutedTextBrush" />
+                                    <StaticResource x:Key="TextControlPlaceholderForegroundFocused" ResourceKey="MutedTextBrush" />
+                                </ResourceDictionary>
+                            </ResourceDictionary.ThemeDictionaries>
+                        </ResourceDictionary>
+                    </AutoSuggestBox.Resources>
+                    <AutoSuggestBox.TextBoxStyle>
+                        <!--  30 hoch, Rundung 8; links Platz für die Lupe, rechts für das Kürzel  -->
+                        <Style BasedOn="{StaticResource AutoSuggestBoxTextBoxStyle}" TargetType="TextBox">
+                            <Setter Property="MinHeight" Value="30" />
+                            <Setter Property="Padding" Value="32,5,118,5" />
+                            <Setter Property="FontSize" Value="13" />
+                        </Style>
+                    </AutoSuggestBox.TextBoxStyle>
+                    <AutoSuggestBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:PaletteItem">
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <FontIcon
+                                    FontSize="14"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    Glyph="{x:Bind app:Ui.PaletteGlyph(Kind)}" />
+                                <TextBlock Grid.Column="1" Text="{x:Bind Title}" />
+                                <TextBlock
+                                    Grid.Column="2"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    Text="{x:Bind Detail}"
+                                    TextTrimming="CharacterEllipsis" />
+                                <TextBlock
+                                    Grid.Column="3"
+                                    Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                    Style="{StaticResource CaptionTextBlockStyle}"
+                                    VerticalAlignment="Center"
+                                    Text="{x:Bind Shortcut}" />
+                            </Grid>
+                        </DataTemplate>
+                    </AutoSuggestBox.ItemTemplate>
+                </AutoSuggestBox>
+                <controls:LineIcon
+                    Margin="11,0,0,0"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Center"
+                    Foreground="{ThemeResource MutedTextBrush}"
+                    IsHitTestVisible="False"
+                    Kind="Search"
+                    Size="14" />
+                <TextBlock
+                    x:Name="PaletteShortcutText"
+                    Margin="0,0,11,0"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Center"
+                    FontSize="11"
+                    Foreground="{ThemeResource MutedTextBrush}"
+                    IsHitTestVisible="False" />
+            </Grid>
+
+            <views:TitleButtonsView x:Name="TitleButtons" Grid.Column="1" />
+        </Grid>
+
+        <!--  Hinweis auf eine neuere Version (GitHub-Releases): schließen oder zur Download-Seite  -->
+        <InfoBar
+            x:Name="UpdateBar"
+            Grid.Row="1"
+            Margin="12,6,12,0"
+            CloseButtonClick="OnUpdateDismissed"
+            IsOpen="{x:Bind Shell.HasUpdate, Mode=OneWay}"
+            Message="{x:Bind Shell.UpdateMessage, Mode=OneWay}"
+            Severity="Informational"
+            Title="{loc:Loc Key=UpdateBannerTitle}">
+            <InfoBar.ActionButton>
+                <Button Click="OnOpenReleaseClicked" Content="{loc:Loc Key=UpdateDownload}" />
+            </InfoBar.ActionButton>
+        </InfoBar>
+
+        <!--  Die Bereiche als Karten; die Trenner dazwischen sind die Lücken  -->
+        <Grid
+            x:Name="PaneArea"
+            Grid.Row="2"
+            Margin="8,0,8,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition x:Name="SftpColumn" Width="300" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" MinWidth="240" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition x:Name="SnippetsColumn" Width="280" />
+            </Grid.ColumnDefinitions>
+
+            <views:SftpBrowserView x:Name="SftpPane" />
+            <controls:PaneSplitter
+                x:Name="SftpSplitter"
+                Grid.Column="1"
+                AutomationProperties.Name="{loc:Loc Key=ResizeSftp}"
+                Orientation="Vertical" />
+            <views:TerminalWorkspaceView x:Name="TerminalPane" Grid.Column="2" />
+            <controls:PaneSplitter
+                x:Name="SnippetsSplitter"
+                Grid.Column="3"
+                AutomationProperties.Name="{loc:Loc Key=ResizeSnippets}"
+                Orientation="Vertical" />
+            <views:SnippetsPaneView x:Name="SnippetsPane" Grid.Column="4" />
+        </Grid>
+
+        <controls:PaneSplitter
+            x:Name="BottomSplitter"
+            Grid.Row="3"
+            AutomationProperties.Name="{loc:Loc Key=ResizeBottom}"
+            Orientation="Horizontal" />
+        <views:BottomPanelView
+            x:Name="BottomPane"
+            Grid.Row="4"
+            Margin="8,0,8,0" />
+
+        <!--  Die Einstellungen liegen als eigene Seite über den Bereichen (ShellViewModel.IsSettingsOpen)  -->
+        <views:SettingsView
+            x:Name="SettingsPane"
+            Grid.Row="2"
+            Grid.RowSpan="3"
+            Margin="8,0,8,0"
+            Visibility="Collapsed" />
+
+        <!--  Die Hilfe: wie die Einstellungen eine Seite über den Bereichen (ShellViewModel.IsHelpOpen)  -->
+        <views:HelpView
+            x:Name="HelpPane"
+            Grid.Row="2"
+            Grid.RowSpan="3"
+            Margin="8,0,8,0"
+            Visibility="Collapsed" />
+
+        <!--  Eine Datei ansehen oder bearbeiten: ebenfalls eine Seite über den Bereichen (ShellViewModel.Viewer)  -->
+        <views:FileViewerView
+            x:Name="ViewerPane"
+            Grid.Row="2"
+            Grid.RowSpan="3"
+            Margin="8,0,8,0"
+            Visibility="Collapsed" />
+
+        <!--  Die Protokolle eines Servers: ebenfalls eine Seite über den Bereichen (ShellViewModel.Logs)  -->
+        <views:ServerLogsView
+            x:Name="LogsPane"
+            Grid.Row="2"
+            Grid.RowSpan="3"
+            Margin="8,0,8,0"
+            Visibility="Collapsed" />
+
+        <!--  Die Einzelheiten eines Servers: ebenfalls eine Seite über den Bereichen (ShellViewModel.Details)  -->
+        <views:ServerDetailsView
+            x:Name="DetailsPane"
+            Grid.Row="2"
+            Grid.RowSpan="3"
+            Margin="8,0,8,0"
+            Visibility="Collapsed" />
+
+        <!--  Die Zeile unten für das ganze Fenster: Auslastung, Details, Transfers, Probleme (Entwurf A)  -->
+        <views:StatusRowView x:Name="StatusBar" Grid.Row="5" />
+    </Grid>
+</Window>

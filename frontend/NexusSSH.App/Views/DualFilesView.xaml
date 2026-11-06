@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    „Zwei Spalten“: links ein Ordner dieses Rechners, rechts der Dateibrowser des Servers – in voller Breite an der
+    Stelle des Terminals, das darunter weiterläuft. Die rechte Spalte ist dieselbe Ansicht wie die schmale Leiste,
+    mit allem, was sie kann.
+-->
+<UserControl
+    x:Class="NexusSSH.App.Views.DualFilesView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:views="using:NexusSSH.App.Views">
+
+    <Grid x:Name="Columns" Background="{ThemeResource WindowBackgroundBrush}">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" MinWidth="260" />
+            <ColumnDefinition Width="*" MinWidth="260" />
+        </Grid.ColumnDefinitions>
+        <views:LocalBrowserView x:Name="LocalPane" />
+        <views:SftpBrowserView
+            x:Name="RemotePane"
+            Grid.Column="1"
+            Embedded="True" />
+    </Grid>
+</UserControl>

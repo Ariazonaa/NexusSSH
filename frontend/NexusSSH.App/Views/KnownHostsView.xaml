@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Bekannte Server – eine Seite der Startseite: die Host-Schlüssel, die sich die App gemerkt hat, ansehen und
+    einzeln vergessen. Name, Art und Fingerabdruck kommen aus der Datei und sind reiner Text.
+-->
+<UserControl
+    x:Class="NexusSSH.App.Views.KnownHostsView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:app="using:NexusSSH.App"
+    xmlns:loc="using:NexusSSH.App.Localization"
+    xmlns:models="using:NexusSSH.Core.Models">
+
+    <Grid RowSpacing="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Grid MaxWidth="760" HorizontalAlignment="Left" ColumnSpacing="12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock
+                MinWidth="300"
+                VerticalAlignment="Center"
+                Style="{StaticResource SubtitleTextBlockStyle}"
+                Text="{loc:Loc Key=SettingsKnownHosts}" />
+            <!--  Eine Zertifizierungsstelle für Host-Zertifikate eintragen (@cert-authority) – nur hier, nur von Hand  -->
+            <Button
+                x:Name="AddAuthorityButton"
+                Grid.Column="1"
+                Click="OnAddAuthorityClicked"
+                Content="{loc:Loc Key=AuthorityAdd}" />
+        </Grid>
+
+        <TextBlock
+            Grid.Row="1"
+            MaxWidth="760"
+            HorizontalAlignment="Left"
+            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+            Style="{StaticResource CaptionTextBlockStyle}"
+            Text="{loc:Loc Key=KnownHostsHint}"
+            TextWrapping="Wrap" />
+
+        <TextBlock
+            x:Name="NoKnownHostsText"
+            Grid.Row="2"
+            Margin="0,12,0,0"
+            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+            Text="{loc:Loc Key=NoKnownHosts}" />
+        <ListView
+            x:Name="KnownHostsList"
+            Grid.Row="2"
+            MaxWidth="760"
+            HorizontalAlignment="Left"
+            AutomationProperties.Name="{loc:Loc Key=SettingsKnownHosts}"
+            ItemsSource="{x:Bind Shell.KnownHosts}"
+            SelectionMode="None">
+            <ListView.ItemContainerStyle>
+                <Style BasedOn="{StaticResource DefaultListViewItemStyle}" TargetType="ListViewItem">
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                    <Setter Property="Padding" Value="0,0,0,8" />
+                </Style>
+            </ListView.ItemContainerStyle>
+            <ListView.ItemTemplate>
+                <DataTemplate x:DataType="models:KnownHost">
+                    <Grid
+                        MinWidth="520"
+                        Padding="14,10,10,10"
+                        Background="{ThemeResource RaisedBackgroundBrush}"
+                        BorderBrush="{ThemeResource CardBorderBrush}"
+                        BorderThickness="1"
+                        ColumnSpacing="12"
+                        CornerRadius="10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center" Spacing="1">
+                            <TextBlock Text="{x:Bind app:Ui.KnownHostTitle(Name, IsAuthority)}" TextTrimming="CharacterEllipsis" />
+                            <TextBlock
+                                FontFamily="Cascadia Mono, Consolas"
+                                FontSize="11"
+                                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                IsTextSelectionEnabled="True"
+                                TextTrimming="CharacterEllipsis">
+                                <Run Text="{x:Bind Algorithm}" />
+                                <Run Text="{x:Bind Fingerprint}" />
+                            </TextBlock>
+                        </StackPanel>
+                        <Button
+                            Grid.Column="1"
+                            VerticalAlignment="Center"
+                            AutomationProperties.Name="{x:Bind app:Ui.ForgetHostName(Name)}"
+                            Click="OnForgetHostClicked"
+                            Content="{loc:Loc Key=ForgetHost}"
+                            Tag="{x:Bind}" />
+                    </Grid>
+                </DataTemplate>
+            </ListView.ItemTemplate>
+        </ListView>
+    </Grid>
+</UserControl>

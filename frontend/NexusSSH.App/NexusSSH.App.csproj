@@ -1,0 +1,58 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>$(NexusWindowsTargetFramework)</TargetFramework>
+    <TargetPlatformMinVersion>$(NexusMinWindowsVersion)</TargetPlatformMinVersion>
+    <SupportedOSPlatformVersion>$(NexusMinWindowsVersion)</SupportedOSPlatformVersion>
+    <RootNamespace>NexusSSH.App</RootNamespace>
+    <AssemblyName>NexusSSH</AssemblyName>
+    <Description>Windows-Oberfläche (WinUI 3) von NexusSSH.</Description>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- gezeichnet von tools/make-icon.ps1 -->
+    <ApplicationIcon>Assets\NexusSSH.ico</ApplicationIcon>
+
+    <!--
+      unpackaged, self-contained. x64, solange niemand etwas anderes verlangt; mit -r win-arm64 entsteht die Fassung
+      für Windows auf ARM (tools/publish-app.ps1 -Arch arm64) – der Rust-Kern wird dann für dasselbe Ziel gebaut.
+    -->
+    <UseWinUI>true</UseWinUI>
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <SelfContained>true</SelfContained>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
+    <PlatformTarget Condition="'$(RuntimeIdentifier)' == 'win-arm64'">ARM64</PlatformTarget>
+    <PlatformTarget Condition="'$(RuntimeIdentifier)' != 'win-arm64'">x64</PlatformTarget>
+    <!-- LibraryImport (MessageBoxW in App.xaml.cs) erzeugt unsafe-Code -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- erzeugt NexusSSH.pri (kompiliertes XAML) auch ohne MSIX-Paket -->
+    <EnableMsixTooling>true</EnableMsixTooling>
+    <!--
+      Native AOT beim Veröffentlichen (tools/publish-app.ps1): kein JIT, schnellerer Start, weniger Speicher. Der
+      gewöhnliche Build bleibt, wie er ist; die Einstellung schaltet aber auch dort die Prüfungen ein, die sagen,
+      was unter AOT nicht ginge. Listen für XAML: siehe AotExposedTypes.cs.
+    -->
+    <PublishAot>true</PublishAot>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" />
+    <PackageReference Include="Microsoft.WindowsAppSDK" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\NexusSSH.Core\NexusSSH.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Terminal-Seite samt xterm.js: der WebView2 lädt sie zur Laufzeit aus dem Ausgabeordner -->
+    <Content Include="Assets\terminal\**" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <!-- Symbol für Fenster und Taskleiste (.ico) und für die Titelleiste (.png) -->
+    <Content Include="Assets\NexusSSH.ico" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="Assets\NexusSSH.png" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <Import Project="RustCore.targets" />
+
+</Project>

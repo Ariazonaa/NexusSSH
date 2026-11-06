@@ -1,0 +1,120 @@
+# Ziele für `cargo fuzz` (libFuzzer) – nur unter Linux, mit einem Nightly-Compiler:
+#
+#     cargo install cargo-fuzz
+#     cd backend/fuzz && cargo +nightly fuzz run sshconfig -- -max_total_time=300
+#
+# Bewusst ein eigener Arbeitsbereich: Der gewöhnliche Build und die CI sollen libFuzzer nicht bauen müssen. Was die
+# Ziele aufrufen, steht in `nexus-core/src/fuzzing.rs`; dieselben Eingänge prüft `nexus-core/tests/fuzz.rs` bei
+# jedem `cargo test` mit festem Zufall, auch unter Windows.
+[package]
+name = "nexus-core-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[workspace]
+
+[dependencies]
+libfuzzer-sys = "0.4"
+nexus-core = { path = "../nexus-core" }
+# Die eingecheckte Mosh-Bibliothek; ihre Eingänge stehen in `mosh-client/src/fuzzing.rs`.
+mosh-client = { path = "../mosh-client" }
+
+[profile.release]
+debug = true
+# Überläufe sollen auffallen, nicht umbrechen.
+overflow-checks = true
+
+[[bin]]
+name = "sshconfig"
+path = "fuzz_targets/sshconfig.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "telnet"
+path = "fuzz_targets/telnet.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "monitor"
+path = "fuzz_targets/monitor.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "ls"
+path = "fuzz_targets/ls.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "ftp_list"
+path = "fuzz_targets/ftp_list.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "exec"
+path = "fuzz_targets/exec.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "x11"
+path = "fuzz_targets/x11.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "socks"
+path = "fuzz_targets/socks.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "keyfile"
+path = "fuzz_targets/keyfile.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "sftp_stream"
+path = "fuzz_targets/sftp_stream.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "mosh_bootstrap"
+path = "fuzz_targets/mosh_bootstrap.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "mosh_untrusted_parsers"
+path = "fuzz_targets/mosh_untrusted_parsers.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "mosh_state_transitions"
+path = "fuzz_targets/mosh_state_transitions.rs"
+test = false
+doc = false
+bench = false

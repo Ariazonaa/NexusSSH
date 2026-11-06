@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Rückfrage zum Host-Schlüssel. „Abbrechen“ ist die Vorgabe: Die Eingabetaste soll nie ungelesen zustimmen.
+-->
+<ContentDialog
+    x:Class="NexusSSH.App.Dialogs.HostKeyDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:loc="using:NexusSSH.App.Localization"
+    CloseButtonText="{loc:Loc Key=Cancel}"
+    DefaultButton="Close">
+
+    <StackPanel Width="460" Spacing="12">
+        <InfoBar
+            x:Name="ChangedWarning"
+            IsClosable="False"
+            IsOpen="True"
+            Severity="Error"
+            Visibility="Collapsed" />
+        <TextBlock x:Name="Intro" TextWrapping="Wrap" />
+        <Grid ColumnSpacing="12" RowSpacing="6">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="{loc:Loc Key=HostKeyServer}" />
+            <TextBlock
+                x:Name="ServerText"
+                Grid.Column="1"
+                IsTextSelectionEnabled="True"
+                TextWrapping="Wrap" />
+            <TextBlock
+                Grid.Row="1"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                Text="{loc:Loc Key=HostKeyType}" />
+            <TextBlock
+                x:Name="AlgorithmText"
+                Grid.Row="1"
+                Grid.Column="1"
+                IsTextSelectionEnabled="True" />
+            <TextBlock
+                Grid.Row="2"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                Text="{loc:Loc Key=HostKeyFingerprint}" />
+            <TextBlock
+                x:Name="FingerprintText"
+                Grid.Row="2"
+                Grid.Column="1"
+                FontFamily="Cascadia Mono, Consolas"
+                IsTextSelectionEnabled="True"
+                TextWrapping="Wrap" />
+            <!--  Nur bei geändertem Schlüssel: der bisherige Fingerabdruck, zum Vergleich darunter  -->
+            <TextBlock
+                x:Name="PreviousLabel"
+                Grid.Row="3"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                Text="{loc:Loc Key=HostKeyPrevious}"
+                Visibility="Collapsed" />
+            <TextBlock
+                x:Name="PreviousText"
+                Grid.Row="3"
+                Grid.Column="1"
+                FontFamily="Cascadia Mono, Consolas"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                IsTextSelectionEnabled="True"
+                TextWrapping="Wrap"
+                Visibility="Collapsed" />
+        </Grid>
+        <TextBlock
+            x:Name="Hint"
+            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+            TextWrapping="Wrap" />
+    </StackPanel>
+</ContentDialog>

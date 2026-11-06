@@ -1,0 +1,507 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Immer dunkel, und zwar schwarz (AMOLED): Das Fenster ist reines Schwarz ohne Mica – nichts vom Desktop schimmert
+    durch –, die Bereiche liegen als abgerundete Karten mit Abstand darauf. Akzent und Bedienelemente kommen von
+    WinUI.
+-->
+<Application
+    x:Class="NexusSSH.App.App"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    RequestedTheme="Dark">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <!--
+                Fenster, Karten darauf, und was sich in der Titelleiste abhebt (Reiter). Mit einem Kontrastdesign
+                von Windows gelten dessen Farben: Sonst blieben die Flächen schwarz, während jedes Bedienelement
+                von WinUI die Farben des Designs annimmt – dunkle Schrift auf Schwarz, nur durch die Unterlegung
+                lesbar, die Windows dann hinter jeden Text setzt (gesehen 2026-10-11 mit „Wüste“). Die Ansichten holen
+                die Pinsel als ThemeResource: So folgen sie auch, wenn das Design wechselt, während die App läuft.
+            -->
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Default">
+                    <SolidColorBrush x:Key="WindowBackgroundBrush" Color="#FF000000" />
+                    <SolidColorBrush x:Key="CardBackgroundBrush" Color="#FF0F0F10" />
+                    <SolidColorBrush x:Key="CardBorderBrush" Color="#FF1F1F22" />
+                    <SolidColorBrush x:Key="PillHoverBrush" Color="#FF141417" />
+                    <SolidColorBrush x:Key="PillSelectedBrush" Color="#FF1D1D21" />
+                    <SolidColorBrush x:Key="PillSelectedBorderBrush" Color="#FF2A2A30" />
+                    <SolidColorBrush x:Key="RaisedBackgroundBrush" Color="#FF121214" />
+                    <!--  Farben aus Entwurf A  -->
+                    <SolidColorBrush x:Key="TerminalCardBrush" Color="#FF0C0C0C" />
+                    <SolidColorBrush x:Key="FieldBackgroundBrush" Color="#FF17171A" />
+                    <SolidColorBrush x:Key="FieldBorderBrush" Color="#FF26262B" />
+                    <SolidColorBrush x:Key="MutedTextBrush" Color="#FF8A8A92" />
+                    <SolidColorBrush x:Key="SecondaryTextBrush" Color="#FF9A9AA2" />
+                    <SolidColorBrush x:Key="IconBrush" Color="#FFC8C8D0" />
+                    <SolidColorBrush x:Key="TitleIconBrush" Color="#FFB8B8C0" />
+                    <SolidColorBrush x:Key="ToggleOnBrush" Color="#FF1D1D21" />
+                    <SolidColorBrush x:Key="ListSelectedBrush" Color="#FF1D2A38" />
+                    <SolidColorBrush x:Key="RowHoverBrush" Color="#FF1A1A1E" />
+                    <SolidColorBrush x:Key="FolderIconBrush" Color="#FFE2B04A" />
+                    <SolidColorBrush x:Key="StateOkBrush" Color="#FF4ADE80" />
+                    <SolidColorBrush x:Key="StateWaitBrush" Color="#FFF5B041" />
+                    <SolidColorBrush x:Key="ProblemTextBrush" Color="#FFF5C46B" />
+                    <SolidColorBrush x:Key="ProblemBackgroundBrush" Color="#FF3A2A10" />
+                    <SolidColorBrush x:Key="BarTrackBrush" Color="#FF26262B" />
+                    <SolidColorBrush x:Key="DraftAccentBrush" Color="#FF5FB3FF" />
+                    <SolidColorBrush x:Key="CheckBoxBorderBrush" Color="#FF4A4A52" />
+                    <SolidColorBrush x:Key="CheckMarkBrush" Color="#FF000000" />
+                    <SolidColorBrush x:Key="DraftAccentHoverBrush" Color="#FF8CC8FF" />
+                    <SolidColorBrush x:Key="OnDraftAccentBrush" Color="#FF00121F" />
+                    <SolidColorBrush x:Key="TileBackgroundBrush" Color="#FF151517" />
+                    <SolidColorBrush x:Key="TileBorderBrush" Color="#FF222226" />
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="HighContrast">
+                    <SolidColorBrush x:Key="WindowBackgroundBrush" Color="{ThemeResource SystemColorWindowColor}" />
+                    <SolidColorBrush x:Key="CardBackgroundBrush" Color="{ThemeResource SystemColorWindowColor}" />
+                    <SolidColorBrush x:Key="CardBorderBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+                    <SolidColorBrush x:Key="PillHoverBrush" Color="{ThemeResource SystemColorButtonFaceColor}" />
+                    <SolidColorBrush x:Key="PillSelectedBrush" Color="{ThemeResource SystemColorButtonFaceColor}" />
+                    <SolidColorBrush x:Key="PillSelectedBorderBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+                    <SolidColorBrush x:Key="RaisedBackgroundBrush" Color="{ThemeResource SystemColorWindowColor}" />
+                    <SolidColorBrush x:Key="TerminalCardBrush" Color="{ThemeResource SystemColorWindowColor}" />
+                    <SolidColorBrush x:Key="FieldBackgroundBrush" Color="{ThemeResource SystemColorWindowColor}" />
+                    <SolidColorBrush x:Key="FieldBorderBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+                    <SolidColorBrush x:Key="MutedTextBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+                    <SolidColorBrush x:Key="SecondaryTextBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+                    <SolidColorBrush x:Key="IconBrush" Color="{ThemeResource SystemColorButtonTextColor}" />
+                    <SolidColorBrush x:Key="TitleIconBrush" Color="{ThemeResource SystemColorButtonTextColor}" />
+                    <SolidColorBrush x:Key="ToggleOnBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+                    <SolidColorBrush x:Key="ListSelectedBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+                    <SolidColorBrush x:Key="RowHoverBrush" Color="{ThemeResource SystemColorButtonFaceColor}" />
+                    <SolidColorBrush x:Key="FolderIconBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+                    <SolidColorBrush x:Key="StateOkBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+                    <SolidColorBrush x:Key="StateWaitBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+                    <SolidColorBrush x:Key="ProblemTextBrush" Color="{ThemeResource SystemColorHighlightTextColor}" />
+                    <SolidColorBrush x:Key="ProblemBackgroundBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+                    <SolidColorBrush x:Key="BarTrackBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+                    <SolidColorBrush x:Key="DraftAccentBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+                    <SolidColorBrush x:Key="CheckBoxBorderBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+                    <SolidColorBrush x:Key="CheckMarkBrush" Color="{ThemeResource SystemColorHighlightTextColor}" />
+                    <SolidColorBrush x:Key="DraftAccentHoverBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+                    <SolidColorBrush x:Key="OnDraftAccentBrush" Color="{ThemeResource SystemColorHighlightTextColor}" />
+                    <SolidColorBrush x:Key="TileBackgroundBrush" Color="{ThemeResource SystemColorWindowColor}" />
+                    <SolidColorBrush x:Key="TileBorderBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+
+            <!--  Gleicher Wert wie in Assets/terminal/terminal.css und terminal.js (Farbschema „Black“)  -->
+            <Color x:Key="TerminalBackground">#FF000000</Color>
+            <SolidColorBrush x:Key="TerminalBackgroundBrush" Color="{StaticResource TerminalBackground}" />
+
+            <SolidColorBrush x:Key="StatusOnlineBrush" Color="#FF6CCB5F" />
+            <SolidColorBrush x:Key="StatusOfflineBrush" Color="#FF9D9D9D" />
+
+            <!--  Farben der Vorschau (FileViewerView): Kommentar, Zeichenkette, Zahl, Schlüssel, Abschnitt/Tag  -->
+            <SolidColorBrush x:Key="SyntaxCommentBrush" Color="#FF6A9955" />
+            <SolidColorBrush x:Key="SyntaxStringBrush" Color="#FFCE9178" />
+            <SolidColorBrush x:Key="SyntaxNumberBrush" Color="#FFB5CEA8" />
+            <SolidColorBrush x:Key="SyntaxKeyBrush" Color="#FF9CDCFE" />
+            <SolidColorBrush x:Key="SyntaxTagBrush" Color="#FF569CD6" />
+            <CornerRadius x:Key="CardCornerRadius">10</CornerRadius>
+
+            <!--  Knopf einer Kopfzeile: umrandete, weich gerundete Fläche – mit Symbol, Text oder beidem  -->
+            <Style
+                x:Key="ToolButtonStyle"
+                BasedOn="{StaticResource DefaultButtonStyle}"
+                TargetType="Button">
+                <Setter Property="Height" Value="30" />
+                <Setter Property="MinWidth" Value="34" />
+                <Setter Property="Padding" Value="9,0" />
+                <Setter Property="CornerRadius" Value="8" />
+                <Setter Property="Background" Value="{ThemeResource RaisedBackgroundBrush}" />
+                <Setter Property="BorderBrush" Value="{ThemeResource PillSelectedBorderBrush}" />
+            </Style>
+
+            <!--  Das runde Viereck mit Symbol vor einem Server (Kopfzeile, Kachel der Startseite)  -->
+            <Style x:Key="AvatarStyle" TargetType="Border">
+                <Setter Property="Width" Value="36" />
+                <Setter Property="Height" Value="36" />
+                <Setter Property="CornerRadius" Value="10" />
+                <Setter Property="Background" Value="{ThemeResource PillSelectedBrush}" />
+                <Setter Property="BorderBrush" Value="{ThemeResource PillSelectedBorderBrush}" />
+                <Setter Property="BorderThickness" Value="1" />
+            </Style>
+
+            <!--  Ein Bereich (SFTP, Terminal, Inspector, unten) als Karte auf dem schwarzen Fenster  -->
+            <Style x:Key="CardStyle" TargetType="Grid">
+                <Setter Property="Background" Value="{ThemeResource CardBackgroundBrush}" />
+                <Setter Property="BorderBrush" Value="{ThemeResource CardBorderBrush}" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="CornerRadius" Value="{StaticResource CardCornerRadius}" />
+            </Style>
+
+            <!--  Das × im Reiter; der Stil der TabView dafür ist außerhalb ihrer Vorlage nicht zu haben  -->
+            <Style
+                x:Key="PillCloseButtonStyle"
+                BasedOn="{StaticResource SubtleButtonStyle}"
+                TargetType="Button">
+                <Setter Property="Width" Value="24" />
+                <Setter Property="Height" Value="24" />
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="CornerRadius" Value="12" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+                <Setter Property="FontFamily" Value="{ThemeResource SymbolThemeFontFamily}" />
+                <Setter Property="FontSize" Value="10" />
+                <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+            </Style>
+
+            <!--
+                Reiter einer Sitzung als Pille. Die Vorlage von WinUI zeichnet den gewählten Reiter als Lasche, die
+                unten in den Inhalt übergeht, und rundet nur die oberen Ecken – das lässt sich über Ressourcen nicht
+                abstellen. Diese Vorlage behält die Namen, die die TabView sucht (TabContainer, ContentPresenter,
+                CloseButton), und die Zustände fürs Ziehen und Umsortieren.
+            -->
+            <Style x:Key="PillTabStyle" TargetType="TabViewItem">
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="BorderBrush" Value="Transparent" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="CornerRadius" Value="18" />
+                <Setter Property="MinHeight" Value="36" />
+                <Setter Property="UseSystemFocusVisuals" Value="True" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="TabViewItem">
+                            <Grid
+                                x:Name="LayoutRoot"
+                                Padding="2,0"
+                                Background="Transparent"
+                                UseLayoutRounding="False">
+                                <Grid.RenderTransform>
+                                    <ScaleTransform x:Name="LayoutRootScale" />
+                                </Grid.RenderTransform>
+                                <VisualStateManager.VisualStateGroups>
+                                    <VisualStateGroup x:Name="CommonStates">
+                                        <VisualState x:Name="Normal" />
+                                        <VisualState x:Name="PointerOver">
+                                            <VisualState.Setters>
+                                                <Setter Target="TabContainer.Background" Value="{ThemeResource PillHoverBrush}" />
+                                                <Setter Target="CloseSlot.Visibility" Value="Visible" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                        <VisualState x:Name="Pressed">
+                                            <VisualState.Setters>
+                                                <Setter Target="TabContainer.Background" Value="{ThemeResource PillHoverBrush}" />
+                                                <Setter Target="CloseSlot.Visibility" Value="Visible" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                        <VisualState x:Name="Selected">
+                                            <VisualState.Setters>
+                                                <Setter Target="TabContainer.Background" Value="{ThemeResource PillSelectedBrush}" />
+                                                <Setter Target="TabContainer.BorderBrush" Value="{ThemeResource PillSelectedBorderBrush}" />
+                                                <Setter Target="ContentPresenter.Foreground" Value="{ThemeResource TextFillColorPrimaryBrush}" />
+                                                <Setter Target="CloseSlot.Visibility" Value="Visible" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                        <VisualState x:Name="PointerOverSelected">
+                                            <VisualState.Setters>
+                                                <Setter Target="TabContainer.Background" Value="{ThemeResource PillSelectedBrush}" />
+                                                <Setter Target="TabContainer.BorderBrush" Value="{ThemeResource PillSelectedBorderBrush}" />
+                                                <Setter Target="ContentPresenter.Foreground" Value="{ThemeResource TextFillColorPrimaryBrush}" />
+                                                <Setter Target="CloseSlot.Visibility" Value="Visible" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                        <VisualState x:Name="PressedSelected">
+                                            <VisualState.Setters>
+                                                <Setter Target="TabContainer.Background" Value="{ThemeResource PillSelectedBrush}" />
+                                                <Setter Target="TabContainer.BorderBrush" Value="{ThemeResource PillSelectedBorderBrush}" />
+                                                <Setter Target="ContentPresenter.Foreground" Value="{ThemeResource TextFillColorPrimaryBrush}" />
+                                                <Setter Target="CloseSlot.Visibility" Value="Visible" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                    </VisualStateGroup>
+                                    <VisualStateGroup x:Name="ReorderHintStates">
+                                        <VisualState x:Name="NoReorderHint" />
+                                        <VisualState x:Name="RightReorderHint">
+                                            <Storyboard>
+                                                <DragOverThemeAnimation
+                                                    Direction="Right"
+                                                    TargetName="LayoutRoot"
+                                                    ToOffset="{ThemeResource ListViewItemReorderHintThemeOffset}" />
+                                            </Storyboard>
+                                        </VisualState>
+                                        <VisualState x:Name="LeftReorderHint">
+                                            <Storyboard>
+                                                <DragOverThemeAnimation
+                                                    Direction="Left"
+                                                    TargetName="LayoutRoot"
+                                                    ToOffset="{ThemeResource ListViewItemReorderHintThemeOffset}" />
+                                            </Storyboard>
+                                        </VisualState>
+                                        <VisualStateGroup.Transitions>
+                                            <VisualTransition GeneratedDuration="0:0:0.2" To="NoReorderHint" />
+                                        </VisualStateGroup.Transitions>
+                                    </VisualStateGroup>
+                                    <VisualStateGroup x:Name="DragStates">
+                                        <VisualState x:Name="NotDragging" />
+                                        <VisualState x:Name="Dragging">
+                                            <Storyboard>
+                                                <DoubleAnimation
+                                                    Storyboard.TargetName="LayoutRoot"
+                                                    Storyboard.TargetProperty="Opacity"
+                                                    To="{ThemeResource ListViewItemDragThemeOpacity}"
+                                                    Duration="0" />
+                                                <DragItemThemeAnimation TargetName="LayoutRoot" />
+                                            </Storyboard>
+                                        </VisualState>
+                                        <VisualState x:Name="Reordering">
+                                            <Storyboard>
+                                                <DoubleAnimation
+                                                    Storyboard.TargetName="LayoutRoot"
+                                                    Storyboard.TargetProperty="Opacity"
+                                                    To="{ThemeResource ListViewItemReorderThemeOpacity}"
+                                                    Duration="0:0:0.240" />
+                                            </Storyboard>
+                                        </VisualState>
+                                        <VisualState x:Name="ReorderingTarget">
+                                            <Storyboard>
+                                                <DoubleAnimation
+                                                    Storyboard.TargetName="LayoutRoot"
+                                                    Storyboard.TargetProperty="Opacity"
+                                                    To="{ThemeResource ListViewItemReorderTargetThemeOpacity}"
+                                                    Duration="0:0:0.240" />
+                                            </Storyboard>
+                                        </VisualState>
+                                        <VisualState x:Name="ReorderedPlaceholder">
+                                            <Storyboard>
+                                                <FadeOutThemeAnimation TargetName="LayoutRoot" />
+                                            </Storyboard>
+                                        </VisualState>
+                                        <VisualState x:Name="DragOver">
+                                            <Storyboard>
+                                                <DropTargetItemThemeAnimation TargetName="LayoutRoot" />
+                                            </Storyboard>
+                                        </VisualState>
+                                        <VisualStateGroup.Transitions>
+                                            <VisualTransition GeneratedDuration="0:0:0.2" To="NotDragging" />
+                                        </VisualStateGroup.Transitions>
+                                    </VisualStateGroup>
+                                    <VisualStateGroup x:Name="CloseIconStates">
+                                        <VisualState x:Name="CloseButtonVisible" />
+                                        <VisualState x:Name="CloseButtonCollapsed">
+                                            <VisualState.Setters>
+                                                <Setter Target="CloseButton.Visibility" Value="Collapsed" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                    </VisualStateGroup>
+                                </VisualStateManager.VisualStateGroups>
+                                <!--
+                                    Das × steht nur am aktiven Reiter und an dem unter dem Zeiger (Entwurf A); sonst
+                                    nimmt es keinen Platz. Es liegt in einer eigenen Hülle: Ob es überhaupt da ist
+                                    (angeheftet), schaltet die TabView am Knopf selbst (CloseIconStates).
+                                -->
+                                <Grid
+                                    x:Name="TabContainer"
+                                    Padding="14,0,7,0"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    ColumnSpacing="6"
+                                    Control.IsTemplateFocusTarget="True"
+                                    CornerRadius="{TemplateBinding CornerRadius}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <!--  Den Inhalt setzt die TabView selbst (wie in ihrer eigenen Vorlage)  -->
+                                    <ContentPresenter
+                                        x:Name="ContentPresenter"
+                                        VerticalAlignment="Center"
+                                        Content=""
+                                        ContentTemplate="{TemplateBinding HeaderTemplate}"
+                                        FontSize="14"
+                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                    <Grid
+                                        x:Name="CloseSlot"
+                                        Grid.Column="1"
+                                        Visibility="Collapsed">
+                                        <Button
+                                            x:Name="CloseButton"
+                                            Content="&#xE711;"
+                                            IsTabStop="False"
+                                            IsTextScaleFactorEnabled="False"
+                                            Style="{StaticResource PillCloseButtonStyle}" />
+                                    </Grid>
+                                </Grid>
+                            </Grid>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!--
+                Das kleine Kästchen aus Entwurf A („Terminal-Ordner folgen“): 14 × 14, Rundung 3, angehakt in der
+                Farbe des Entwurfs mit dunklem Haken, Schrift 12. Nur für einzelne Kästchen – alle übrigen bleiben bei
+                WinUI. Im Kontrastdesign: Rand in der Schriftfarbe, angehakt in der Farbe für Hervorgehobenes.
+            -->
+            <Style x:Key="SmallCheckBoxStyle" TargetType="CheckBox">
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="Foreground" Value="{ThemeResource IconBrush}" />
+                <Setter Property="FontSize" Value="12" />
+                <Setter Property="Padding" Value="8,0,0,0" />
+                <Setter Property="MinWidth" Value="0" />
+                <Setter Property="MinHeight" Value="20" />
+                <Setter Property="HorizontalAlignment" Value="Left" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+                <Setter Property="UseSystemFocusVisuals" Value="True" />
+                <Setter Property="FocusVisualMargin" Value="-3" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="CheckBox">
+                            <Grid
+                                x:Name="RootGrid"
+                                Background="{TemplateBinding Background}"
+                                Control.IsTemplateFocusTarget="True">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <VisualStateManager.VisualStateGroups>
+                                    <VisualStateGroup x:Name="CombinedStates">
+                                        <VisualState x:Name="UncheckedNormal" />
+                                        <VisualState x:Name="UncheckedPointerOver">
+                                            <VisualState.Setters>
+                                                <Setter Target="Box.BorderBrush" Value="{ThemeResource IconBrush}" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                        <VisualState x:Name="UncheckedPressed">
+                                            <VisualState.Setters>
+                                                <Setter Target="Box.BorderBrush" Value="{ThemeResource IconBrush}" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                        <VisualState x:Name="UncheckedDisabled">
+                                            <VisualState.Setters>
+                                                <Setter Target="Box.Opacity" Value="0.5" />
+                                                <Setter Target="ContentPresenter.Foreground" Value="{ThemeResource TextFillColorDisabledBrush}" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                        <VisualState x:Name="CheckedNormal">
+                                            <VisualState.Setters>
+                                                <Setter Target="Box.Background" Value="{ThemeResource DraftAccentBrush}" />
+                                                <Setter Target="Box.BorderBrush" Value="{ThemeResource DraftAccentBrush}" />
+                                                <Setter Target="Mark.Opacity" Value="1" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                        <VisualState x:Name="CheckedPointerOver">
+                                            <VisualState.Setters>
+                                                <Setter Target="Box.Background" Value="{ThemeResource DraftAccentBrush}" />
+                                                <Setter Target="Box.BorderBrush" Value="{ThemeResource IconBrush}" />
+                                                <Setter Target="Mark.Opacity" Value="1" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                        <VisualState x:Name="CheckedPressed">
+                                            <VisualState.Setters>
+                                                <Setter Target="Box.Background" Value="{ThemeResource DraftAccentBrush}" />
+                                                <Setter Target="Box.BorderBrush" Value="{ThemeResource IconBrush}" />
+                                                <Setter Target="Mark.Opacity" Value="1" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                        <VisualState x:Name="CheckedDisabled">
+                                            <VisualState.Setters>
+                                                <Setter Target="Box.Background" Value="{ThemeResource DraftAccentBrush}" />
+                                                <Setter Target="Box.BorderBrush" Value="{ThemeResource DraftAccentBrush}" />
+                                                <Setter Target="Mark.Opacity" Value="1" />
+                                                <Setter Target="Box.Opacity" Value="0.5" />
+                                                <Setter Target="ContentPresenter.Foreground" Value="{ThemeResource TextFillColorDisabledBrush}" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                        <!--  Drei Zustände braucht dieses Kästchen nicht; unbestimmt sieht aus wie leer  -->
+                                        <VisualState x:Name="IndeterminateNormal" />
+                                        <VisualState x:Name="IndeterminatePointerOver">
+                                            <VisualState.Setters>
+                                                <Setter Target="Box.BorderBrush" Value="{ThemeResource IconBrush}" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                        <VisualState x:Name="IndeterminatePressed">
+                                            <VisualState.Setters>
+                                                <Setter Target="Box.BorderBrush" Value="{ThemeResource IconBrush}" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                        <VisualState x:Name="IndeterminateDisabled">
+                                            <VisualState.Setters>
+                                                <Setter Target="Box.Opacity" Value="0.5" />
+                                                <Setter Target="ContentPresenter.Foreground" Value="{ThemeResource TextFillColorDisabledBrush}" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                    </VisualStateGroup>
+                                </VisualStateManager.VisualStateGroups>
+                                <Border
+                                    x:Name="Box"
+                                    Width="14"
+                                    Height="14"
+                                    VerticalAlignment="Center"
+                                    Background="{ThemeResource FieldBackgroundBrush}"
+                                    BorderBrush="{ThemeResource CheckBoxBorderBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="3">
+                                    <Path
+                                        x:Name="Mark"
+                                        Data="M2.5,6.2 L5,8.6 L9.6,3.6"
+                                        Opacity="0"
+                                        Stroke="{ThemeResource CheckMarkBrush}"
+                                        StrokeEndLineCap="Round"
+                                        StrokeLineJoin="Round"
+                                        StrokeStartLineCap="Round"
+                                        StrokeThickness="1.6" />
+                                </Border>
+                                <ContentPresenter
+                                    x:Name="ContentPresenter"
+                                    Grid.Column="1"
+                                    Margin="{TemplateBinding Padding}"
+                                    VerticalAlignment="Center"
+                                    AutomationProperties.AccessibilityView="Raw"
+                                    Content="{TemplateBinding Content}"
+                                    ContentTemplate="{TemplateBinding ContentTemplate}"
+                                    ContentTransitions="{TemplateBinding ContentTransitions}"
+                                    Foreground="{TemplateBinding Foreground}"
+                                    TextWrapping="Wrap" />
+                            </Grid>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!--  Überschrift eines Bereichs  -->
+            <Style
+                x:Key="PaneTitleStyle"
+                BasedOn="{StaticResource CaptionTextBlockStyle}"
+                TargetType="TextBlock">
+                <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+                <Setter Property="CharacterSpacing" Value="40" />
+            </Style>
+
+            <!--  Spaltenkopf und Nebentext in Listen  -->
+            <Style
+                x:Key="ColumnHeaderStyle"
+                BasedOn="{StaticResource CaptionTextBlockStyle}"
+                TargetType="TextBlock">
+                <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+            </Style>
+
+            <!--  Kleiner Symbolknopf für Werkzeugzeilen und die Titelleiste  -->
+            <Style
+                x:Key="IconButtonStyle"
+                BasedOn="{StaticResource SubtleButtonStyle}"
+                TargetType="Button">
+                <Setter Property="Width" Value="32" />
+                <Setter Property="Height" Value="32" />
+                <Setter Property="Padding" Value="0" />
+            </Style>
+
+            <!--  Dichte Listenzeile: ein SSH-Client zeigt viele Dateien  -->
+            <Style
+                x:Key="CompactListItemStyle"
+                BasedOn="{StaticResource DefaultListViewItemStyle}"
+                TargetType="ListViewItem">
+                <Setter Property="MinHeight" Value="30" />
+                <Setter Property="Padding" Value="12,0" />
+                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            </Style>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

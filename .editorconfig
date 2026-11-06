@@ -1,0 +1,34 @@
+root = true
+
+[*]
+charset = utf-8
+indent_style = space
+indent_size = 4
+insert_final_newline = true
+trim_trailing_whitespace = true
+end_of_line = lf
+
+[*.{csproj,props,targets,slnx,json,xml,toml}]
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
+
+[*.cs]
+csharp_style_namespace_declarations = file_scoped:warning
+csharp_style_var_for_built_in_types = true:silent
+dotnet_sort_system_directives_first = true
+
+# Eingechecktes Fremdmaterial (xterm.js) bleibt unverändert
+[frontend/NexusSSH.App/Assets/terminal/vendor/**]
+charset = unset
+indent_style = unset
+indent_size = unset
+insert_final_newline = unset
+trim_trailing_whitespace = unset
+
+# Windows PowerShell 5.1 (die CI ruft die Skripte damit auf) liest eine Datei ohne BOM als ANSI: Umlaute würden
+# verstümmelt, und ein Gedankenstrich kann sogar eine Zeichenkette beenden.
+[*.ps1]
+charset = utf-8-bom
+end_of_line = crlf

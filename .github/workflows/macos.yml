@@ -1,0 +1,83 @@
+# Die Befehle des Kerns an einem echten macOS: Kopieren, Belegung, Prüfsumme, Mitlesen, Packen, Prozessliste
+# und Dateien ohne SFTP – gegen den sshd des Runners selbst. Geprüft sind sie sonst an GNU, BusyBox, FreeBSD und
+# OpenBSD; für macOS gibt es keinen eigenen Rechner, ein gehosteter Runner ist einer.
+#
+# Läuft nur auf Wunsch (Actions → „macOS“ → Run workflow): Der Job schaltet auf dem Runner die entfernte
+# Anmeldung ein und meldet sich dort mit einem Schlüssel an, den er selbst erzeugt – der Runner wird danach
+# verworfen.
+name: macOS
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: never
+
+jobs:
+  commands:
+    name: Befehle am Server (macOS)
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Entfernte Anmeldung einschalten
+        run: |
+          sudo launchctl load -w /System/Library/LaunchDaemons/ssh.plist || sudo systemsetup -setremotelogin on
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          ssh-keygen -q -t ed25519 -N '' -f "$RUNNER_TEMP/nexus_test_key"
+          cat "$RUNNER_TEMP/nexus_test_key.pub" >> ~/.ssh/authorized_keys
+          chmod 600 ~/.ssh/authorized_keys
+          chmod go-w ~
+          mkdir "$RUNNER_TEMP/nexus-real"
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do nc -z 127.0.0.1 22 && break; sleep 2; done
+          {
+            echo "NEXUS_REAL_HOST=127.0.0.1"
+            echo "NEXUS_REAL_USER=$(id -un)"
+            echo "NEXUS_REAL_KEY=$RUNNER_TEMP/nexus_test_key"
+            echo "NEXUS_REAL_DIR=$RUNNER_TEMP/nexus-real"
+            echo "NEXUS_REAL_FINGERPRINT=$(ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub | awk '{print $2}')"
+          } >> "$GITHUB_ENV"
+
+      # Zum Nachlesen im Protokoll: welches System, welche Shell, und dass die Anmeldung überhaupt geht.
+      - name: Was hier läuft
+        run: |
+          sw_vers
+          ssh -i "$NEXUS_REAL_KEY" -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o BatchMode=yes \
+            "$NEXUS_REAL_USER@127.0.0.1" 'echo "shell: $SHELL"; uname -a'
+
+      # Was die Auslastung auf macOS liest – als Vorlage für den Vergleich mit dem, was die App daraus macht.
+      - name: Ausgaben für die Auslastung
+        run: |
+          top -l 2 -n 0 -s 1 | tail -n 12
+          vm_stat
+          sysctl hw.memsize hw.ncpu vm.swapusage
+          df -k -l
+          netstat -ibn | head -n 12
+          uptime
+
+      - name: Kern bauen
+        working-directory: backend
+        run: cargo test -p nexus-core --locked --no-run
+
+      - name: Befehle am echten Server
+        working-directory: backend
+        run: cargo test -p nexus-core --locked --test sftp on_a_real_server -- --nocapture --test-threads 1
+
+      - name: Dateien ohne SFTP
+        if: always()
+        working-directory: backend
+        run: cargo test -p nexus-core --locked --test real_shell_files -- --nocapture --test-threads 1
+
+      # Auch der Rest der Tests des Kerns – der läuft sonst nur unter Linux und Windows. Hält nichts auf.
+      - name: Alle Tests des Kerns
+        if: always()
+        continue-on-error: true
+        working-directory: backend
+        env:
+          NEXUS_REAL_HOST: ""
+        run: cargo test -p nexus-core --locked

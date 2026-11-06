@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>NexusSSH.Core</RootNamespace>
+    <Description>Oberflächen-Logik von NexusSSH ohne Windows-Abhängigkeit: Modelle, Dienst-Schnittstellen, Mock-Backend, ViewModels.</Description>
+    <IsAotCompatible>true</IsAotCompatible>
+    <!-- LibraryImport (Backend/Native) erzeugt unsafe-Code -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="NexusSSH.Core.Tests" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,264 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Die Startseite (Entwurf A): links die Seitenleiste als Karte, rechts die
+    gewählte Seite als Karte – die Server als Kacheln oder eine der Verwaltungen oder die Übersicht. Welche Seite offen
+    ist, steht in ShellViewModel.HomePage; die Seitenleiste fasst die Seiten zu fünf Einträgen zusammen (HomeSidebar),
+    „Mehr“ klappt drei weitere auf. Befehle der Palette führen so direkt dorthin.
+-->
+<UserControl
+    x:Class="NexusSSH.App.Views.HomeView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:NexusSSH.App.Controls"
+    xmlns:loc="using:NexusSSH.App.Localization"
+    xmlns:views="using:NexusSSH.App.Views">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.ThemeDictionaries>
+                <!--  Im Kontrastdesign gelten die Farben von WinUI: Dort zeigt die Farbe für Hervorgehobenes die Auswahl  -->
+                <ResourceDictionary x:Key="HighContrast" />
+                <ResourceDictionary x:Key="Default">
+                    <!--  Einträge der Seitenleiste: grau, der gewählte hell auf etwas hellerer Fläche, ohne Strich davor  -->
+                    <StaticResource x:Key="ListViewItemForeground" ResourceKey="IconBrush" />
+                    <StaticResource x:Key="ListViewItemForegroundPointerOver" ResourceKey="TextFillColorPrimaryBrush" />
+                    <StaticResource x:Key="ListViewItemForegroundSelected" ResourceKey="TextFillColorPrimaryBrush" />
+                    <StaticResource x:Key="ListViewItemForegroundSelectedPointerOver" ResourceKey="TextFillColorPrimaryBrush" />
+                    <StaticResource x:Key="ListViewItemBackgroundPointerOver" ResourceKey="PillHoverBrush" />
+                    <StaticResource x:Key="ListViewItemBackgroundPressed" ResourceKey="PillHoverBrush" />
+                    <StaticResource x:Key="ListViewItemBackgroundSelected" ResourceKey="ToggleOnBrush" />
+                    <StaticResource x:Key="ListViewItemBackgroundSelectedPointerOver" ResourceKey="ToggleOnBrush" />
+                    <StaticResource x:Key="ListViewItemBackgroundSelectedPressed" ResourceKey="ToggleOnBrush" />
+                    <x:Boolean x:Key="ListViewItemSelectionIndicatorVisualEnabled">False</x:Boolean>
+                    <!--  Umschalter „Schlüssel | Identitäten“: eingeschaltet die Fläche des gewählten Eintrags  -->
+                    <StaticResource x:Key="ToggleButtonBackground" ResourceKey="SubtleFillColorTransparentBrush" />
+                    <StaticResource x:Key="ToggleButtonBackgroundPointerOver" ResourceKey="PillHoverBrush" />
+                    <StaticResource x:Key="ToggleButtonBackgroundPressed" ResourceKey="PillHoverBrush" />
+                    <StaticResource x:Key="ToggleButtonBackgroundChecked" ResourceKey="ToggleOnBrush" />
+                    <StaticResource x:Key="ToggleButtonBackgroundCheckedPointerOver" ResourceKey="ToggleOnBrush" />
+                    <StaticResource x:Key="ToggleButtonBackgroundCheckedPressed" ResourceKey="ToggleOnBrush" />
+                    <StaticResource x:Key="ToggleButtonForeground" ResourceKey="IconBrush" />
+                    <StaticResource x:Key="ToggleButtonForegroundPointerOver" ResourceKey="TextFillColorPrimaryBrush" />
+                    <StaticResource x:Key="ToggleButtonForegroundPressed" ResourceKey="TextFillColorPrimaryBrush" />
+                    <StaticResource x:Key="ToggleButtonForegroundChecked" ResourceKey="TextFillColorPrimaryBrush" />
+                    <StaticResource x:Key="ToggleButtonForegroundCheckedPointerOver" ResourceKey="TextFillColorPrimaryBrush" />
+                    <StaticResource x:Key="ToggleButtonForegroundCheckedPressed" ResourceKey="TextFillColorPrimaryBrush" />
+                    <StaticResource x:Key="ToggleButtonBorderBrush" ResourceKey="FieldBorderBrush" />
+                    <StaticResource x:Key="ToggleButtonBorderBrushPointerOver" ResourceKey="FieldBorderBrush" />
+                    <StaticResource x:Key="ToggleButtonBorderBrushPressed" ResourceKey="FieldBorderBrush" />
+                    <StaticResource x:Key="ToggleButtonBorderBrushChecked" ResourceKey="FieldBorderBrush" />
+                    <StaticResource x:Key="ToggleButtonBorderBrushCheckedPointerOver" ResourceKey="FieldBorderBrush" />
+                    <StaticResource x:Key="ToggleButtonBorderBrushCheckedPressed" ResourceKey="FieldBorderBrush" />
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+
+            <!--
+                Ein Eintrag oben: 36 hoch, Rundung 6 (die Vorlage von WinUI nimmt sie aus der Ressource). Die Fläche
+                rückt WinUI selbst ein Stück vom Rand ein; der Text steht 18 vom Rand der Karte wie im Entwurf.
+            -->
+            <CornerRadius x:Key="ListViewItemCornerRadius">6</CornerRadius>
+            <Style
+                x:Key="SidebarItemStyle"
+                BasedOn="{StaticResource DefaultListViewItemStyle}"
+                TargetType="ListViewItem">
+                <Setter Property="MinHeight" Value="36" />
+                <Setter Property="Padding" Value="14,0" />
+            </Style>
+
+            <!--  Ein Eintrag unter „Mehr“: 32 hoch, eingerückt bis unter den Text der Einträge oben  -->
+            <Style
+                x:Key="SidebarSubItemStyle"
+                BasedOn="{StaticResource SidebarItemStyle}"
+                TargetType="ListViewItem">
+                <Setter Property="MinHeight" Value="32" />
+                <Setter Property="Padding" Value="40,0,14,0" />
+            </Style>
+
+            <Style
+                x:Key="SidebarButtonStyle"
+                BasedOn="{StaticResource SubtleButtonStyle}"
+                TargetType="Button">
+                <Setter Property="MinHeight" Value="36" />
+                <Setter Property="Margin" Value="4,0" />
+                <Setter Property="Padding" Value="10,0" />
+                <Setter Property="CornerRadius" Value="6" />
+                <Setter Property="HorizontalAlignment" Value="Stretch" />
+                <Setter Property="HorizontalContentAlignment" Value="Left" />
+                <Setter Property="Foreground" Value="{ThemeResource IconBrush}" />
+            </Style>
+
+            <Style x:Key="SwitchButtonStyle" TargetType="ToggleButton" BasedOn="{StaticResource DefaultToggleButtonStyle}">
+                <Setter Property="MinHeight" Value="30" />
+                <Setter Property="Padding" Value="14,0" />
+                <Setter Property="CornerRadius" Value="6" />
+            </Style>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <!--
+        Die Startseite liegt in der Karte des Terminals und deckt sie mit der Fensterfarbe ab: So stehen die beiden
+        Karten wie im Entwurf frei auf dem Fenster.
+    -->
+    <Grid Background="{ThemeResource WindowBackgroundBrush}" ColumnSpacing="8">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition
+                Width="Auto"
+                MinWidth="230"
+                MaxWidth="360" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <!--  Seitenleiste: die Einträge in der Reihenfolge von HomeSidebar.Entries, die Auswahl wird von Hand abgeglichen  -->
+        <Grid Padding="4,10" Style="{StaticResource CardStyle}">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+            <ListView
+                x:Name="Pages"
+                AutomationProperties.Name="{loc:Loc Key=HomeNavigation}"
+                ItemContainerStyle="{StaticResource SidebarItemStyle}"
+                SelectionChanged="OnPageSelected"
+                SelectionMode="Single">
+                <ListViewItem AutomationProperties.Name="{loc:Loc Key=Servers}">
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <controls:LineIcon x:Name="ServersIcon" Kind="Servers" />
+                        <TextBlock VerticalAlignment="Center" Text="{loc:Loc Key=Servers}" />
+                    </StackPanel>
+                </ListViewItem>
+                <ListViewItem AutomationProperties.Name="{loc:Loc Key=HomeSnippets}">
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <controls:LineIcon x:Name="SnippetsIcon" Kind="Snippets" />
+                        <TextBlock VerticalAlignment="Center" Text="{loc:Loc Key=HomeSnippets}" />
+                    </StackPanel>
+                </ListViewItem>
+                <ListViewItem AutomationProperties.Name="{loc:Loc Key=HomeKeysAndIdentities}">
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <controls:LineIcon x:Name="KeysIcon" Kind="Key" />
+                        <TextBlock VerticalAlignment="Center" Text="{loc:Loc Key=HomeKeysAndIdentities}" />
+                    </StackPanel>
+                </ListViewItem>
+                <ListViewItem AutomationProperties.Name="{loc:Loc Key=HomeTunnels}">
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <controls:LineIcon x:Name="TunnelsIcon" Kind="Tunnel" />
+                        <TextBlock VerticalAlignment="Center" Text="{loc:Loc Key=HomeTunnels}" />
+                    </StackPanel>
+                </ListViewItem>
+                <!--  Kein Ziel: klappt die drei darunter auf und zu; der Pfeil zeigt nach unten, solange sie offen sind  -->
+                <ListViewItem
+                    x:Name="MoreEntry"
+                    AutomationProperties.Name="{loc:Loc Key=HomeMore}"
+                    KeyDown="OnMoreKeyDown"
+                    Tapped="OnMoreTapped">
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <controls:LineIcon
+                            x:Name="MoreIcon"
+                            Kind="ChevronDown"
+                            RenderTransformOrigin="0.5,0.5">
+                            <controls:LineIcon.RenderTransform>
+                                <RotateTransform x:Name="MoreRotation" />
+                            </controls:LineIcon.RenderTransform>
+                        </controls:LineIcon>
+                        <TextBlock VerticalAlignment="Center" Text="{loc:Loc Key=HomeMore}" />
+                    </StackPanel>
+                </ListViewItem>
+                <ListViewItem
+                    x:Name="SyncsEntry"
+                    AutomationProperties.Name="{loc:Loc Key=SyncsTitle}"
+                    Style="{StaticResource SidebarSubItemStyle}">
+                    <TextBlock Foreground="{ThemeResource SecondaryTextBrush}" Text="{loc:Loc Key=SyncsTitle}" />
+                </ListViewItem>
+                <ListViewItem
+                    x:Name="KnownHostsEntry"
+                    AutomationProperties.Name="{loc:Loc Key=SettingsKnownHosts}"
+                    Style="{StaticResource SidebarSubItemStyle}">
+                    <TextBlock Foreground="{ThemeResource SecondaryTextBrush}" Text="{loc:Loc Key=SettingsKnownHosts}" />
+                </ListViewItem>
+                <ListViewItem
+                    x:Name="OverviewEntry"
+                    AutomationProperties.Name="{loc:Loc Key=HomeOverview}"
+                    Style="{StaticResource SidebarSubItemStyle}">
+                    <TextBlock Foreground="{ThemeResource SecondaryTextBrush}" Text="{loc:Loc Key=HomeOverview}" />
+                </ListViewItem>
+            </ListView>
+
+            <!--  Ganz unten: die Einstellungen (eine Seite über den Bereichen, wie bisher)  -->
+            <Button
+                x:Name="SettingsEntry"
+                Grid.Row="1"
+                AutomationProperties.Name="{loc:Loc Key=Settings}"
+                Click="OnSettingsClicked"
+                Style="{StaticResource SidebarButtonStyle}">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                    <controls:LineIcon Kind="Settings" />
+                    <TextBlock VerticalAlignment="Center" Text="{loc:Loc Key=Settings}" />
+                </StackPanel>
+            </Button>
+        </Grid>
+
+        <!--  Die Seite  -->
+        <Grid
+            Grid.Column="1"
+            Padding="26,22,26,18"
+            Style="{StaticResource CardStyle}">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <!--  „Schlüssel & Identitäten“ ist eine Seite mit zwei Hälften, oben umschaltbar  -->
+            <StackPanel
+                x:Name="KeysSwitch"
+                Margin="0,0,0,16"
+                Orientation="Horizontal"
+                Spacing="4"
+                Visibility="Collapsed">
+                <ToggleButton
+                    x:Name="KeysToggle"
+                    Checked="OnKeysToggled"
+                    Content="{loc:Loc Key=KeysTitle}"
+                    Style="{StaticResource SwitchButtonStyle}"
+                    Unchecked="OnKeysToggled" />
+                <ToggleButton
+                    x:Name="IdentitiesToggle"
+                    Checked="OnIdentitiesToggled"
+                    Content="{loc:Loc Key=SettingsIdentities}"
+                    Style="{StaticResource SwitchButtonStyle}"
+                    Unchecked="OnIdentitiesToggled" />
+            </StackPanel>
+
+            <views:ServerListView
+                x:Name="ServersPage"
+                Grid.Row="1"
+                Cards="True" />
+            <views:SyncsView
+                x:Name="SyncsPage"
+                Grid.Row="1"
+                Visibility="Collapsed" />
+            <views:SnippetsView
+                x:Name="SnippetsPage"
+                Grid.Row="1"
+                Visibility="Collapsed" />
+            <views:IdentitiesView
+                x:Name="IdentitiesPage"
+                Grid.Row="1"
+                Visibility="Collapsed" />
+            <views:KeysView
+                x:Name="KeysPage"
+                Grid.Row="1"
+                Visibility="Collapsed" />
+            <views:KnownHostsView
+                x:Name="KnownHostsPage"
+                Grid.Row="1"
+                Visibility="Collapsed" />
+            <views:TunnelsView
+                x:Name="TunnelsPage"
+                Grid.Row="1"
+                Visibility="Collapsed" />
+            <views:OverviewView
+                x:Name="OverviewPage"
+                Grid.Row="1"
+                Visibility="Collapsed" />
+        </Grid>
+    </Grid>
+</UserControl>

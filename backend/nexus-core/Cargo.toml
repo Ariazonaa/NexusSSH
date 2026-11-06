@@ -1,0 +1,58 @@
+[package]
+name = "nexus-core"
+description = "NexusSSH-Kern: SSH, SFTP, Transfers und Speicherung. Wird als nexus_core.dll in die WinUI-App geladen."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[lib]
+name = "nexus_core"
+# cdylib für die App (C-ABI), rlib für Tests und spätere Rust-Werkzeuge
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+russh.workspace = true
+russh-sftp.workspace = true
+# Zufall für neue Schlüssel; über russh ohnehin dabei.
+rand = "0.10"
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+suppaftp.workspace = true
+tokio-rustls.workspace = true
+rustls-platform-verifier.workspace = true
+# Fingerabdruck eines TLS-Zertifikats, das der Benutzer bestätigt hat.
+sha2.workspace = true
+# Schlüsseldateien im Format von PuTTY schreiben (`ppk.rs`): Verschlüsselung, Prüfwert und Ableitung des
+# Schlüssels aus der Passphrase. Alle fünf sind über russh ohnehin dabei – dieselben Fassungen.
+aes.workspace = true
+cbc = "0.2"
+hmac = "0.13"
+argon2 = "0.6"
+zeroize.workspace = true
+# Nur für Schlüsseldateien der alten Fassung 2 von PuTTY (ihr Prüfwert).
+sha1 = "0.11"
+# Das Terminal über Mosh (UDP): die eingecheckte Bibliothek, siehe dort `PATCHES.md`.
+mosh-client = { path = "../mosh-client" }
+# Lange PowerShell-Skripte für Windows-Server gehen komprimiert hinüber (`winserver::command`) – sonst wären sie
+# länger, als `cmd.exe` eine Zeile annimmt. Über russh ohnehin dabei, dieselbe Fassung.
+flate2 = "1"
+
+[target.'cfg(windows)'.dependencies]
+# Windows Credential Manager (CredReadW/CredWriteW/CredDeleteW), serielle Schnittstellen und das lokale Terminal
+# (Shells finden: Register, Systemordner; starten in einer Pseudokonsole mit Job-Objekt).
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security_Credentials", "Win32_Devices_Communication", "Win32_Storage_FileSystem", "Win32_System_Registry", "Win32_System_SystemInformation", "Win32_System_Threading", "Win32_System_Console", "Win32_System_Pipes", "Win32_System_JobObjects", "Win32_Security"] }
+
+[target.'cfg(unix)'.dependencies]
+# Lokales Terminal: die Benutzerdatenbank (Anmelde-Shell) und das Pseudo-Terminal. Über tokio ohnehin dabei.
+libc = "0.2"
+
+[dev-dependencies]
+nexus-testserver = { path = "../nexus-testserver" }
+# Ein selbst signiertes Zertifikat für den FTPS-Test.
+rcgen.workspace = true
+# Nur für den SSH-Agenten der Tests: russh nimmt dessen Verbindungen als Stream entgegen. Ist über russh ohnehin dabei.
+futures = "0.3"
+
+[lints]
+workspace = true

@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Die Hilfe als eigene Seite über den Bereichen, wie die Einstellungen: was die laufende Version neu kann, die
+    wichtigsten Handgriffe und die Tastenkürzel, wie sie gerade gelten. Geöffnet über die Palette oder von selbst
+    nach einem Update (ShellViewModel.IsHelpOpen), geschlossen mit × oder Esc.
+-->
+<UserControl
+    x:Class="NexusSSH.App.Views.HelpView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:loc="using:NexusSSH.App.Localization"
+    xmlns:services="using:NexusSSH.Core.Services"
+    KeyDown="OnKeyDown">
+
+    <UserControl.Resources>
+        <Style
+            x:Key="SectionTitleStyle"
+            BasedOn="{StaticResource BodyStrongTextBlockStyle}"
+            TargetType="TextBlock">
+            <Setter Property="Margin" Value="0,8,0,0" />
+        </Style>
+        <Style x:Key="SectionStyle" TargetType="StackPanel">
+            <Setter Property="Padding" Value="16,14,16,16" />
+            <Setter Property="Spacing" Value="12" />
+            <Setter Property="Background" Value="{ThemeResource RaisedBackgroundBrush}" />
+            <Setter Property="BorderBrush" Value="{ThemeResource CardBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="10" />
+        </Style>
+    </UserControl.Resources>
+
+    <Grid Style="{StaticResource CardStyle}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Grid
+            Padding="24,14,10,12"
+            BorderBrush="{ThemeResource CardBorderBrush}"
+            BorderThickness="0,0,0,1">
+            <TextBlock
+                VerticalAlignment="Center"
+                Style="{StaticResource SubtitleTextBlockStyle}"
+                Text="{loc:Loc Key=HelpTitle}" />
+            <Button
+                x:Name="CloseButton"
+                HorizontalAlignment="Right"
+                AutomationProperties.AutomationId="HelpCloseButton"
+                AutomationProperties.Name="{loc:Loc Key=CloseHelp}"
+                Click="OnCloseClicked"
+                Style="{StaticResource IconButtonStyle}"
+                ToolTipService.ToolTip="{loc:Loc Key=CloseHelp}">
+                <FontIcon FontSize="14" Glyph="&#xE711;" />
+            </Button>
+        </Grid>
+
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel
+                MaxWidth="760"
+                Padding="24,12,24,24"
+                HorizontalAlignment="Left"
+                Spacing="10">
+
+                <!--  Was die laufende Version neu kann  -->
+                <TextBlock
+                    x:Name="NewsTitle"
+                    Style="{StaticResource SectionTitleStyle}" />
+                <StackPanel Style="{StaticResource SectionStyle}">
+                    <ItemsRepeater x:Name="NewsList" AutomationProperties.Name="{x:Bind NewsTitle.Text, Mode=OneWay}">
+                        <ItemsRepeater.Layout>
+                            <StackLayout Spacing="8" />
+                        </ItemsRepeater.Layout>
+                        <ItemsRepeater.ItemTemplate>
+                            <DataTemplate x:DataType="x:String">
+                                <Grid ColumnSpacing="8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" Text="•" />
+                                    <TextBlock
+                                        Grid.Column="1"
+                                        IsTextSelectionEnabled="True"
+                                        Text="{x:Bind}"
+                                        TextWrapping="Wrap" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsRepeater.ItemTemplate>
+                    </ItemsRepeater>
+                </StackPanel>
+
+                <!--  Die wichtigsten Handgriffe  -->
+                <TextBlock Style="{StaticResource SectionTitleStyle}" Text="{loc:Loc Key=HelpTopicsTitle}" />
+                <StackPanel Style="{StaticResource SectionStyle}">
+                    <ItemsRepeater x:Name="TopicList" AutomationProperties.Name="{loc:Loc Key=HelpTopicsTitle}">
+                        <ItemsRepeater.Layout>
+                            <StackLayout Spacing="14" />
+                        </ItemsRepeater.Layout>
+                        <ItemsRepeater.ItemTemplate>
+                            <DataTemplate x:DataType="services:HelpTopic">
+                                <StackPanel Spacing="2">
+                                    <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="{x:Bind Title}" />
+                                    <TextBlock
+                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                        IsTextSelectionEnabled="True"
+                                        Text="{x:Bind Text}"
+                                        TextWrapping="Wrap" />
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsRepeater.ItemTemplate>
+                    </ItemsRepeater>
+                </StackPanel>
+
+                <!--  Die Tastenkürzel, wie sie gerade gelten  -->
+                <TextBlock
+                    x:Name="ShortcutsTitle"
+                    Style="{StaticResource SectionTitleStyle}"
+                    Text="{loc:Loc Key=HelpShortcutsTitle}" />
+                <StackPanel Style="{StaticResource SectionStyle}">
+                    <TextBlock
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Style="{StaticResource CaptionTextBlockStyle}"
+                        Text="{loc:Loc Key=HelpShortcutsHint}"
+                        TextWrapping="Wrap" />
+                    <Button
+                        AutomationProperties.AutomationId="SaveShortcutsButton"
+                        Click="OnSaveShortcutsClicked"
+                        Content="{loc:Loc Key=HelpShortcutsSave}" />
+                    <ItemsRepeater x:Name="ShortcutList" AutomationProperties.Name="{loc:Loc Key=HelpShortcutsTitle}">
+                        <ItemsRepeater.Layout>
+                            <StackLayout Spacing="6" />
+                        </ItemsRepeater.Layout>
+                        <ItemsRepeater.ItemTemplate>
+                            <DataTemplate x:DataType="services:HelpShortcut">
+                                <Grid ColumnSpacing="16">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{x:Bind Title}" TextWrapping="Wrap" />
+                                    <TextBlock
+                                        Grid.Column="1"
+                                        FontFamily="Consolas"
+                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                        Text="{x:Bind Keys}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsRepeater.ItemTemplate>
+                    </ItemsRepeater>
+                </StackPanel>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

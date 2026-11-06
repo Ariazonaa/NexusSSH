@@ -1,0 +1,6 @@
+* text=auto eol=lf
+*.ps1 text eol=crlf
+*.ico binary
+
+# Eingechecktes Fremdmaterial: nicht normalisieren, nicht im Diff zeigen
+frontend/NexusSSH.App/Assets/terminal/vendor/** -text -diff linguist-vendored

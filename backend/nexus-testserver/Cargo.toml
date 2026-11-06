@@ -1,0 +1,20 @@
+[package]
+name = "nexus-testserver"
+description = "Kleiner SSH-Server mit nachgespielter Shell – Gegenstelle für die Tests des Kerns und zum Ausprobieren der App ohne echten Server."
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+russh.workspace = true
+russh-sftp.workspace = true
+# "process": der Testserver kann Befehle wirklich ausführen (Options::real_shell).
+tokio = { workspace = true, features = ["process"] }
+sha2.workspace = true
+# TLS für den kleinen FTP-Server (ftp.rs).
+tokio-rustls.workspace = true
+# Das Zertifikat dazu, wenn der Server zum Ausprobieren läuft (main.rs).
+rcgen.workspace = true
+
+[lints]
+workspace = true

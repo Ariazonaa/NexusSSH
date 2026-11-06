@@ -1,0 +1,481 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--  Server-Details: was über den Server der aktiven Sitzung zu wissen ist – geöffnet aus der Zeile unten  -->
+<UserControl
+    x:Class="NexusSSH.App.Views.ServerDetailsView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:app="using:NexusSSH.App"
+    xmlns:loc="using:NexusSSH.App.Localization"
+    xmlns:models="using:NexusSSH.Core.Models"
+    xmlns:vm="using:NexusSSH.Core.ViewModels">
+
+    <UserControl.Resources>
+        <Style
+            x:Key="LabelStyle"
+            BasedOn="{StaticResource CaptionTextBlockStyle}"
+            TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+        </Style>
+        <Style x:Key="ValueStyle" TargetType="TextBlock">
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="IsTextSelectionEnabled" Value="True" />
+        </Style>
+    </UserControl.Resources>
+    <!--
+        Die Seite „Server-Details“ (Entwurf A): eine Karte über den Bereichen wie die Protokolle
+        (ShellViewModel.Details). Darauf steht, was früher die Server-Info rechts zeigte; die Werte liefert weiter
+        ServerInspectorViewModel. Gemessen wird, solange sie offen ist. Esc oder × schließt sie.
+    -->
+    <Grid Style="{StaticResource CardStyle}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Grid
+            Padding="24,10,10,10"
+            BorderBrush="{ThemeResource CardBorderBrush}"
+            BorderThickness="0,0,0,1"
+            ColumnSpacing="12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel VerticalAlignment="Center" Spacing="2">
+                <TextBlock
+                    x:Name="TitleText"
+                    Style="{StaticResource BodyStrongTextBlockStyle}"
+                    Text="{x:Bind app:Ui.DetailsTitle(Shell.Details.Profile.Name), Mode=OneWay, FallbackValue=''}"
+                    TextTrimming="CharacterEllipsis" />
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Ellipse
+                        Width="8"
+                        Height="8"
+                        VerticalAlignment="Center"
+                        Fill="{x:Bind app:Ui.StatusBrush(Shell.Details.Inspector.IsOnline), Mode=OneWay, FallbackValue={x:Null}}" />
+                    <TextBlock
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Style="{StaticResource CaptionTextBlockStyle}"
+                        Text="{x:Bind Shell.Details.Inspector.StatusText, Mode=OneWay, FallbackValue=''}" />
+                </StackPanel>
+            </StackPanel>
+            <StackPanel
+                Grid.Column="1"
+                VerticalAlignment="Center"
+                Orientation="Horizontal"
+                Spacing="8">
+                <!--  Die Protokolle des Servers: eine eigene Seite, die diese ersetzt  -->
+                <HyperlinkButton
+                    x:Name="LogsLink"
+                    AutomationProperties.AutomationId="DetailsLogsLink"
+                    Click="OnLogsClicked"
+                    Content="{loc:Loc Key=ServerLogsLink}" />
+                <Button
+                    x:Name="DetailsCloseButton"
+                    AutomationProperties.AutomationId="DetailsCloseButton"
+                    AutomationProperties.Name="{loc:Loc Key=ServerDetailsClose}"
+                    Click="OnCloseClicked"
+                    Style="{StaticResource IconButtonStyle}"
+                    ToolTipService.ToolTip="{loc:Loc Key=ServerDetailsClose}">
+                    <FontIcon FontSize="12" Glyph="&#xE711;" />
+                </Button>
+            </StackPanel>
+        </Grid>
+
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel
+                MaxWidth="760"
+                Padding="24,16,24,24"
+                HorizontalAlignment="Left"
+                Spacing="14">
+                <!--  Die Werte der Zeile unten, ausführlich  -->
+                <Grid
+                    ColumnSpacing="16"
+                    RowSpacing="4"
+                    Visibility="{x:Bind Shell.Details.Inspector.HasMetrics, Mode=OneWay, FallbackValue=Collapsed}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Style="{StaticResource LabelStyle}" Text="{loc:Loc Key=Cpu}" />
+                    <TextBlock Grid.Column="1" Style="{StaticResource ValueStyle}" Text="{x:Bind Shell.Details.Inspector.CpuText, Mode=OneWay, FallbackValue=''}" />
+                    <TextBlock Grid.Row="1" Style="{StaticResource LabelStyle}" Text="{loc:Loc Key=Memory}" />
+                    <TextBlock Grid.Row="1" Grid.Column="1" Style="{StaticResource ValueStyle}" Text="{x:Bind Shell.Details.Inspector.MemoryText, Mode=OneWay, FallbackValue=''}" />
+                    <TextBlock Grid.Row="2" Style="{StaticResource LabelStyle}" Text="{loc:Loc Key=Disk}" />
+                    <TextBlock Grid.Row="2" Grid.Column="1" Style="{StaticResource ValueStyle}" Text="{x:Bind Shell.Details.Inspector.DiskText, Mode=OneWay, FallbackValue=''}" />
+                    <TextBlock Grid.Row="3" Style="{StaticResource LabelStyle}" Text="{loc:Loc Key=Network}" />
+                    <TextBlock Grid.Row="3" Grid.Column="1" Style="{StaticResource ValueStyle}" Text="{x:Bind Shell.Details.Inspector.NetworkText, Mode=OneWay, FallbackValue=''}" />
+                    <TextBlock Grid.Row="4" Style="{StaticResource LabelStyle}" Text="{loc:Loc Key=DetailsLoad}" Visibility="{x:Bind Shell.Details.Inspector.HasLoad, Mode=OneWay, FallbackValue=Collapsed}" />
+                    <TextBlock Grid.Row="4" Grid.Column="1" Style="{StaticResource ValueStyle}" Text="{x:Bind Shell.Details.Inspector.LoadText, Mode=OneWay, FallbackValue=''}" Visibility="{x:Bind Shell.Details.Inspector.HasLoad, Mode=OneWay, FallbackValue=Collapsed}" />
+                    <TextBlock Grid.Row="5" Style="{StaticResource LabelStyle}" Text="{loc:Loc Key=DetailsSystem}" />
+                    <TextBlock Grid.Row="5" Grid.Column="1" Style="{StaticResource ValueStyle}" Text="{x:Bind app:Ui.SystemLine(Shell.Details.Inspector.OsName, Shell.Details.Inspector.UptimeSinceText), Mode=OneWay, FallbackValue=''}" />
+                </Grid>
+
+                <!--  Die erste Messung steht noch aus  -->
+                <StackPanel
+                    Orientation="Horizontal"
+                    Spacing="8"
+                    Visibility="{x:Bind Shell.Details.Inspector.IsMeasuring, Mode=OneWay, FallbackValue=Collapsed}">
+                    <ProgressRing
+                        Width="16"
+                        Height="16"
+                        IsActive="True" />
+                    <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="{loc:Loc Key=InspectorMeasuring}" />
+                </StackPanel>
+
+                <!--  Kein Linux-Server, er lässt keine Befehle zu – oder er verstummte und wird neu versucht  -->
+                <TextBlock
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Text="{x:Bind Shell.Details.Inspector.UnavailableText, Mode=OneWay, FallbackValue=''}"
+                    TextWrapping="Wrap"
+                    Visibility="{x:Bind Shell.Details.Inspector.IsUnavailable, Mode=OneWay, FallbackValue=Collapsed}" />
+
+                <!--
+                    Einzelheiten der Messung: nur, wenn es eine gibt. CPU, Arbeitsspeicher, Platte, Netz und Laufzeit
+                    selbst stehen in der Leiste unter dem Terminal.
+                -->
+                <StackPanel Spacing="14" Visibility="{x:Bind Shell.Details.Inspector.HasMetrics, Mode=OneWay, FallbackValue=Collapsed}">
+                    <StackPanel Spacing="12">
+                        <StackPanel Spacing="4" Visibility="{x:Bind Shell.Details.Inspector.HasCpuDetails, Mode=OneWay, FallbackValue=Collapsed}">
+                            <TextBlock Style="{StaticResource LabelStyle}" Text="{loc:Loc Key=Cpu}" />
+                            <!--  Woraus die Auslastung besteht  -->
+                            <TextBlock
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                IsTextSelectionEnabled="True"
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Text="{x:Bind Shell.Details.Inspector.SplitText, Mode=OneWay}"
+                                TextWrapping="Wrap"
+                                Visibility="{x:Bind Shell.Details.Inspector.HasSplit, Mode=OneWay, FallbackValue=Collapsed}" />
+                            <!--  Jeder Kern ein Balken; Nummer und Wert stehen im Tooltip  -->
+                            <ItemsRepeater
+                                Margin="0,2,0,0"
+                                AutomationProperties.Name="{x:Bind Shell.Details.Inspector.CoresText, Mode=OneWay}"
+                                ItemsSource="{x:Bind Shell.Details.Inspector.Cores, Mode=OneWay}"
+                                Visibility="{x:Bind Shell.Details.Inspector.HasCores, Mode=OneWay, FallbackValue=Collapsed}">
+                                <ItemsRepeater.Layout>
+                                    <UniformGridLayout
+                                        ItemsStretch="Fill"
+                                        MinColumnSpacing="3"
+                                        MinItemHeight="28"
+                                        MinItemWidth="10"
+                                        MinRowSpacing="4" />
+                                </ItemsRepeater.Layout>
+                                <ItemsRepeater.ItemTemplate>
+                                    <DataTemplate x:DataType="models:CoreLoad">
+                                        <Grid
+                                            Height="28"
+                                            AutomationProperties.Name="{x:Bind Text}"
+                                            Background="{ThemeResource ControlFillColorDefaultBrush}"
+                                            BorderBrush="{x:Bind app:Ui.ChartFrameBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="2"
+                                            ToolTipService.ToolTip="{x:Bind Text}">
+                                            <Rectangle
+                                                Height="{x:Bind app:Ui.CoreBar(Percent)}"
+                                                VerticalAlignment="Bottom"
+                                                Fill="{x:Bind app:Ui.ChartBrush}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsRepeater.ItemTemplate>
+                            </ItemsRepeater>
+                        </StackPanel>
+                        <StackPanel Spacing="4">
+                            <TextBlock Style="{StaticResource LabelStyle}" Text="{loc:Loc Key=Memory}" />
+                            <!--  Was der Speicher sonst hält, und die Auslagerung – nur, wenn der Server es nennt  -->
+                            <TextBlock
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                IsTextSelectionEnabled="True"
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Text="{x:Bind Shell.Details.Inspector.MemorySplitText, Mode=OneWay}"
+                                TextWrapping="Wrap"
+                                Visibility="{x:Bind Shell.Details.Inspector.HasMemorySplit, Mode=OneWay, FallbackValue=Collapsed}" />
+                            <TextBlock
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                IsTextSelectionEnabled="True"
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Text="{x:Bind Shell.Details.Inspector.SwapText, Mode=OneWay}"
+                                TextWrapping="Wrap"
+                                Visibility="{x:Bind Shell.Details.Inspector.HasSwap, Mode=OneWay, FallbackValue=Collapsed}" />
+                            <!--  Der Verlauf von CPU und Arbeitsspeicher über die ganze Sitzung  -->
+                            <HyperlinkButton
+                                x:Name="LoadHistoryButton"
+                                Padding="0"
+                                Click="OnLoadHistoryClicked"
+                                Content="{loc:Loc Key=LoadHistoryShow}" />
+                        </StackPanel>
+                        <!--  Alle Dateisysteme: Balken in Warnfarbe, wenn Platz oder Inodes knapp werden  -->
+                        <StackPanel Spacing="6" Visibility="{x:Bind Shell.Details.Inspector.HasDisks, Mode=OneWay, FallbackValue=Collapsed}">
+                            <TextBlock Style="{StaticResource LabelStyle}" Text="{loc:Loc Key=FileSystems}" />
+                            <ItemsRepeater AutomationProperties.Name="{loc:Loc Key=FileSystems}" ItemsSource="{x:Bind Shell.Details.Inspector.Disks, Mode=OneWay}">
+                                <ItemsRepeater.Layout>
+                                    <StackLayout Spacing="8" />
+                                </ItemsRepeater.Layout>
+                                <ItemsRepeater.ItemTemplate>
+                                    <DataTemplate x:DataType="models:DiskUsage">
+                                        <StackPanel Spacing="3" ToolTipService.ToolTip="{x:Bind Device}">
+                                            <Grid ColumnSpacing="8">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock
+                                                    Style="{StaticResource CaptionTextBlockStyle}"
+                                                    Text="{x:Bind Mount}"
+                                                    TextTrimming="CharacterEllipsis" />
+                                                <TextBlock
+                                                    Grid.Column="1"
+                                                    Style="{StaticResource CaptionTextBlockStyle}"
+                                                    Text="{x:Bind PercentText}" />
+                                            </Grid>
+                                            <ProgressBar
+                                                AutomationProperties.Name="{x:Bind Summary}"
+                                                Foreground="{x:Bind app:Ui.UsageBrush(Level)}"
+                                                Value="{x:Bind Percent}" />
+                                            <TextBlock
+                                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                Style="{StaticResource CaptionTextBlockStyle}"
+                                                Text="{x:Bind Detail}"
+                                                TextWrapping="Wrap" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsRepeater.ItemTemplate>
+                            </ItemsRepeater>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <Rectangle Height="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" />
+
+                    <StackPanel Spacing="10">
+                        <!--  Was der Rechner ist – jede Zeile nur, wenn der Server es nennt  -->
+                        <StackPanel Spacing="1" Visibility="{x:Bind Shell.Details.Inspector.HasMachine, Mode=OneWay, FallbackValue=Collapsed}">
+                            <TextBlock Style="{StaticResource LabelStyle}" Text="{loc:Loc Key=Machine}" />
+                            <TextBlock Style="{StaticResource ValueStyle}" Text="{x:Bind Shell.Details.Inspector.MachineText, Mode=OneWay}" />
+                        </StackPanel>
+                        <StackPanel Spacing="1" Visibility="{x:Bind Shell.Details.Inspector.HasProcessor, Mode=OneWay, FallbackValue=Collapsed}">
+                            <TextBlock Style="{StaticResource LabelStyle}" Text="{loc:Loc Key=Processor}" />
+                            <TextBlock Style="{StaticResource ValueStyle}" Text="{x:Bind Shell.Details.Inspector.ProcessorText, Mode=OneWay}" />
+                        </StackPanel>
+                        <StackPanel Spacing="1" Visibility="{x:Bind Shell.Details.Inspector.HasVirtualization, Mode=OneWay, FallbackValue=Collapsed}">
+                            <TextBlock Style="{StaticResource LabelStyle}" Text="{loc:Loc Key=Virtualization}" />
+                            <TextBlock Style="{StaticResource ValueStyle}" Text="{x:Bind Shell.Details.Inspector.VirtualizationText, Mode=OneWay}" />
+                        </StackPanel>
+                        <StackPanel Spacing="1" Visibility="{x:Bind Shell.Details.Inspector.HasClock, Mode=OneWay, FallbackValue=Collapsed}">
+                            <TextBlock Style="{StaticResource LabelStyle}" Text="{loc:Loc Key=ServerClock}" />
+                            <TextBlock Style="{StaticResource ValueStyle}" Text="{x:Bind Shell.Details.Inspector.ClockText, Mode=OneWay}" />
+                        </StackPanel>
+                        <!--  Je Netzwerkkarte: Durchsatz und Adressen (vom Kern als Adressen gelesen)  -->
+                        <StackPanel Spacing="1" Visibility="{x:Bind Shell.Details.Inspector.HasInterfaces, Mode=OneWay, FallbackValue=Collapsed}">
+                            <TextBlock Style="{StaticResource LabelStyle}" Text="{loc:Loc Key=Network}" />
+                            <ItemsRepeater
+                                Margin="0,4,0,0"
+                                AutomationProperties.Name="{loc:Loc Key=NetInterfaces}"
+                                ItemsSource="{x:Bind Shell.Details.Inspector.Interfaces, Mode=OneWay}">
+                                <ItemsRepeater.Layout>
+                                    <StackLayout Spacing="6" />
+                                </ItemsRepeater.Layout>
+                                <ItemsRepeater.ItemTemplate>
+                                    <DataTemplate x:DataType="models:NetInterface">
+                                        <StackPanel Spacing="1">
+                                            <Grid ColumnSpacing="8">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock
+                                                    Style="{StaticResource CaptionTextBlockStyle}"
+                                                    Text="{x:Bind Name}"
+                                                    TextTrimming="CharacterEllipsis" />
+                                                <TextBlock
+                                                    Grid.Column="1"
+                                                    Style="{StaticResource CaptionTextBlockStyle}"
+                                                    Text="{x:Bind RateText}" />
+                                            </Grid>
+                                            <TextBlock
+                                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                IsTextSelectionEnabled="True"
+                                                Style="{StaticResource CaptionTextBlockStyle}"
+                                                Text="{x:Bind Addresses}"
+                                                TextWrapping="Wrap"
+                                                Visibility="{x:Bind HasAddresses}" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsRepeater.ItemTemplate>
+                            </ItemsRepeater>
+                        </StackPanel>
+                        <StackPanel Spacing="1" Visibility="{x:Bind Shell.Details.Inspector.HasDiskIo, Mode=OneWay, FallbackValue=Collapsed}">
+                            <TextBlock Style="{StaticResource LabelStyle}" Text="{loc:Loc Key=DiskIo}" />
+                            <TextBlock
+                                Style="{StaticResource ValueStyle}"
+                                Text="{x:Bind Shell.Details.Inspector.DiskIoText, Mode=OneWay}"
+                                TextWrapping="Wrap" />
+                            <!--  Verlauf der letzten Messungen, der jüngste rechts: gelesen und geschrieben zusammen, am höchsten Wert gemessen  -->
+                            <Viewbox Height="24" Stretch="Fill">
+                                <Canvas Width="100" Height="24">
+                                    <Polyline
+                                        Points="{x:Bind app:Ui.Sparkline(Shell.Details.Inspector.DiskIoHistory), Mode=OneWay}"
+                                        Stroke="{x:Bind app:Ui.ChartBrush}"
+                                        StrokeLineJoin="Round"
+                                        StrokeThickness="1" />
+                                </Canvas>
+                            </Viewbox>
+                            <!--  Je Platte, wenn es mehrere gibt; der Name kommt vom Server und steht als Text da  -->
+                            <ItemsRepeater
+                                Margin="0,4,0,0"
+                                AutomationProperties.Name="{loc:Loc Key=DiskIoDevices}"
+                                ItemsSource="{x:Bind Shell.Details.Inspector.DiskIoDevices, Mode=OneWay}"
+                                Visibility="{x:Bind Shell.Details.Inspector.HasDiskIoDevices, Mode=OneWay, FallbackValue=Collapsed}">
+                                <ItemsRepeater.Layout>
+                                    <StackLayout Spacing="6" />
+                                </ItemsRepeater.Layout>
+                                <ItemsRepeater.ItemTemplate>
+                                    <DataTemplate x:DataType="models:DiskIoDevice">
+                                        <StackPanel Spacing="1">
+                                            <TextBlock
+                                                Style="{StaticResource CaptionTextBlockStyle}"
+                                                Text="{x:Bind Name}"
+                                                TextTrimming="CharacterEllipsis" />
+                                            <TextBlock
+                                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                Style="{StaticResource CaptionTextBlockStyle}"
+                                                Text="{x:Bind Text}"
+                                                TextWrapping="Wrap" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ItemsRepeater.ItemTemplate>
+                            </ItemsRepeater>
+                        </StackPanel>
+                    </StackPanel>
+                </StackPanel>
+
+                <Rectangle Height="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" />
+
+                <!--
+                    Tunnel dieses Servers: Zustand und Schalter. Nur zu sehen, wenn das Profil welche hat – angelegt
+                    werden sie auf der Startseite.
+                -->
+                <StackPanel
+                    x:Name="TunnelsSection"
+                    Spacing="8"
+                    Visibility="{x:Bind Shell.HasSessionTunnels, Mode=OneWay}">
+                    <TextBlock Style="{StaticResource LabelStyle}" Text="{loc:Loc Key=InspectorTunnels}" />
+                    <ItemsRepeater ItemsSource="{x:Bind Shell.SessionTunnels}">
+                        <ItemsRepeater.Layout>
+                            <StackLayout Spacing="6" />
+                        </ItemsRepeater.Layout>
+                        <ItemsRepeater.ItemTemplate>
+                            <DataTemplate x:DataType="vm:TunnelRow">
+                                <Grid ColumnSpacing="8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Ellipse
+                                        Width="8"
+                                        Height="8"
+                                        Margin="0,6,0,0"
+                                        VerticalAlignment="Top"
+                                        Fill="{x:Bind app:Ui.TunnelBrush(State), Mode=OneWay}" />
+                                    <StackPanel Grid.Column="1" Spacing="0">
+                                        <TextBlock
+                                            Text="{x:Bind Name}"
+                                            TextTrimming="CharacterEllipsis"
+                                            ToolTipService.ToolTip="{x:Bind Route}" />
+                                        <TextBlock
+                                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                            Style="{StaticResource CaptionTextBlockStyle}"
+                                            Text="{x:Bind StateText, Mode=OneWay}"
+                                            TextWrapping="Wrap" />
+                                    </StackPanel>
+                                    <ToggleSwitch
+                                        Grid.Column="2"
+                                        MinWidth="0"
+                                        Margin="0,-4,-8,0"
+                                        VerticalAlignment="Top"
+                                        AutomationProperties.Name="{x:Bind app:Ui.TunnelSwitchName(Name)}"
+                                        IsEnabled="{x:Bind CanSwitch, Mode=OneWay}"
+                                        IsOn="{x:Bind IsListening, Mode=OneWay}"
+                                        OffContent=""
+                                        OnContent=""
+                                        Tag="{x:Bind}"
+                                        Toggled="OnTunnelToggled" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsRepeater.ItemTemplate>
+                    </ItemsRepeater>
+                </StackPanel>
+
+                <Rectangle
+                    Height="1"
+                    Fill="{ThemeResource DividerStrokeColorDefaultBrush}"
+                    Visibility="{x:Bind Shell.HasSessionTunnels, Mode=OneWay}" />
+
+                <!--  Verbindung  -->
+                <StackPanel Spacing="10">
+                    <StackPanel Spacing="1">
+                        <TextBlock Style="{StaticResource LabelStyle}" Text="{loc:Loc Key=Host}" />
+                        <TextBlock Style="{StaticResource ValueStyle}" Text="{x:Bind Shell.Details.Profile.Address, Mode=OneWay}" />
+                    </StackPanel>
+                    <!--  Antwortzeit auf Knopfdruck (ein eigener kurzer Aufbau ohne Anmeldung) und Traceroute in die Ausgabe  -->
+                    <Grid ColumnSpacing="4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Spacing="1">
+                            <TextBlock Style="{StaticResource LabelStyle}" Text="{loc:Loc Key=InspectorLatency}" />
+                            <TextBlock
+                                x:Name="LatencyText"
+                                Style="{StaticResource ValueStyle}"
+                                Text="{x:Bind Shell.Details.LatencyText, Mode=OneWay}"
+                                TextWrapping="Wrap" />
+                        </StackPanel>
+                        <Button
+                            x:Name="MeasureButton"
+                            Grid.Column="1"
+                            VerticalAlignment="Top"
+                            AutomationProperties.Name="{loc:Loc Key=InspectorMeasure}"
+                            Click="OnMeasureClicked"
+                            Style="{StaticResource IconButtonStyle}"
+                            ToolTipService.ToolTip="{loc:Loc Key=InspectorMeasure}">
+                            <FontIcon FontSize="14" Glyph="&#xE916;" />
+                        </Button>
+                        <Button
+                            x:Name="TraceButton"
+                            Grid.Column="2"
+                            VerticalAlignment="Top"
+                            AutomationProperties.Name="{loc:Loc Key=InspectorTrace}"
+                            Click="OnTraceClicked"
+                            Style="{StaticResource IconButtonStyle}"
+                            ToolTipService.ToolTip="{loc:Loc Key=InspectorTrace}">
+                            <FontIcon FontSize="14" Glyph="&#xE8CE;" />
+                        </Button>
+                    </Grid>
+                    <StackPanel Spacing="1" Visibility="{x:Bind app:Ui.VisibleIfText(Shell.Details.Profile.Group), Mode=OneWay}">
+                        <TextBlock Style="{StaticResource LabelStyle}" Text="{loc:Loc Key=Group}" />
+                        <TextBlock Style="{StaticResource ValueStyle}" Text="{x:Bind Shell.Details.Profile.Group, Mode=OneWay}" />
+                    </StackPanel>
+                    <!--  Die Notiz aus dem Profil: Text des Benutzers, umbrochen und zum Markieren  -->
+                    <StackPanel Spacing="1" Visibility="{x:Bind app:Ui.VisibleIfText(Shell.Details.Profile.Notes), Mode=OneWay}">
+                        <TextBlock Style="{StaticResource LabelStyle}" Text="{loc:Loc Key=InspectorNotes}" />
+                        <TextBlock
+                            x:Name="NotesText"
+                            IsTextSelectionEnabled="True"
+                            Style="{StaticResource ValueStyle}"
+                            Text="{x:Bind Shell.Details.Profile.Notes, Mode=OneWay}"
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+                </StackPanel>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

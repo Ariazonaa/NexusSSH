@@ -1,0 +1,249 @@
+# Auslieferung: baut das Artefakt über tools/make-release.ps1.
+#   - NexusSSH-Setup-<version>.exe      (Inno-Setup-Installer, je Benutzer, ohne Adminrechte)
+#
+# Auslöser:
+#   - Tag v*            → baut, legt ein Release an und hängt die Datei an. Die App sieht für ihren
+#                         Update-Hinweis nach dem neuesten Release – ohne Release kein Hinweis.
+#   - workflow_dispatch → baut und lädt es nur als Workflow-Artefakt hoch (kein Release). Version wahlweise angeben.
+#                         Mit „release“ und einer Version: baut den Stand des bestehenden Tags v<version> und legt
+#                         dessen Release an – für einen Tag, der schon da war, bevor es diesen Workflow gab, oder
+#                         dessen Lauf gescheitert ist.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version (leer = aus Directory.Build.props)"
+        required: false
+        default: ""
+      release:
+        description: "Release für den bestehenden Tag v<version> anlegen"
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
+  CARGO_TERM_COLOR: never
+
+jobs:
+  package:
+    name: setup.exe
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        # Windows PowerShell 5.1, wie die Skripte unter tools/ sie erwarten (BOM, siehe .editorconfig).
+        shell: powershell
+    env:
+      # Build-Ausgabe und cargo-Zielverzeichnis im Arbeitsverzeichnis des Jobs statt im Profil des Runner-Kontos.
+      NexusArtifactsRoot: ${{ github.workspace }}\.build
+    steps:
+      # Von Hand mit „release“: gebaut wird der Stand des Tags, nicht der des Zweigs, von dem der Lauf startet.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release && format('refs/tags/v{0}', inputs.version) || github.ref }}
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      # Rust über das rustup des Runners statt über eine fremde Action: Dieser Job baut, was ausgeliefert wird, und
+      # hält ein Token mit Schreibrecht.
+      - name: Rust (stable)
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          rustup default stable
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cargo --version
+
+      # Inno Setup 6 (ISCC) je Benutzer, falls das Abbild des Runners es nicht mitbringt. make-release.ps1 sucht
+      # in den üblichen Ordnern. Der Download ist an seine Prüfsumme gebunden: Der Installer läuft auf dem Runner.
+      # Native Programme beenden einen PowerShell-Schritt nicht von selbst, daher die $LASTEXITCODE-Prüfungen.
+      - name: Inno Setup sicherstellen
+        run: |
+          $found = @(
+            (Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe')
+            'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+            'C:\Program Files\Inno Setup 6\ISCC.exe'
+          ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $found) {
+            $ProgressPreference = 'SilentlyContinue'
+            $exe = Join-Path $env:RUNNER_TEMP 'innosetup-6.7.3.exe'
+            Invoke-WebRequest -UseBasicParsing -Uri https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe -OutFile $exe
+            $hash = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLower()
+            if ($hash -ne '9c73c3bae7ed48d44112a0f48e66742c00090bdb5bef71d9d3c056c66e97b732') { Write-Output "::error::Inno Setup: unerwartete Prüfsumme $hash."; exit 1 }
+            & $exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CURRENTUSER | Out-Null
+            $found = Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe'
+            if (-not (Test-Path $found)) { Write-Output "::error::Inno Setup wurde nicht installiert."; exit 1 }
+          }
+          Write-Output "ISCC: $found"
+
+      - name: Artefakt bauen (setup.exe)
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          $version = ''
+          if ($env:GITHUB_REF -like 'refs/tags/v*') { $version = $env:GITHUB_REF.Substring(11) }
+          elseif ($env:INPUT_VERSION) { $version = $env:INPUT_VERSION }
+          $params = @{ Dist = "$env:GITHUB_WORKSPACE\dist" }
+          if ($version) { $params['Version'] = $version }
+          .\tools\make-release.ps1 @params
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          if ((Get-ChildItem "$env:GITHUB_WORKSPACE\dist" -File).Count -ne 1) { Write-Output '::error::Es fehlt das Artefakt (erwartet: setup.exe).'; exit 1 }
+
+      # Die veröffentlichte Exe muss laufen: Ein AOT-Fehler zeigt sich erst zur Laufzeit (tools/self-test.ps1).
+      # Kann auf dem Runner kein Fenster entstehen, sagt das Skript das, und der Schritt gilt als übersprungen.
+      - name: Selbsttest der veröffentlichten App
+        run: |
+          .\tools\self-test.ps1 -Exe "$env:GITHUB_WORKSPACE\release-stage\app\NexusSSH.exe" -AllowNoDesktop
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NexusSSH-dist
+          path: dist/*
+          retention-days: 30
+          if-no-files-found: error
+
+      # Bei Tags und von Hand mit „release“: Release anlegen und die Datei anhängen (Berechtigung contents: write).
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if ($env:GITHUB_REF -like 'refs/tags/v*') { $tag = $env:GITHUB_REF.Substring(10) }   # "refs/tags/" abschneiden → vX.Y.Z
+          elseif ($env:INPUT_VERSION -match '^\d+\.\d+\.\d+$') { $tag = "v$env:INPUT_VERSION" }
+          else { Write-Output '::error::Für ein Release von Hand braucht es die Version (1.2.3).'; exit 1 }
+          $files = Get-ChildItem "$env:GITHUB_WORKSPACE\dist" -File
+          $sums = $files | ForEach-Object { "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)" }
+          $fence = '```'
+          # Die Änderungen dieser Version aus CHANGELOG.md: der Abschnitt "## <version> – …" bis zum nächsten "## ".
+          $version = $tag.Substring(1)
+          $changes = @()
+          $inside = $false
+          foreach ($line in (Get-Content "$env:GITHUB_WORKSPACE\CHANGELOG.md" -Encoding UTF8)) {
+            if ($line -like '## *') { $inside = $line -like "## $version *"; continue }
+            if ($inside) { $changes += $line }
+          }
+          $notes = @(
+            "Built from $tag."
+            ''
+            $changes
+            ''
+            '- **NexusSSH-Setup**: installer per user, no admin rights needed'
+            ''
+            "What the app can do: [FEATURES.md](https://github.com/$env:GITHUB_REPOSITORY/blob/$tag/FEATURES.md) (German). NexusSSH needs the WebView2 runtime (part of Windows 11)."
+            ''
+            'SHA-256:'
+            $fence
+            $sums
+            $fence
+          ) -join "`n"
+          # Ohne BOM schreiben: Windows PowerShell setzt bei "-Encoding utf8" eins davor.
+          $notesFile = Join-Path $env:RUNNER_TEMP 'release-notes.md'
+          [IO.File]::WriteAllText($notesFile, $notes, (New-Object Text.UTF8Encoding $false))
+          gh release create $tag @($files.FullName) --repo $env:GITHUB_REPOSITORY --title "NexusSSH $tag" --notes-file $notesFile --verify-tag
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+  # Dasselbe Setup für Windows auf ARM, gebaut auf einem ARM-Runner (ohne Kreuz-Übersetzung) und an das Release
+  # gehängt, das der Job darüber angelegt hat. Noch nie gelaufen, als dieser Job dazukam (2026-10-10):
+  # Scheitert er, steht das x64-Release trotzdem – deshalb continue-on-error und erst nach "package".
+  package-arm64:
+    name: setup.exe (ARM64)
+    needs: package
+    runs-on: windows-11-arm
+    timeout-minutes: 60
+    continue-on-error: true
+    defaults:
+      run:
+        shell: powershell
+    env:
+      NexusArtifactsRoot: ${{ github.workspace }}\.build
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release && format('refs/tags/v{0}', inputs.version) || github.ref }}
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Rust (stable, aarch64)
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          rustup default stable
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          rustup target add aarch64-pc-windows-msvc
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cargo --version
+
+      # Wie im Job darüber; ISCC ist ein x86-Programm und läuft auf dem ARM-Runner in der Emulation von Windows.
+      - name: Inno Setup sicherstellen
+        run: |
+          $found = @(
+            (Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe')
+            'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+            'C:\Program Files\Inno Setup 6\ISCC.exe'
+          ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $found) {
+            $ProgressPreference = 'SilentlyContinue'
+            $exe = Join-Path $env:RUNNER_TEMP 'innosetup-6.7.3.exe'
+            Invoke-WebRequest -UseBasicParsing -Uri https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe -OutFile $exe
+            $hash = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLower()
+            if ($hash -ne '9c73c3bae7ed48d44112a0f48e66742c00090bdb5bef71d9d3c056c66e97b732') { Write-Output "::error::Inno Setup: unerwartete Prüfsumme $hash."; exit 1 }
+            & $exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CURRENTUSER | Out-Null
+            $found = Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe'
+            if (-not (Test-Path $found)) { Write-Output "::error::Inno Setup wurde nicht installiert."; exit 1 }
+          }
+          Write-Output "ISCC: $found"
+
+      - name: Artefakt bauen (ARM64)
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          $version = ''
+          if ($env:GITHUB_REF -like 'refs/tags/v*') { $version = $env:GITHUB_REF.Substring(11) }
+          elseif ($env:INPUT_VERSION) { $version = $env:INPUT_VERSION }
+          $params = @{ Dist = "$env:GITHUB_WORKSPACE\dist"; Arch = 'arm64' }
+          if ($version) { $params['Version'] = $version }
+          .\tools\make-release.ps1 @params
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      # Hier läuft die ARM-Fassung wirklich: Der Runner ist ein ARM-Rechner.
+      - name: Selbsttest der veröffentlichten App
+        run: |
+          .\tools\self-test.ps1 -Exe "$env:GITHUB_WORKSPACE\release-stage\app\NexusSSH.exe" -AllowNoDesktop
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NexusSSH-dist-arm64
+          path: dist/*
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: An das Release hängen
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if ($env:GITHUB_REF -like 'refs/tags/v*') { $tag = $env:GITHUB_REF.Substring(10) }
+          elseif ($env:INPUT_VERSION -match '^\d+\.\d+\.\d+$') { $tag = "v$env:INPUT_VERSION" }
+          else { Write-Output '::error::Für ein Release von Hand braucht es die Version (1.2.3).'; exit 1 }
+          $files = Get-ChildItem "$env:GITHUB_WORKSPACE\dist" -File
+          gh release upload $tag @($files.FullName) --repo $env:GITHUB_REPOSITORY --clobber
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }

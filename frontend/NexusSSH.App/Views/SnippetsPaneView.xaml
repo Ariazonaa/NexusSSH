@@ -1,0 +1,253 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Die Spalte rechts (Entwurf A, statt der Server-Info): die gespeicherten Befehle. Ein Klick führt einen im aktiven
+    Terminal aus (ShellViewModel.RunSnippet), Enter im Suchfeld den ersten Treffer, Esc geht ins Terminal zurück.
+    Beim Überfahren zeigt eine Zeile einen Stift, der den Befehl im Editor der Startseite öffnet; „+“ legt dort einen
+    neuen an. Ohne verbundene Sitzung mit Shell sind die Einträge grau, und ein Satz oben sagt, warum.
+-->
+<UserControl
+    x:Class="NexusSSH.App.Views.SnippetsPaneView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:app="using:NexusSSH.App"
+    xmlns:controls="using:NexusSSH.App.Controls"
+    xmlns:loc="using:NexusSSH.App.Localization"
+    xmlns:vm="using:NexusSSH.Core.ViewModels">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="HighContrast" />
+                <ResourceDictionary x:Key="Default">
+                    <!--  Das Suchfeld wie im Bild: dunkle Fläche, feiner Rand, auch beim Überfahren und mit Fokus  -->
+                    <StaticResource x:Key="TextControlBackground" ResourceKey="FieldBackgroundBrush" />
+                    <StaticResource x:Key="TextControlBackgroundPointerOver" ResourceKey="FieldBackgroundBrush" />
+                    <StaticResource x:Key="TextControlBackgroundFocused" ResourceKey="FieldBackgroundBrush" />
+                    <StaticResource x:Key="TextControlBorderBrush" ResourceKey="FieldBorderBrush" />
+                    <StaticResource x:Key="TextControlBorderBrushPointerOver" ResourceKey="FieldBorderBrush" />
+                    <StaticResource x:Key="TextControlPlaceholderForeground" ResourceKey="MutedTextBrush" />
+                    <StaticResource x:Key="TextControlPlaceholderForegroundPointerOver" ResourceKey="MutedTextBrush" />
+                    <StaticResource x:Key="TextControlPlaceholderForegroundFocused" ResourceKey="MutedTextBrush" />
+                    <!--  Eine Zeile hebt sich beim Überfahren ab; gewählt wird nichts – ein Klick führt aus  -->
+                    <StaticResource x:Key="ListViewItemBackgroundPointerOver" ResourceKey="RowHoverBrush" />
+                    <StaticResource x:Key="ListViewItemBackgroundPressed" ResourceKey="RowHoverBrush" />
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+
+            <!--  Eine Zeile: Name, darunter der Befehl; 7 × 8 Innenabstand, Rundung 6, 2 Abstand  -->
+            <Style
+                x:Key="SnippetItemStyle"
+                BasedOn="{StaticResource DefaultListViewItemStyle}"
+                TargetType="ListViewItem">
+                <Setter Property="MinHeight" Value="0" />
+                <Setter Property="Padding" Value="8,7,6,7" />
+                <Setter Property="Margin" Value="0,0,0,2" />
+                <Setter Property="CornerRadius" Value="6" />
+                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            </Style>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <Grid Style="{StaticResource CardStyle}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Grid Padding="14,10,8,6">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock
+                VerticalAlignment="Center"
+                FontSize="14"
+                FontWeight="SemiBold"
+                Text="{loc:Loc Key=SnippetsPaneTitle}" />
+            <Button
+                x:Name="AddSnippetButton"
+                Grid.Column="1"
+                Width="30"
+                MinHeight="30"
+                Padding="0"
+                AutomationProperties.AutomationId="AddSnippetButton"
+                AutomationProperties.Name="{loc:Loc Key=SnippetNew}"
+                Click="OnAddClicked"
+                Content="+"
+                CornerRadius="6"
+                FontSize="18"
+                Foreground="{ThemeResource IconBrush}"
+                Style="{StaticResource SubtleButtonStyle}"
+                ToolTipService.ToolTip="{loc:Loc Key=SnippetNew}" />
+        </Grid>
+
+        <!--  Suchfeld mit Lupe; Enter führt den ersten Treffer aus, Esc geht ins Terminal zurück  -->
+        <Grid Grid.Row="1" Padding="10,0,10,8">
+            <TextBox
+                x:Name="SnippetSearchBox"
+                MinHeight="30"
+                Padding="30,5,8,5"
+                AutomationProperties.AutomationId="SnippetSearchBox"
+                AutomationProperties.Name="{loc:Loc Key=SnippetsSearch}"
+                CornerRadius="6"
+                IsSpellCheckEnabled="False"
+                KeyDown="OnSearchKeyDown"
+                PlaceholderText="{loc:Loc Key=SnippetsPlaceholder}"
+                Text="{x:Bind Shell.SnippetFilter, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+            <controls:LineIcon
+                Margin="9,0,0,0"
+                HorizontalAlignment="Left"
+                VerticalAlignment="Center"
+                Foreground="{ThemeResource MutedTextBrush}"
+                IsHitTestVisible="False"
+                Kind="Search"
+                Size="14" />
+        </Grid>
+
+        <!--  Warum die Einträge gerade grau sind; Hinweise ohne Befehle  -->
+        <StackPanel Grid.Row="2" Padding="14,0,14,6">
+            <TextBlock
+                FontSize="12"
+                Foreground="{ThemeResource SecondaryTextBrush}"
+                Text="{loc:Loc Key=SnippetsNoShell}"
+                TextWrapping="Wrap"
+                Visibility="{x:Bind app:Ui.VisibleIfAllWithout(Shell.CannotRunSnippets, x:True, Shell.HasNoSnippets), Mode=OneWay}" />
+            <TextBlock
+                FontSize="12"
+                Foreground="{ThemeResource SecondaryTextBrush}"
+                Text="{loc:Loc Key=SnippetsNone}"
+                TextWrapping="Wrap"
+                Visibility="{x:Bind Shell.HasNoSnippets, Mode=OneWay}" />
+            <TextBlock
+                FontSize="12"
+                Foreground="{ThemeResource SecondaryTextBrush}"
+                Text="{loc:Loc Key=SnippetsNoMatch}"
+                TextWrapping="Wrap"
+                Visibility="{x:Bind Shell.HasNoSnippetMatch, Mode=OneWay}" />
+        </StackPanel>
+
+        <ListView
+            x:Name="SnippetList"
+            Grid.Row="3"
+            Padding="6,0"
+            AutomationProperties.AutomationId="SnippetList"
+            AutomationProperties.Name="{loc:Loc Key=SnippetsPaneTitle}"
+            IsItemClickEnabled="True"
+            ItemClick="OnSnippetClicked"
+            ItemContainerStyle="{StaticResource SnippetItemStyle}"
+            ItemsSource="{x:Bind Shell.SnippetItems, Mode=OneWay}"
+            Opacity="{x:Bind app:Ui.SnippetsOpacity(Shell.CanRunSnippets), Mode=OneWay}"
+            SelectionMode="None">
+            <ListView.ItemTemplate>
+                <DataTemplate x:DataType="vm:SnippetItem">
+                    <Grid>
+                        <!--  Überschrift eines Ordners: ein Klick (oder Enter) klappt ihn ein und aus  -->
+                        <Grid
+                            Margin="0,4,0,0"
+                            ColumnSpacing="6"
+                            Visibility="{x:Bind IsHeading}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <controls:LineIcon
+                                VerticalAlignment="Center"
+                                Foreground="{ThemeResource MutedTextBrush}"
+                                Kind="{x:Bind app:Ui.CollapseIcon(IsCollapsed)}"
+                                Size="10" />
+                            <controls:LineIcon
+                                Grid.Column="1"
+                                VerticalAlignment="Center"
+                                Foreground="{ThemeResource FolderIconBrush}"
+                                Kind="Folder"
+                                Size="14" />
+                            <TextBlock
+                                Grid.Column="2"
+                                VerticalAlignment="Center"
+                                FontSize="12"
+                                FontWeight="SemiBold"
+                                Foreground="{ThemeResource SecondaryTextBrush}"
+                                Text="{x:Bind Name}"
+                                TextTrimming="CharacterEllipsis" />
+                            <TextBlock
+                                Grid.Column="3"
+                                Margin="0,0,4,0"
+                                VerticalAlignment="Center"
+                                FontSize="11"
+                                Foreground="{ThemeResource MutedTextBrush}"
+                                Text="{x:Bind app:Ui.Count(Count)}" />
+                        </Grid>
+                        <Grid
+                            Margin="{x:Bind app:Ui.SnippetIndent(Folder)}"
+                            Background="Transparent"
+                            ColumnSpacing="6"
+                            Visibility="{x:Bind IsCommand}"
+                            PointerEntered="OnRowPointerEntered"
+                            PointerExited="OnRowPointerExited"
+                            ToolTipService.ToolTip="{x:Bind Text}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.ContextFlyout>
+                                <MenuFlyout>
+                                    <MenuFlyoutItem
+                                        Click="OnEditClicked"
+                                        Tag="{x:Bind}"
+                                        Text="{x:Bind app:Ui.SnippetEditName(Name)}" />
+                                </MenuFlyout>
+                            </Grid.ContextFlyout>
+                            <StackPanel Spacing="1">
+                                <TextBlock
+                                    FontSize="13"
+                                    Text="{x:Bind Name}"
+                                    TextTrimming="CharacterEllipsis" />
+                                <TextBlock
+                                    FontFamily="Cascadia Mono, Consolas"
+                                    FontSize="11"
+                                    Foreground="{ThemeResource MutedTextBrush}"
+                                    Text="{x:Bind app:Ui.FirstLine(Text)}"
+                                    TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
+                            <!--  Der Stift: beim Überfahren zu sehen, für eine Sprachausgabe immer da  -->
+                            <Button
+                                Grid.Column="1"
+                                Width="26"
+                                MinHeight="26"
+                                Padding="0"
+                                VerticalAlignment="Center"
+                                AutomationProperties.Name="{x:Bind app:Ui.SnippetEditName(Name)}"
+                                Background="{ThemeResource FieldBorderBrush}"
+                                Click="OnEditClicked"
+                                CornerRadius="5"
+                                Foreground="{ThemeResource IconBrush}"
+                                Opacity="0"
+                                Style="{StaticResource SubtleButtonStyle}"
+                                Tag="{x:Bind}"
+                                ToolTipService.ToolTip="{x:Bind app:Ui.SnippetEditName(Name)}">
+                                <controls:LineIcon Kind="Edit" Size="13" />
+                            </Button>
+                        </Grid>
+                    </Grid>
+                </DataTemplate>
+            </ListView.ItemTemplate>
+        </ListView>
+
+        <Border
+            Grid.Row="4"
+            Padding="14,10"
+            BorderBrush="{ThemeResource CardBorderBrush}"
+            BorderThickness="0,1,0,0">
+            <TextBlock
+                FontSize="11"
+                Foreground="{ThemeResource MutedTextBrush}"
+                Text="{loc:Loc Key=SnippetsRunHint}"
+                TextWrapping="Wrap" />
+        </Border>
+    </Grid>
+</UserControl>

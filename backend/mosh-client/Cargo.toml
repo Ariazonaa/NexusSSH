@@ -1,0 +1,39 @@
+[package]
+name = "mosh-client"
+version = "0.1.4"
+edition = "2024"
+rust-version = "1.89"
+license = "MIT OR Apache-2.0"
+description = "An independent, unofficial, wire-compatible Mosh client implementation in Rust"
+readme = "README.md"
+repository = "https://github.com/wandcs/mosh-client-rs"
+keywords = ["mosh", "terminal", "udp", "roaming"]
+categories = ["network-programming"]
+# NexusSSH: eingecheckte Kopie, siehe PATCHES.md (P6) – nicht veröffentlichen.
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+# NexusSSH (P6): Versionen aus [workspace.dependencies] statt fester `=`-Angaben; die Features wie im Original.
+[dependencies]
+aes = { workspace = true, features = ["zeroize"] }
+base64.workspace = true
+itoa.workspace = true
+ocb3.workspace = true
+miniz_oxide = { workspace = true, features = ["with-alloc"] }
+prost = { workspace = true, features = ["derive", "std"] }
+tokio = { version = "1", default-features = false, features = ["net", "rt", "sync", "time"] }
+unicode-width = { workspace = true, features = ["cjk"] }
+vte.workspace = true
+zeroize.workspace = true
+
+[dev-dependencies]
+proptest = { workspace = true, features = ["std"] }
+
+[lints.rust]
+unsafe_code = "forbid"
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(fuzzing)"] }
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }

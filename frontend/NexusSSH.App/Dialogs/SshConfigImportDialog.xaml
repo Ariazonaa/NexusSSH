@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--  Import aus ~/.ssh/config (Spec §8) oder aus PuTTY, WinSCP, MobaXterm: ankreuzen, was als Profil übernommen wird. Die Quelle wird nur gelesen.  -->
+<ContentDialog
+    x:Class="NexusSSH.App.Dialogs.SshConfigImportDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:app="using:NexusSSH.App"
+    xmlns:loc="using:NexusSSH.App.Localization"
+    xmlns:vm="using:NexusSSH.Core.ViewModels"
+    Title="{x:Bind Import.Title}"
+    CloseButtonText="{loc:Loc Key=Cancel}"
+    DefaultButton="Primary"
+    IsPrimaryButtonEnabled="{x:Bind Import.CanImport, Mode=OneWay}"
+    PrimaryButtonText="{loc:Loc Key=ImportAction}">
+
+    <Grid Width="480" RowSpacing="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock
+            IsTextSelectionEnabled="True"
+            Text="{x:Bind Import.Intro}"
+            TextWrapping="Wrap" />
+
+        <!--  Jede Zeile ist ein Kontrollkästchen; die Liste scrollt selbst  -->
+        <ListView
+            Grid.Row="1"
+            MaxHeight="360"
+            AutomationProperties.Name="{x:Bind Import.Title}"
+            ItemsSource="{x:Bind Import.Candidates}"
+            SelectionMode="None"
+            Visibility="{x:Bind Import.HasCandidates}">
+            <ListView.ItemContainerStyle>
+                <Style BasedOn="{StaticResource DefaultListViewItemStyle}" TargetType="ListViewItem">
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                    <Setter Property="Padding" Value="4,2" />
+                </Style>
+            </ListView.ItemContainerStyle>
+            <ListView.ItemTemplate>
+                <DataTemplate x:DataType="vm:ImportCandidate">
+                    <CheckBox
+                        HorizontalAlignment="Stretch"
+                        AutomationProperties.Name="{x:Bind Host.Alias}"
+                        IsChecked="{x:Bind IsSelected, Mode=TwoWay}">
+                        <StackPanel Spacing="1">
+                            <TextBlock Text="{x:Bind Host.Alias}" />
+                            <TextBlock
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Text="{x:Bind Summary}"
+                                TextTrimming="CharacterEllipsis" />
+                            <!--  Was in der Datei steht und die App nicht übernimmt (ProxyCommand, Ciphers …)  -->
+                            <TextBlock
+                                Foreground="{ThemeResource SystemFillColorCautionBrush}"
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Text="{x:Bind Skipped}"
+                                TextWrapping="Wrap"
+                                Visibility="{x:Bind app:Ui.VisibleIfText(Skipped)}" />
+                        </StackPanel>
+                    </CheckBox>
+                </DataTemplate>
+            </ListView.ItemTemplate>
+        </ListView>
+
+        <TextBlock
+            Grid.Row="2"
+            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+            Style="{StaticResource CaptionTextBlockStyle}"
+            Text="{x:Bind Import.Hint}"
+            TextWrapping="Wrap"
+            Visibility="{x:Bind Import.HasCandidates}" />
+
+        <!--  Nur bei ~/.ssh/config: Die Profile folgen danach der Datei  -->
+        <StackPanel
+            Grid.Row="3"
+            Spacing="2"
+            Visibility="{x:Bind Import.CanLink}">
+            <!--  Match-Blöcke, deren Bedingung die App nicht prüft (exec …): Sie gelten hier nie  -->
+            <TextBlock
+                x:Name="UncheckedText"
+                Margin="0,0,0,6"
+                Foreground="{ThemeResource SystemFillColorCautionBrush}"
+                Style="{StaticResource CaptionTextBlockStyle}"
+                Text="{x:Bind Import.Unchecked}"
+                TextWrapping="Wrap"
+                Visibility="{x:Bind app:Ui.VisibleIfText(Import.Unchecked)}" />
+            <CheckBox
+                x:Name="LinkedBox"
+                Content="{loc:Loc Key=ImportLinked}"
+                IsChecked="{x:Bind Import.Linked, Mode=TwoWay}" />
+            <TextBlock
+                Margin="28,0,0,0"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                Style="{StaticResource CaptionTextBlockStyle}"
+                Text="{loc:Loc Key=ImportLinkedHint}"
+                TextWrapping="Wrap" />
+        </StackPanel>
+    </Grid>
+</ContentDialog>

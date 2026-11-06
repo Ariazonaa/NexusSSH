@@ -1,0 +1,629 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Serverprofil anlegen oder ändern (Spec §8), in drei Reitern – so passt der Dialog auch in ein kleines Fenster.
+    Ein Passwort gehört nicht ins Profil – es wird beim Verbinden gefragt.
+-->
+<ContentDialog
+    x:Class="NexusSSH.App.Dialogs.ProfileEditorDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:app="using:NexusSSH.App"
+    xmlns:loc="using:NexusSSH.App.Localization"
+    xmlns:models="using:NexusSSH.Core.Models"
+    Title="{x:Bind Editor.Title}"
+    CloseButtonText="{loc:Loc Key=Cancel}"
+    DefaultButton="Primary"
+    IsPrimaryButtonEnabled="{x:Bind Editor.IsValid, Mode=OneWay}"
+    PrimaryButtonText="{loc:Loc Key=Save}">
+
+    <!--
+        Die Reiter oben, darunter ein Bereich, der rollt: Ist das Fenster niedrig, passte der erste Reiter nicht
+        ganz in den Dialog, und was unten stand (Favorit, Telnet, FTP, seriell), war weder zu sehen noch zu
+        erreichen (gefunden 2026-10-11). Ein Grid, kein StackPanel – das gäbe dem Rollbereich unendlich viel Platz.
+    -->
+    <Grid Width="456" RowSpacing="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <SelectorBar
+            x:Name="Sections"
+            Margin="-12,-8,0,0"
+            SelectionChanged="OnSectionChanged">
+            <SelectorBarItem
+                x:Name="ServerSection"
+                IsSelected="True"
+                Text="{loc:Loc Key=ProfileSectionServer}" />
+            <SelectorBarItem x:Name="AuthSection" Text="{loc:Loc Key=ProfileSectionAuth}" />
+            <SelectorBarItem x:Name="RouteSection" Text="{loc:Loc Key=ProfileSectionRoute}" />
+            <SelectorBarItem x:Name="LinkSection" Text="{loc:Loc Key=ProfileSectionLink}" />
+            <SelectorBarItem x:Name="NotesSection" Text="{loc:Loc Key=ProfileSectionNotes}" />
+        </SelectorBar>
+
+        <!--  Die Höhe richtet sich nach dem ersten Reiter, damit der Dialog beim Wechseln nicht springt  -->
+        <ScrollViewer
+            Grid.Row="1"
+            Padding="0,0,16,0"
+            HorizontalScrollBarVisibility="Disabled"
+            VerticalScrollBarVisibility="Auto">
+        <Grid MinHeight="340">
+            <!--  Server: wohin, als wer, wie er heißt  -->
+            <StackPanel x:Name="ServerPanel" Spacing="12">
+                <!--  Verknüpft mit ~/.ssh/config: Was hier steht, liest der Kern beim Start neu aus der Datei  -->
+                <StackPanel Spacing="2" Visibility="{x:Bind Editor.CanLink, Mode=OneWay}">
+                    <ComboBox
+                        x:Name="LinkBox"
+                        HorizontalAlignment="Stretch"
+                        Header="{loc:Loc Key=ProfileLinkLabel}"
+                        ItemsSource="{x:Bind Editor.LinkChoices}"
+                        SelectionChanged="OnLinkChanged" />
+                    <TextBlock
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Style="{StaticResource CaptionTextBlockStyle}"
+                        Text="{x:Bind Editor.LinkedText, Mode=OneWay}"
+                        TextWrapping="Wrap"
+                        Visibility="{x:Bind Editor.IsLinked, Mode=OneWay}" />
+                </StackPanel>
+                <Grid ColumnSpacing="12" Visibility="{x:Bind Editor.IsRemote, Mode=OneWay}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="110" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Spacing="2">
+                        <TextBox
+                            x:Name="HostBox"
+                            Header="{loc:Loc Key=ProfileHost}"
+                            IsEnabled="{x:Bind Editor.CanEditAddress, Mode=OneWay}"
+                            IsSpellCheckEnabled="False"
+                            PlaceholderText="example.org"
+                            Text="{x:Bind Editor.Host, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock
+                            Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Text="{x:Bind Editor.HostError, Mode=OneWay}"
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Spacing="2">
+                        <NumberBox
+                            Header="{loc:Loc Key=ProfilePort}"
+                            IsEnabled="{x:Bind Editor.CanEditPort, Mode=OneWay}"
+                            Maximum="65535"
+                            Minimum="1"
+                            SpinButtonPlacementMode="Hidden"
+                            Value="{x:Bind Editor.Port, Mode=TwoWay}" />
+                        <TextBlock
+                            Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Text="{x:Bind Editor.PortError, Mode=OneWay}"
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+                </Grid>
+
+                <StackPanel Spacing="2" Visibility="{x:Bind Editor.IsRemote, Mode=OneWay}">
+                    <TextBox
+                        Header="{loc:Loc Key=ProfileUser}"
+                        IsEnabled="{x:Bind Editor.CanEditSignIn, Mode=OneWay}"
+                        IsSpellCheckEnabled="False"
+                        PlaceholderText="root"
+                        Text="{x:Bind Editor.User, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    <TextBlock
+                        Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                        Style="{StaticResource CaptionTextBlockStyle}"
+                        Text="{x:Bind Editor.UserError, Mode=OneWay}"
+                        TextWrapping="Wrap" />
+                </StackPanel>
+
+                <TextBox
+                    Header="{loc:Loc Key=ProfileName}"
+                    IsSpellCheckEnabled="False"
+                    PlaceholderText="{loc:Loc Key=ProfileNamePlaceholder}"
+                    Text="{x:Bind Editor.Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+                <Grid ColumnSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <ComboBox
+                        x:Name="GroupBox"
+                        HorizontalAlignment="Stretch"
+                        Header="{loc:Loc Key=Group}"
+                        IsEditable="True"
+                        Text="{x:Bind Editor.Group, Mode=TwoWay}" />
+                    <TextBox
+                        Grid.Column="1"
+                        Header="{loc:Loc Key=ProfileTags}"
+                        IsSpellCheckEnabled="False"
+                        PlaceholderText="web, nginx"
+                        Text="{x:Bind Editor.Tags, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                </Grid>
+
+                <!--  Kennfarbe: Prod rot, Test grün – sichtbar an Tab, Kopfzeile und Kachel  -->
+                <ComboBox
+                    x:Name="ColorBox"
+                    HorizontalAlignment="Stretch"
+                    Header="{loc:Loc Key=ProfileColor}"
+                    ItemsSource="{x:Bind Editor.Colors}"
+                    SelectionChanged="OnColorChanged" />
+                <!--  Eigenes Farbschema für das Terminal dieses Servers: Produktion z. B. immer dunkelrot  -->
+                <ComboBox
+                    x:Name="ThemeBox"
+                    HorizontalAlignment="Stretch"
+                    Header="{loc:Loc Key=ProfileTheme}"
+                    ItemsSource="{x:Bind Editor.ThemeChoices}"
+                    SelectionChanged="OnThemeChanged" />
+                <CheckBox Content="{loc:Loc Key=ProfileFavorite}" IsChecked="{x:Bind Editor.IsFavorite, Mode=TwoWay}" />
+                <!--  Telnet für Geräte ohne SSH; der Hinweis steht nur da, solange es gewählt ist  -->
+                <StackPanel Spacing="2">
+                    <CheckBox Content="{loc:Loc Key=ProfileTelnet}" IsChecked="{x:Bind Editor.IsTelnet, Mode=TwoWay}" />
+                    <TextBlock
+                        Margin="28,0,0,0"
+                        Foreground="{ThemeResource SystemFillColorCautionBrush}"
+                        Style="{StaticResource CaptionTextBlockStyle}"
+                        Text="{loc:Loc Key=ProfileTelnetHint}"
+                        TextWrapping="Wrap"
+                        Visibility="{x:Bind Editor.IsTelnet, Mode=OneWay}" />
+                </StackPanel>
+                <!--  FTP/FTPS: nur Dateien. Ohne Verschlüsselung nur auf ausdrücklichen Wunsch, mit Warnung  -->
+                <StackPanel Spacing="2">
+                    <CheckBox Content="{loc:Loc Key=ProfileFtp}" IsChecked="{x:Bind Editor.IsFtp, Mode=TwoWay}" />
+                    <StackPanel
+                        Margin="28,0,0,0"
+                        Spacing="2"
+                        Visibility="{x:Bind Editor.IsFtp, Mode=OneWay}">
+                        <TextBlock
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Text="{loc:Loc Key=ProfileFtpHint}"
+                            TextWrapping="Wrap" />
+                        <CheckBox Content="{loc:Loc Key=ProfileFtpImplicit}" IsChecked="{x:Bind Editor.FtpImplicit, Mode=TwoWay}" />
+                        <CheckBox Content="{loc:Loc Key=ProfileFtpActive}" IsChecked="{x:Bind Editor.FtpActive, Mode=TwoWay}" />
+                        <!--  Sichtbar, sobald der Schalter an ist: Dann fragt Windows beim ersten Mal nach der Firewall  -->
+                        <TextBlock
+                            Margin="28,0,0,0"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Text="{loc:Loc Key=ProfileFtpActiveHint}"
+                            TextWrapping="Wrap"
+                            Visibility="{x:Bind Editor.FtpActive, Mode=OneWay}" />
+                        <!--  Die Einträge stehen in der Reihenfolge von ProfileEditorViewModel.FtpEncodings  -->
+                        <ComboBox
+                            x:Name="FtpEncodingBox"
+                            MinWidth="240"
+                            Margin="0,4,0,4"
+                            AutomationProperties.Name="{loc:Loc Key=ProfileFtpEncoding}"
+                            Header="{loc:Loc Key=ProfileFtpEncoding}"
+                            SelectedIndex="{x:Bind Editor.FtpEncodingIndex, Mode=TwoWay}"
+                            ToolTipService.ToolTip="{loc:Loc Key=ProfileFtpEncodingHint}">
+                            <ComboBoxItem Content="{loc:Loc Key=ProfileFtpEncodingUtf8}" />
+                            <ComboBoxItem Content="ISO-8859-1 (Latin-1)" />
+                            <ComboBoxItem Content="Windows-1252" />
+                        </ComboBox>
+                        <CheckBox Content="{loc:Loc Key=ProfileFtpPlain}" IsChecked="{x:Bind Editor.FtpPlain, Mode=TwoWay}" />
+                        <TextBlock
+                            Margin="28,0,0,0"
+                            Foreground="{ThemeResource SystemFillColorCautionBrush}"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Text="{loc:Loc Key=ProfileFtpPlainHint}"
+                            TextWrapping="Wrap"
+                            Visibility="{x:Bind Editor.ShowsFtpPlainHint, Mode=OneWay}" />
+                    </StackPanel>
+                </StackPanel>
+                <!--  Serielle Schnittstelle: Im Feld „Host“ steht dann COM3, dazu die Geschwindigkeit  -->
+                <StackPanel Spacing="6">
+                    <CheckBox Content="{loc:Loc Key=ProfileSerial}" IsChecked="{x:Bind Editor.IsSerial, Mode=TwoWay}" />
+                    <StackPanel
+                        Margin="28,0,0,0"
+                        Spacing="4"
+                        Visibility="{x:Bind Editor.IsSerial, Mode=OneWay}">
+                        <NumberBox
+                            Width="160"
+                            HorizontalAlignment="Left"
+                            Header="{loc:Loc Key=ProfileBaud}"
+                            Maximum="4000000"
+                            Minimum="50"
+                            SpinButtonPlacementMode="Hidden"
+                            Value="{x:Bind Editor.Baud, Mode=TwoWay}" />
+                        <TextBlock
+                            Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Text="{x:Bind Editor.BaudError, Mode=OneWay}"
+                            TextWrapping="Wrap" />
+                        <TextBlock
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Text="{loc:Loc Key=ProfileSerialHint}"
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+                </StackPanel>
+                <!--  Lokales Terminal: eine Shell dieses Rechners. Host, Benutzer, Anmeldung und Verbindung entfallen  -->
+                <StackPanel Spacing="6">
+                    <CheckBox Content="{loc:Loc Key=ProfileLocal}" IsChecked="{x:Bind Editor.IsLocal, Mode=TwoWay}" />
+                    <StackPanel
+                        Margin="28,0,0,0"
+                        Spacing="6"
+                        Visibility="{x:Bind Editor.IsLocal, Mode=OneWay}">
+                        <TextBlock
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Text="{loc:Loc Key=ProfileLocalHint}"
+                            TextWrapping="Wrap" />
+                        <!--  Die Einträge stehen in der Reihenfolge von Editor.LocalShells; SelectedItem ist object, deshalb von Hand  -->
+                        <ComboBox
+                            x:Name="LocalShellBox"
+                            HorizontalAlignment="Stretch"
+                            AutomationProperties.Name="{loc:Loc Key=ProfileLocalShell}"
+                            Header="{loc:Loc Key=ProfileLocalShell}"
+                            ItemsSource="{x:Bind Editor.LocalShells}"
+                            SelectionChanged="OnLocalShellChanged">
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="models:LocalShell">
+                                    <TextBlock Text="{x:Bind DisplayName}" />
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <Grid ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBox
+                                AutomationProperties.Name="{loc:Loc Key=ProfileLocalFolder}"
+                                Header="{loc:Loc Key=ProfileLocalFolder}"
+                                IsSpellCheckEnabled="False"
+                                PlaceholderText="{loc:Loc Key=ProfileLocalFolderPlaceholder}"
+                                Text="{x:Bind Editor.LocalDirectory, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            <Button
+                                Grid.Column="1"
+                                VerticalAlignment="Bottom"
+                                AutomationProperties.Name="{loc:Loc Key=ProfileLocalFolderBrowse}"
+                                Click="OnBrowseLocalFolder"
+                                Content="{loc:Loc Key=Browse}" />
+                        </Grid>
+                        <TextBlock
+                            Foreground="{ThemeResource SystemFillColorCriticalBrush}"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Text="{x:Bind Editor.LocalFolderError, Mode=OneWay}"
+                            TextWrapping="Wrap"
+                            Visibility="{x:Bind app:Ui.VisibleIfText(Editor.LocalFolderError), Mode=OneWay}" />
+                    </StackPanel>
+                </StackPanel>
+            </StackPanel>
+
+            <!--  Anmeldung: Schlüssel und Agent  -->
+            <StackPanel
+                x:Name="AuthPanel"
+                Spacing="12"
+                Visibility="Collapsed">
+                <!--  Mit einer Identität kommen Benutzer und Schlüssel von dort; die Felder zeigen sie nur noch  -->
+                <ComboBox
+                    x:Name="IdentityBox"
+                    HorizontalAlignment="Stretch"
+                    Header="{loc:Loc Key=ProfileIdentity}"
+                    ItemsSource="{x:Bind Editor.IdentityChoices}"
+                    SelectionChanged="OnIdentityChanged" />
+                <Grid ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBox
+                        Header="{loc:Loc Key=ProfileKeyFile}"
+                        IsEnabled="{x:Bind Editor.CanEditSignIn, Mode=OneWay}"
+                        IsSpellCheckEnabled="False"
+                        PlaceholderText="{loc:Loc Key=ProfileKeyFilePlaceholder}"
+                        Text="{x:Bind Editor.KeyPath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    <Button
+                        Grid.Column="1"
+                        VerticalAlignment="Bottom"
+                        Click="OnBrowseKey"
+                        IsEnabled="{x:Bind Editor.CanEditSignIn, Mode=OneWay}"
+                        Content="{loc:Loc Key=Browse}" />
+                </Grid>
+                <TextBlock
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="{loc:Loc Key=ProfileAuthHint}"
+                    TextWrapping="Wrap" />
+                <CheckBox
+                    Content="{loc:Loc Key=ProfileUseAgent}"
+                    IsChecked="{x:Bind Editor.UseAgent, Mode=TwoWay}"
+                    IsEnabled="{x:Bind Editor.HasOwnSignIn, Mode=OneWay}" />
+                <StackPanel Spacing="2">
+                    <CheckBox
+                        x:Name="IdentitiesOnlyBox"
+                        Content="{loc:Loc Key=ProfileIdentitiesOnly}"
+                        IsChecked="{x:Bind Editor.IdentitiesOnly, Mode=TwoWay}"
+                        IsEnabled="{x:Bind Editor.CanEditSignIn, Mode=OneWay}" />
+                    <TextBlock
+                        Margin="28,0,0,0"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Style="{StaticResource CaptionTextBlockStyle}"
+                        Text="{loc:Loc Key=ProfileIdentitiesOnlyHint}"
+                        TextWrapping="Wrap" />
+                </StackPanel>
+            </StackPanel>
+
+            <!--  Weg zum Server: Sprung-Server und Agent Forwarding  -->
+            <StackPanel
+                x:Name="RoutePanel"
+                Spacing="12"
+                Visibility="Collapsed">
+                <ComboBox
+                    x:Name="JumpBox"
+                    HorizontalAlignment="Stretch"
+                    Header="{loc:Loc Key=ProfileJump}"
+                    IsEnabled="{x:Bind Editor.CanEditAddress, Mode=OneWay}"
+                    ItemsSource="{x:Bind Editor.JumpChoices}"
+                    SelectionChanged="OnJumpChanged" />
+                <TextBlock
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="{loc:Loc Key=ProfileJumpHint}"
+                    TextWrapping="Wrap" />
+                <StackPanel Spacing="2">
+                    <CheckBox
+                        Content="{loc:Loc Key=ProfileForwardAgent}"
+                        IsChecked="{x:Bind Editor.ForwardAgent, Mode=TwoWay}"
+                        IsEnabled="{x:Bind Editor.CanSetForwardAgent, Mode=OneWay}" />
+                    <TextBlock
+                        Margin="28,0,0,0"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Style="{StaticResource CaptionTextBlockStyle}"
+                        Text="{loc:Loc Key=ProfileForwardAgentHint}"
+                        TextWrapping="Wrap" />
+                </StackPanel>
+                <StackPanel Spacing="2">
+                    <CheckBox
+                        Content="{loc:Loc Key=ProfileForwardX11}"
+                        IsChecked="{x:Bind Editor.ForwardX11, Mode=TwoWay}"
+                        IsEnabled="{x:Bind Editor.CanForwardAgent, Mode=OneWay}" />
+                    <TextBlock
+                        Margin="28,0,0,0"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Style="{StaticResource CaptionTextBlockStyle}"
+                        Text="{loc:Loc Key=ProfileForwardX11Hint}"
+                        TextWrapping="Wrap" />
+                </StackPanel>
+                <!--  Mosh: das Terminal über UDP; mit Sprung-Server nicht zu wählen, und es schaltet Agent, X11 und den Zeichensatz ab  -->
+                <StackPanel Spacing="6" Visibility="{x:Bind Editor.ShowsMosh, Mode=OneWay}">
+                    <StackPanel Spacing="2">
+                        <CheckBox
+                            x:Name="MoshBox"
+                            Content="{loc:Loc Key=ProfileMosh}"
+                            IsChecked="{x:Bind Editor.Mosh, Mode=TwoWay}"
+                            IsEnabled="{x:Bind Editor.CanUseMosh, Mode=OneWay}" />
+                        <TextBlock
+                            Margin="28,0,0,0"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Text="{loc:Loc Key=ProfileMoshHint}"
+                            TextWrapping="Wrap" />
+                        <TextBlock
+                            Margin="28,0,0,0"
+                            Foreground="{ThemeResource SystemFillColorCautionBrush}"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Text="{loc:Loc Key=ProfileMoshNoJump}"
+                            TextWrapping="Wrap"
+                            Visibility="{x:Bind Editor.ShowsMoshNoJump, Mode=OneWay}" />
+                    </StackPanel>
+                    <StackPanel Margin="28,0,0,0" Spacing="2" Visibility="{x:Bind Editor.ShowsMoshPorts, Mode=OneWay}">
+                        <TextBox
+                            x:Name="MoshPortsBox"
+                            Header="{loc:Loc Key=ProfileMoshPorts}"
+                            IsSpellCheckEnabled="False"
+                            MaxLength="11"
+                            PlaceholderText="60001:60010"
+                            Text="{x:Bind Editor.MoshPorts, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        <TextBlock
+                            Foreground="{ThemeResource SystemFillColorCautionBrush}"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Text="{x:Bind Editor.MoshPortsError, Mode=OneWay}"
+                            TextWrapping="Wrap"
+                            Visibility="{x:Bind app:Ui.VisibleIfText(Editor.MoshPortsError), Mode=OneWay}" />
+                        <TextBlock
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            Text="{loc:Loc Key=ProfileMoshPortsHint}"
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+                </StackPanel>
+            </StackPanel>
+            <!--  Verbindung: wie aufgebaut wird und was dabei erlaubt ist  -->
+            <StackPanel
+                x:Name="LinkPanel"
+                Spacing="12"
+                Visibility="Collapsed">
+                <Grid ColumnSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <ComboBox
+                        x:Name="AddressFamilyBox"
+                        HorizontalAlignment="Stretch"
+                        Header="{loc:Loc Key=ProfileAddressFamily}"
+                        ItemsSource="{x:Bind Editor.AddressFamilies}"
+                        SelectionChanged="OnAddressFamilyChanged" />
+                    <NumberBox
+                        x:Name="ConnectTimeoutBox"
+                        Grid.Column="1"
+                        Width="150"
+                        Header="{loc:Loc Key=ProfileConnectTimeout}"
+                        LargeChange="10"
+                        Maximum="120"
+                        Minimum="3"
+                        SmallChange="1"
+                        SpinButtonPlacementMode="Compact"
+                        Value="{x:Bind Editor.ConnectTimeout, Mode=TwoWay}" />
+                </Grid>
+                <!--  Lebenszeichen nur für diesen Server; leer = wie in den Einstellungen  -->
+                <StackPanel Spacing="2">
+                    <Grid ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <NumberBox
+                            x:Name="KeepAliveSecondsBox"
+                            HorizontalAlignment="Stretch"
+                            Header="{loc:Loc Key=ProfileKeepAliveSeconds}"
+                            Maximum="3600"
+                            Minimum="0"
+                            PlaceholderText="{loc:Loc Key=ProfileKeepAliveGeneral}"
+                            Value="{x:Bind Editor.KeepAliveSeconds, Mode=TwoWay}" />
+                        <NumberBox
+                            x:Name="KeepAliveMissedBox"
+                            Grid.Column="1"
+                            HorizontalAlignment="Stretch"
+                            Header="{loc:Loc Key=ProfileKeepAliveMissed}"
+                            Maximum="20"
+                            Minimum="1"
+                            PlaceholderText="{loc:Loc Key=ProfileKeepAliveGeneral}"
+                            Value="{x:Bind Editor.KeepAliveMissed, Mode=TwoWay}" />
+                    </Grid>
+                    <TextBlock
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Style="{StaticResource CaptionTextBlockStyle}"
+                        Text="{loc:Loc Key=ProfileKeepAliveHint}"
+                        TextWrapping="Wrap" />
+                </StackPanel>
+                <CheckBox Content="{loc:Loc Key=ProfileAutoReconnect}" IsChecked="{x:Bind Editor.AutoReconnect, Mode=TwoWay}" />
+                <StackPanel Spacing="2">
+                    <CheckBox Content="{loc:Loc Key=ProfileCompression}" IsChecked="{x:Bind Editor.Compression, Mode=TwoWay}" />
+                    <TextBlock
+                        Margin="28,0,0,0"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Style="{StaticResource CaptionTextBlockStyle}"
+                        Text="{loc:Loc Key=ProfileCompressionHint}"
+                        TextWrapping="Wrap" />
+                </StackPanel>
+                <StackPanel Spacing="2">
+                    <CheckBox
+                        x:Name="LegacyBox"
+                        Content="{loc:Loc Key=ProfileLegacy}"
+                        IsChecked="{x:Bind Editor.LegacyAlgorithms, Mode=TwoWay}" />
+                    <TextBlock
+                        Margin="28,0,0,0"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Style="{StaticResource CaptionTextBlockStyle}"
+                        Text="{loc:Loc Key=ProfileLegacyHint}"
+                        TextWrapping="Wrap" />
+                    <InfoBar
+                        Margin="28,6,0,0"
+                        IsClosable="False"
+                        IsOpen="{x:Bind Editor.LegacyAlgorithms, Mode=OneWay}"
+                        Message="{loc:Loc Key=ProfileLegacyWarning}"
+                        Severity="Warning" />
+                </StackPanel>
+                <!--  Terminal: als was sich die App ausgibt, in welchem Zeichensatz der Server spricht, welche Variablen er bekommt  -->
+                <StackPanel Spacing="6">
+                    <Grid ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBox
+                            x:Name="TermBox"
+                            Header="{loc:Loc Key=ProfileTerm}"
+                            IsSpellCheckEnabled="False"
+                            MaxLength="64"
+                            PlaceholderText="xterm-256color"
+                            Text="{x:Bind Editor.Term, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        <!--  Die Einträge stehen in der Reihenfolge von TerminalCharset.Ids  -->
+                        <ComboBox
+                            x:Name="CharsetBox"
+                            Grid.Column="1"
+                            HorizontalAlignment="Stretch"
+                            AutomationProperties.Name="{loc:Loc Key=ProfileCharset}"
+                            Header="{loc:Loc Key=ProfileCharset}"
+                            IsEnabled="{x:Bind Editor.CanChooseCharset, Mode=OneWay}"
+                            SelectedIndex="{x:Bind Editor.CharsetIndex, Mode=TwoWay}">
+                            <ComboBoxItem Content="UTF-8" />
+                            <ComboBoxItem Content="ISO-8859-1 (Latin-1)" />
+                            <ComboBoxItem Content="ISO-8859-15 (Latin-9)" />
+                            <ComboBoxItem Content="Windows-1252" />
+                        </ComboBox>
+                    </Grid>
+                    <TextBlock
+                        Foreground="{ThemeResource SystemFillColorCautionBrush}"
+                        Style="{StaticResource CaptionTextBlockStyle}"
+                        Text="{x:Bind Editor.TermError, Mode=OneWay}"
+                        TextWrapping="Wrap"
+                        Visibility="{x:Bind app:Ui.VisibleIfText(Editor.TermError), Mode=OneWay}" />
+                    <TextBlock
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Style="{StaticResource CaptionTextBlockStyle}"
+                        Text="{loc:Loc Key=ProfileTermHint}"
+                        TextWrapping="Wrap" />
+                    <TextBox
+                        x:Name="EnvBox"
+                        Height="84"
+                        AcceptsReturn="True"
+                        FontFamily="Cascadia Mono, Consolas"
+                        Header="{loc:Loc Key=ProfileEnv}"
+                        IsSpellCheckEnabled="False"
+                        MaxLength="4000"
+                        PlaceholderText="LANG=de_DE.UTF-8"
+                        ScrollViewer.VerticalScrollBarVisibility="Auto"
+                        Text="{x:Bind Editor.EnvText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                    <TextBlock
+                        Foreground="{ThemeResource SystemFillColorCautionBrush}"
+                        Style="{StaticResource CaptionTextBlockStyle}"
+                        Text="{x:Bind Editor.EnvError, Mode=OneWay}"
+                        TextWrapping="Wrap"
+                        Visibility="{x:Bind app:Ui.VisibleIfText(Editor.EnvError), Mode=OneWay}" />
+                    <TextBlock
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Style="{StaticResource CaptionTextBlockStyle}"
+                        Text="{loc:Loc Key=ProfileEnvHint}"
+                        TextWrapping="Wrap" />
+                </StackPanel>
+                <!--  Verbindungstest mit dem, was gerade im Dialog steht – ohne Anmeldung, ohne etwas zu speichern  -->
+                <StackPanel Spacing="6">
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <Button
+                            x:Name="ProbeButton"
+                            Click="OnProbeClicked"
+                            Content="{loc:Loc Key=ProbeButton}"
+                            IsEnabled="{x:Bind Editor.IsValid, Mode=OneWay}" />
+                        <ProgressRing
+                            x:Name="ProbeRing"
+                            Width="18"
+                            Height="18"
+                            IsActive="False" />
+                    </StackPanel>
+                    <TextBlock
+                        x:Name="ProbeResult"
+                        FontSize="12"
+                        IsTextSelectionEnabled="True"
+                        Text="{loc:Loc Key=ProbeHint}"
+                        TextWrapping="Wrap" />
+                </StackPanel>
+            </StackPanel>
+
+            <!--  Notizen: freier Text zum Server  -->
+            <StackPanel
+                x:Name="NotesPanel"
+                Spacing="8"
+                Visibility="Collapsed">
+                <TextBox
+                    x:Name="NotesBox"
+                    Height="220"
+                    AcceptsReturn="True"
+                    Header="{loc:Loc Key=ProfileNotes}"
+                    MaxLength="4000"
+                    PlaceholderText="{loc:Loc Key=ProfileNotesPlaceholder}"
+                    ScrollViewer.VerticalScrollBarVisibility="Auto"
+                    Text="{x:Bind Editor.Notes, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                    TextWrapping="Wrap" />
+                <TextBlock
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="{loc:Loc Key=ProfileNotesHint}"
+                    TextWrapping="Wrap" />
+            </StackPanel>
+        </Grid>
+        </ScrollViewer>
+    </Grid>
+</ContentDialog>

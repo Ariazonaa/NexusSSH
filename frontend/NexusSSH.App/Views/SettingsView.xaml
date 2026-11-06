@@ -1,0 +1,971 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Die Einstellungen als eigene Seite: eine Karte über den Bereichen. Links die Bereiche, rechts der gewählte – je
+    Bereich ein StackPanel „Page…“, das OnPageChanged ein- und ausblendet. Geöffnet über das Zahnrad in der
+    Titelleiste oder die Palette (ShellViewModel.IsSettingsOpen), geschlossen mit × oder Esc.
+-->
+<UserControl
+    x:Class="NexusSSH.App.Views.SettingsView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:app="using:NexusSSH.App"
+    xmlns:loc="using:NexusSSH.App.Localization"
+    xmlns:vm="using:NexusSSH.Core.ViewModels"
+    xmlns:settings="using:NexusSSH.Core.Settings"
+    xmlns:models="using:NexusSSH.Core.Models"
+    xmlns:terminals="using:NexusSSH.Core.Terminals"
+    KeyDown="OnKeyDown">
+
+    <UserControl.Resources>
+        <Style
+            x:Key="SectionTitleStyle"
+            BasedOn="{StaticResource BodyStrongTextBlockStyle}"
+            TargetType="TextBlock">
+            <Setter Property="Margin" Value="0,8,0,0" />
+        </Style>
+        <Style
+            x:Key="HintStyle"
+            BasedOn="{StaticResource CaptionTextBlockStyle}"
+            TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+        <!--  Ein Abschnitt: leicht abgesetzte Fläche auf der Karte  -->
+        <Style x:Key="SectionStyle" TargetType="StackPanel">
+            <Setter Property="Padding" Value="16,14,16,16" />
+            <Setter Property="Spacing" Value="12" />
+            <Setter Property="Background" Value="{ThemeResource RaisedBackgroundBrush}" />
+            <Setter Property="BorderBrush" Value="{ThemeResource CardBorderBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="10" />
+        </Style>
+    </UserControl.Resources>
+
+    <Grid Style="{StaticResource CardStyle}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Grid
+            Padding="24,14,10,12"
+            BorderBrush="{ThemeResource CardBorderBrush}"
+            BorderThickness="0,0,0,1">
+            <TextBlock
+                VerticalAlignment="Center"
+                Style="{StaticResource SubtitleTextBlockStyle}"
+                Text="{loc:Loc Key=Settings}" />
+            <!--  Suche über alle Bereiche: zeigt nur noch die Zeilen, die zum Getippten passen  -->
+            <TextBox
+                x:Name="SearchBox"
+                Width="280"
+                Margin="0,0,44,0"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Center"
+                AutomationProperties.Name="{loc:Loc Key=SettingsSearch}"
+                IsSpellCheckEnabled="False"
+                PlaceholderText="{loc:Loc Key=SettingsSearch}"
+                TextChanged="OnSearchChanged" />
+            <Button
+                x:Name="CloseButton"
+                HorizontalAlignment="Right"
+                AutomationProperties.Name="{loc:Loc Key=CloseSettings}"
+                Click="OnCloseClicked"
+                Style="{StaticResource IconButtonStyle}"
+                ToolTipService.ToolTip="{loc:Loc Key=CloseSettings}">
+                <FontIcon FontSize="12" Glyph="&#xE711;" />
+            </Button>
+        </Grid>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" MinWidth="220" MaxWidth="380" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!--  Die Bereiche; Tag nennt die Seite (Page…)  -->
+            <ListView
+                x:Name="NavList"
+                Padding="8,10,8,10"
+                AutomationProperties.Name="{loc:Loc Key=Settings}"
+                BorderBrush="{ThemeResource CardBorderBrush}"
+                BorderThickness="0,0,1,0"
+                SelectionChanged="OnPageChanged"
+                SelectionMode="Single">
+                <ListViewItem x:Name="NavGeneral" Content="{loc:Loc Key=SettingsGeneral}" Tag="General" />
+                <ListViewItem x:Name="NavLook" Content="{loc:Loc Key=SettingsLook}" Tag="Look" />
+                <ListViewItem x:Name="NavConnections" Content="{loc:Loc Key=SettingsConnections}" Tag="Connections" />
+                <ListViewItem x:Name="NavAlerts" Content="{loc:Loc Key=SettingsAlerts}" Tag="Alerts" />
+                <ListViewItem x:Name="NavTerminal" Content="{loc:Loc Key=SettingsTerminal}" Tag="Terminal" />
+                <ListViewItem x:Name="NavFiles" Content="{loc:Loc Key=SettingsFiles}" Tag="Files" />
+                <ListViewItem x:Name="NavShortcuts" Content="{loc:Loc Key=SettingsShortcuts}" Tag="Shortcuts" />
+                <ListViewItem x:Name="NavData" Content="{loc:Loc Key=DataSection}" Tag="Data" />
+                <ListViewItem x:Name="NavMcp" Content="{loc:Loc Key=SettingsMcp}" Tag="Mcp" />
+                <ListViewItem x:Name="NavAbout" Content="{loc:Loc Key=SettingsAbout}" Tag="About" />
+            </ListView>
+
+            <ScrollViewer
+                x:Name="PageScroll"
+                Grid.Column="1"
+                VerticalScrollBarVisibility="Auto">
+                <!--  Jede Seite gleich breit, links angeschlagen: die erste Spalte nimmt allen Platz bis 640  -->
+                <Grid Margin="24,16,24,24">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="10000*" MaxWidth="640" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock
+                        x:Name="SearchEmpty"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Text="{loc:Loc Key=SettingsSearchNone}"
+                        Visibility="Collapsed" />
+
+                    <StackPanel x:Name="PageGeneral" Spacing="8">
+                        <StackPanel Style="{StaticResource SectionStyle}">
+                            <StackPanel Tag="set:Language" Spacing="4">
+                                <ComboBox
+                                    x:Name="LanguageBox"
+                                    Width="260"
+                                    Header="{loc:Loc Key=Language}"
+                                    SelectionChanged="OnLanguageChanged">
+                                    <ComboBoxItem Content="{loc:Loc Key=LanguageAuto}" />
+                                    <ComboBoxItem Content="Deutsch" />
+                                    <ComboBoxItem Content="English" />
+                                    <ComboBoxItem Content="Français" />
+                                    <ComboBoxItem Content="Español" />
+                                </ComboBox>
+                                <TextBlock Style="{StaticResource HintStyle}" Text="{loc:Loc Key=LanguageRestartHint}" />
+                            </StackPanel>
+                            <CheckBox Tag="set:RestoreTabs" Content="{loc:Loc Key=RestoreTabs}" IsChecked="{x:Bind Shell.RestoreTabs, Mode=TwoWay}" />
+                            <CheckBox Tag="set:ConfirmClose" Content="{loc:Loc Key=SettingConfirmClose}" IsChecked="{x:Bind Shell.ConfirmClose, Mode=TwoWay}" />
+                            <CheckBox Tag="set:CheckForUpdates" Content="{loc:Loc Key=SettingCheckUpdates}" IsChecked="{x:Bind Shell.CheckForUpdates, Mode=TwoWay}" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <StackPanel x:Name="PageLook" Spacing="8">
+                        <StackPanel Style="{StaticResource SectionStyle}">
+                            <StackPanel Tag="set:Accent" Spacing="4">
+                                <ComboBox
+                                    x:Name="AccentBox"
+                                    Width="260"
+                                    Header="{loc:Loc Key=AccentLabel}"
+                                    SelectionChanged="OnAccentChanged">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate x:DataType="settings:AccentColor">
+                                            <TextBlock Text="{x:Bind Name}" />
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                                <TextBlock Style="{StaticResource HintStyle}" Text="{loc:Loc Key=LanguageRestartHint}" />
+                            </StackPanel>
+                            <StackPanel Tag="set:UiZoom" Spacing="2">
+                                <NumberBox
+                                    x:Name="UiZoomBox"
+                                    Width="260"
+                                    HorizontalAlignment="Left"
+                                    Header="{loc:Loc Key=UiZoomLabel}"
+                                    LargeChange="20"
+                                    SmallChange="10"
+                                    SpinButtonPlacementMode="Inline"
+                                    ValueChanged="OnUiZoomChanged" />
+                                <TextBlock
+                                    Style="{StaticResource HintStyle}"
+                                    Text="{loc:Loc Key=UiZoomHint}"
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
+                            <StackPanel Tag="set:Compact" Spacing="2">
+                                <CheckBox Content="{loc:Loc Key=SettingCompact}" IsChecked="{x:Bind Shell.Compact, Mode=TwoWay}" />
+                                <TextBlock
+                                    Margin="28,0,0,0"
+                                    Style="{StaticResource HintStyle}"
+                                    Text="{loc:Loc Key=LanguageRestartHint}" />
+                            </StackPanel>
+                            <CheckBox Tag="set:Animations" Content="{loc:Loc Key=SettingAnimations}" IsChecked="{x:Bind Shell.Animations, Mode=TwoWay}" />
+                            <StackPanel Tag="set:MonitorBar" Spacing="2">
+                                <CheckBox Content="{loc:Loc Key=SettingMonitorBar}" IsChecked="{x:Bind Shell.MonitorBar, Mode=TwoWay}" />
+                                <TextBlock
+                                    Margin="28,0,0,0"
+                                    Style="{StaticResource HintStyle}"
+                                    Text="{loc:Loc Key=SettingMonitorBarHint}" />
+                            </StackPanel>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <StackPanel x:Name="PageConnections" Spacing="8">
+                        <StackPanel Style="{StaticResource SectionStyle}">
+                            <CheckBox Tag="set:AutoReconnect" Content="{loc:Loc Key=SettingAutoReconnect}" IsChecked="{x:Bind Shell.AutoReconnect, Mode=TwoWay}" />
+                            <StackPanel Tag="set:RememberUnlockedKeys" Spacing="2">
+                                <CheckBox Content="{loc:Loc Key=SettingRememberKeys}" IsChecked="{x:Bind Shell.RememberUnlockedKeys, Mode=TwoWay}" />
+                                <TextBlock
+                                    Margin="28,0,0,0"
+                                    Style="{StaticResource HintStyle}"
+                                    Text="{loc:Loc Key=SettingRememberKeysHint}"
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
+                            <StackPanel Tag="set:CheckReachability" Spacing="2">
+                                <CheckBox Content="{loc:Loc Key=SettingReachability}" IsChecked="{x:Bind Shell.CheckReachability, Mode=TwoWay}" />
+                                <TextBlock
+                                    Margin="28,0,0,0"
+                                    Style="{StaticResource HintStyle}"
+                                    Text="{loc:Loc Key=SettingReachabilityHint}" />
+                            </StackPanel>
+                            <!--  Lebenszeichen: Abstand und wie viele unbeantwortet bleiben dürfen – für Server ohne eigene Angabe  -->
+                            <StackPanel Tag="set:KeepAlive" Spacing="4">
+                                <StackPanel Orientation="Horizontal" Spacing="12">
+                                    <NumberBox
+                                        x:Name="KeepAliveSecondsBox"
+                                        Width="220"
+                                        AutomationProperties.Name="{loc:Loc Key=SettingKeepAliveSeconds}"
+                                        Header="{loc:Loc Key=SettingKeepAliveSeconds}"
+                                        LargeChange="30"
+                                        Maximum="3600"
+                                        Minimum="0"
+                                        SmallChange="5"
+                                        SpinButtonPlacementMode="Inline"
+                                        Value="{x:Bind app:Ui.ToDouble(Shell.KeepAliveSeconds), BindBack=SetKeepAliveSeconds, Mode=TwoWay}" />
+                                    <NumberBox
+                                        x:Name="KeepAliveMissedBox"
+                                        Width="220"
+                                        AutomationProperties.Name="{loc:Loc Key=SettingKeepAliveMissed}"
+                                        Header="{loc:Loc Key=SettingKeepAliveMissed}"
+                                        Maximum="20"
+                                        Minimum="1"
+                                        SpinButtonPlacementMode="Inline"
+                                        Value="{x:Bind app:Ui.ToDouble(Shell.KeepAliveMissed), BindBack=SetKeepAliveMissed, Mode=TwoWay}" />
+                                </StackPanel>
+                                <TextBlock Style="{StaticResource HintStyle}" Text="{loc:Loc Key=SettingKeepAliveHint}" />
+                            </StackPanel>
+                            <!--  X11-Forwarding: an welchem Display der X-Server dieses Rechners lauscht (0 = Port 6000)  -->
+                            <StackPanel Tag="set:X11Display" Spacing="4">
+                                <NumberBox
+                                    Width="260"
+                                    HorizontalAlignment="Left"
+                                    AutomationProperties.Name="{loc:Loc Key=SettingX11Display}"
+                                    Header="{loc:Loc Key=SettingX11Display}"
+                                    Maximum="63"
+                                    Minimum="0"
+                                    SpinButtonPlacementMode="Inline"
+                                    Value="{x:Bind app:Ui.ToDouble(Shell.X11Display), BindBack=SetX11Display, Mode=TwoWay}" />
+                                <TextBlock Style="{StaticResource HintStyle}" Text="{loc:Loc Key=SettingX11DisplayHint}" />
+                            </StackPanel>
+                            <!--  Mosh: ob getippte Zeichen schon vor der Antwort des Servers erscheinen; gilt für Sitzungen, die danach beginnen  -->
+                            <StackPanel Tag="set:MoshPredict" Spacing="4">
+                                <ComboBox
+                                    x:Name="MoshPredictBox"
+                                    MinWidth="260"
+                                    HorizontalAlignment="Left"
+                                    AutomationProperties.Name="{loc:Loc Key=SettingMoshPredict}"
+                                    Header="{loc:Loc Key=SettingMoshPredict}"
+                                    SelectionChanged="OnMoshPredictChanged">
+                                    <ComboBoxItem Content="{loc:Loc Key=SettingMoshPredictAdaptive}" Tag="adaptive" />
+                                    <ComboBoxItem Content="{loc:Loc Key=SettingMoshPredictAlways}" Tag="always" />
+                                    <ComboBoxItem Content="{loc:Loc Key=SettingMoshPredictNever}" Tag="never" />
+                                </ComboBox>
+                                <TextBlock Style="{StaticResource HintStyle}" Text="{loc:Loc Key=SettingMoshPredictHint}" />
+                            </StackPanel>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <StackPanel x:Name="PageAlerts" Spacing="8">
+                        <StackPanel Style="{StaticResource SectionStyle}">
+                            <CheckBox Tag="set:Notifications" Content="{loc:Loc Key=SettingNotifications}" IsChecked="{x:Bind Shell.Notifications, Mode=TwoWay}" />
+                            <!--  Hinweise zu Platte, Speicher und Last: aus, solange es niemand einschaltet  -->
+                            <StackPanel Tag="set:ServerAlerts" Spacing="2">
+                                <CheckBox Content="{loc:Loc Key=SettingServerAlerts}" IsChecked="{x:Bind Shell.ServerAlerts, Mode=TwoWay}" />
+                                <TextBlock
+                                    Margin="28,0,0,0"
+                                    Style="{StaticResource HintStyle}"
+                                    Text="{loc:Loc Key=SettingServerAlertsHint}"
+                                    TextWrapping="Wrap" />
+                                <StackPanel
+                                    Margin="28,6,0,0"
+                                    Orientation="Horizontal"
+                                    Spacing="12"
+                                    Visibility="{x:Bind Shell.ServerAlerts, Mode=OneWay}">
+                                    <NumberBox
+                                        Width="150"
+                                        Header="{loc:Loc Key=AlertDiskLabel}"
+                                        LargeChange="5"
+                                        Maximum="99"
+                                        Minimum="50"
+                                        SmallChange="1"
+                                        SpinButtonPlacementMode="Inline"
+                                        Value="{x:Bind Shell.AlertDiskPercent, Mode=TwoWay}" />
+                                    <NumberBox
+                                        Width="150"
+                                        Header="{loc:Loc Key=AlertMemoryLabel}"
+                                        LargeChange="5"
+                                        Maximum="99"
+                                        Minimum="50"
+                                        SmallChange="1"
+                                        SpinButtonPlacementMode="Inline"
+                                        Value="{x:Bind Shell.AlertMemoryPercent, Mode=TwoWay}" />
+                                    <NumberBox
+                                        Width="150"
+                                        Header="{loc:Loc Key=AlertLoadLabel}"
+                                        LargeChange="1"
+                                        Maximum="50"
+                                        Minimum="0.5"
+                                        SmallChange="0.5"
+                                        SpinButtonPlacementMode="Inline"
+                                        Value="{x:Bind Shell.AlertLoadPerCore, Mode=TwoWay}" />
+                                </StackPanel>
+                            </StackPanel>
+                        </StackPanel>
+                        <StackPanel Style="{StaticResource SectionStyle}">
+                            <!--  Töne zu Ereignissen: jedes für sich, daneben der Knopf zum Probehören (Tag = SoundEvent)  -->
+                            <StackPanel Spacing="2">
+                                <TextBlock Text="{loc:Loc Key=SettingSoundsTitle}" />
+                                <StackPanel Tag="set:SoundConnectFailed" Orientation="Horizontal" Spacing="8">
+                                    <CheckBox
+                                        MinWidth="340"
+                                        Content="{loc:Loc Key=SettingSoundConnectFailed}"
+                                        IsChecked="{x:Bind Shell.SoundConnectFailed, Mode=TwoWay}" />
+                                    <Button
+                                        AutomationProperties.Name="{loc:Loc Key=SoundPreview}"
+                                        Click="OnPreviewSound"
+                                        Style="{StaticResource IconButtonStyle}"
+                                        Tag="ConnectFailed"
+                                        ToolTipService.ToolTip="{loc:Loc Key=SoundPreview}">
+                                        <FontIcon FontSize="12" Glyph="&#xE768;" />
+                                    </Button>
+                                </StackPanel>
+                                <StackPanel Tag="set:SoundAuthFailed" Orientation="Horizontal" Spacing="8">
+                                    <CheckBox
+                                        MinWidth="340"
+                                        Content="{loc:Loc Key=SettingSoundAuthFailed}"
+                                        IsChecked="{x:Bind Shell.SoundAuthFailed, Mode=TwoWay}" />
+                                    <Button
+                                        AutomationProperties.Name="{loc:Loc Key=SoundPreview}"
+                                        Click="OnPreviewSound"
+                                        Style="{StaticResource IconButtonStyle}"
+                                        Tag="AuthFailed"
+                                        ToolTipService.ToolTip="{loc:Loc Key=SoundPreview}">
+                                        <FontIcon FontSize="12" Glyph="&#xE768;" />
+                                    </Button>
+                                </StackPanel>
+                                <StackPanel Tag="set:SoundConnectionLost" Orientation="Horizontal" Spacing="8">
+                                    <CheckBox
+                                        MinWidth="340"
+                                        Content="{loc:Loc Key=SettingSoundConnectionLost}"
+                                        IsChecked="{x:Bind Shell.SoundConnectionLost, Mode=TwoWay}" />
+                                    <Button
+                                        AutomationProperties.Name="{loc:Loc Key=SoundPreview}"
+                                        Click="OnPreviewSound"
+                                        Style="{StaticResource IconButtonStyle}"
+                                        Tag="ConnectionLost"
+                                        ToolTipService.ToolTip="{loc:Loc Key=SoundPreview}">
+                                        <FontIcon FontSize="12" Glyph="&#xE768;" />
+                                    </Button>
+                                </StackPanel>
+                                <StackPanel Tag="set:SoundTransferFailed" Orientation="Horizontal" Spacing="8">
+                                    <CheckBox
+                                        MinWidth="340"
+                                        Content="{loc:Loc Key=SettingSoundTransferFailed}"
+                                        IsChecked="{x:Bind Shell.SoundTransferFailed, Mode=TwoWay}" />
+                                    <Button
+                                        AutomationProperties.Name="{loc:Loc Key=SoundPreview}"
+                                        Click="OnPreviewSound"
+                                        Style="{StaticResource IconButtonStyle}"
+                                        Tag="TransferFailed"
+                                        ToolTipService.ToolTip="{loc:Loc Key=SoundPreview}">
+                                        <FontIcon FontSize="12" Glyph="&#xE768;" />
+                                    </Button>
+                                </StackPanel>
+                                <StackPanel Tag="set:SoundConnected" Orientation="Horizontal" Spacing="8">
+                                    <CheckBox
+                                        MinWidth="340"
+                                        Content="{loc:Loc Key=SettingSoundConnected}"
+                                        IsChecked="{x:Bind Shell.SoundConnected, Mode=TwoWay}" />
+                                    <Button
+                                        AutomationProperties.Name="{loc:Loc Key=SoundPreview}"
+                                        Click="OnPreviewSound"
+                                        Style="{StaticResource IconButtonStyle}"
+                                        Tag="Connected"
+                                        ToolTipService.ToolTip="{loc:Loc Key=SoundPreview}">
+                                        <FontIcon FontSize="12" Glyph="&#xE768;" />
+                                    </Button>
+                                </StackPanel>
+                                <StackPanel Tag="set:SoundTransferDone" Orientation="Horizontal" Spacing="8">
+                                    <CheckBox
+                                        MinWidth="340"
+                                        Content="{loc:Loc Key=SettingSoundTransferDone}"
+                                        IsChecked="{x:Bind Shell.SoundTransferDone, Mode=TwoWay}" />
+                                    <Button
+                                        AutomationProperties.Name="{loc:Loc Key=SoundPreview}"
+                                        Click="OnPreviewSound"
+                                        Style="{StaticResource IconButtonStyle}"
+                                        Tag="TransferDone"
+                                        ToolTipService.ToolTip="{loc:Loc Key=SoundPreview}">
+                                        <FontIcon FontSize="12" Glyph="&#xE768;" />
+                                    </Button>
+                                </StackPanel>
+                                <CheckBox Tag="set:SoundsOnlyInBackground" Content="{loc:Loc Key=SettingSoundsBackground}" IsChecked="{x:Bind Shell.SoundsOnlyInBackground, Mode=TwoWay}" />
+                                <TextBlock
+                                    Style="{StaticResource HintStyle}"
+                                    Text="{loc:Loc Key=SettingSoundsHint}"
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
+                        </StackPanel>
+                        <StackPanel Style="{StaticResource SectionStyle}">
+                            <!--  Die Glocke des Terminals (BEL): Ton, Reiter, Taskleiste – jedes für sich, oder nichts  -->
+                            <StackPanel Spacing="2">
+                                <TextBlock Text="{loc:Loc Key=SettingBellTitle}" />
+                                <CheckBox Tag="set:BellTab" Content="{loc:Loc Key=SettingBellTab}" IsChecked="{x:Bind Shell.BellTab, Mode=TwoWay}" />
+                                <CheckBox Tag="set:BellSound" Content="{loc:Loc Key=SettingBellSound}" IsChecked="{x:Bind Shell.BellSound, Mode=TwoWay}" />
+                                <CheckBox Tag="set:BellTaskbar" Content="{loc:Loc Key=SettingBellTaskbar}" IsChecked="{x:Bind Shell.BellTaskbar, Mode=TwoWay}" />
+                                <TextBlock
+                                    Style="{StaticResource HintStyle}"
+                                    Text="{loc:Loc Key=SettingBellHint}"
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
+                        </StackPanel>
+                        <StackPanel Style="{StaticResource SectionStyle}">
+                            <!--  Meldungen von Programmen im Terminal (OSC 9, OSC 777): wie die Glocke, nur mit Text  -->
+                            <StackPanel Spacing="2">
+                                <CheckBox Tag="set:TerminalNotices" Content="{loc:Loc Key=SettingTerminalNotices}" IsChecked="{x:Bind Shell.TerminalNotices, Mode=TwoWay}" />
+                                <TextBlock
+                                    Style="{StaticResource HintStyle}"
+                                    Text="{loc:Loc Key=SettingTerminalNoticesHint}"
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <StackPanel x:Name="PageTerminal" Spacing="8">
+                        <TextBlock Style="{StaticResource SectionTitleStyle}" Text="{loc:Loc Key=SettingsTerminalLook}" />
+                        <StackPanel Style="{StaticResource SectionStyle}">
+                            <ComboBox Tag="set:TerminalTheme"
+                                x:Name="ThemeBox"
+                                Width="260"
+                                Header="{loc:Loc Key=TerminalThemeLabel}"
+                                SelectionChanged="OnThemeChanged">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="terminals:TerminalTheme">
+                                        <TextBlock Text="{x:Bind Name}" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <!--  Eigene Farbschemata: aus einer Datei von iTerm2, Windows Terminal oder Xresources  -->
+                            <StackPanel Spacing="4">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <Button
+                                        x:Name="NewThemeButton"
+                                        Click="OnNewThemeClicked"
+                                        Content="{loc:Loc Key=ThemeNew}" />
+                                    <Button
+                                        x:Name="EditThemeButton"
+                                        Click="OnEditThemeClicked"
+                                        Content="{loc:Loc Key=ThemeEdit}"
+                                        IsEnabled="{x:Bind Shell.CanRemoveTheme, Mode=OneWay}" />
+                                    <Button
+                                        x:Name="ImportThemeButton"
+                                        Click="OnImportThemeClicked"
+                                        Content="{loc:Loc Key=ThemeImport}" />
+                                    <Button
+                                        x:Name="RemoveThemeButton"
+                                        Click="OnRemoveThemeClicked"
+                                        Content="{loc:Loc Key=ThemeRemove}"
+                                        IsEnabled="{x:Bind Shell.CanRemoveTheme, Mode=OneWay}" />
+                                </StackPanel>
+                                <TextBlock
+                                    x:Name="ThemeHint"
+                                    Style="{StaticResource HintStyle}"
+                                    Text="{loc:Loc Key=ThemeImportHint}"
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
+                            <!--  Bild hinter dem Terminal: von Haus aus keines – dann bleibt der Hintergrund die Farbe des Farbschemas  -->
+                            <StackPanel Tag="set:TerminalBackground" Spacing="4">
+                                <TextBlock Text="{loc:Loc Key=BackdropLabel}" />
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <Button
+                                        x:Name="BackdropPickButton"
+                                        Click="OnPickBackdropClicked"
+                                        Content="{loc:Loc Key=BackdropPick}" />
+                                    <Button
+                                        x:Name="BackdropClearButton"
+                                        Click="OnClearBackdropClicked"
+                                        Content="{loc:Loc Key=BackdropNone}"
+                                        IsEnabled="{x:Bind Shell.HasTerminalBackground, Mode=OneWay}" />
+                                </StackPanel>
+                                <TextBlock
+                                    x:Name="BackdropPath"
+                                    Style="{StaticResource HintStyle}"
+                                    Text="{x:Bind Shell.TerminalBackgroundImage, Mode=OneWay}"
+                                    TextTrimming="CharacterEllipsis" />
+                                <Slider
+                                    x:Name="BackdropDimSlider"
+                                    Width="260"
+                                    HorizontalAlignment="Left"
+                                    Header="{loc:Loc Key=BackdropDim}"
+                                    IsEnabled="{x:Bind Shell.HasTerminalBackground, Mode=OneWay}"
+                                    Maximum="95"
+                                    Minimum="0"
+                                    StepFrequency="5"
+                                    Value="{x:Bind app:Ui.ToDouble(Shell.TerminalBackgroundDim), BindBack=SetBackdropDim, Mode=TwoWay}" />
+                                <TextBlock
+                                    Style="{StaticResource HintStyle}"
+                                    Text="{loc:Loc Key=BackdropHint}"
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
+                            <!--  Eine der vorgeschlagenen Schriften oder der Name einer anderen, die installiert ist  -->
+                            <ComboBox Tag="set:TerminalFont"
+                                x:Name="FontBox"
+                                Width="260"
+                                Header="{loc:Loc Key=TerminalFontLabel}"
+                                IsEditable="True"
+                                SelectionChanged="OnFontChanged"
+                                TextSubmitted="OnFontSubmitted" />
+                            <NumberBox Tag="set:TerminalFontSize"
+                                x:Name="FontSizeBox"
+                                Width="260"
+                                HorizontalAlignment="Left"
+                                Header="{loc:Loc Key=TerminalFontSizeLabel}"
+                                LargeChange="2"
+                                SmallChange="1"
+                                SpinButtonPlacementMode="Inline"
+                                ValueChanged="OnFontSizeChanged" />
+                            <!--  Cursor und Abstände: gelten sofort, für alle Terminals  -->
+                            <StackPanel Tag="set:TerminalCursor" Orientation="Horizontal" Spacing="12">
+                                <ComboBox
+                                    x:Name="CursorBox"
+                                    Width="170"
+                                    Header="{loc:Loc Key=SettingCursor}"
+                                    SelectionChanged="OnCursorChanged">
+                                    <ComboBoxItem Content="{loc:Loc Key=SettingCursorBlock}" Tag="block" />
+                                    <ComboBoxItem Content="{loc:Loc Key=SettingCursorBar}" Tag="bar" />
+                                    <ComboBoxItem Content="{loc:Loc Key=SettingCursorUnderline}" Tag="underline" />
+                                </ComboBox>
+                                <CheckBox
+                                    VerticalAlignment="Bottom"
+                                    Content="{loc:Loc Key=SettingCursorBlink}"
+                                    IsChecked="{x:Bind Shell.TerminalCursorBlink, Mode=TwoWay}" />
+                            </StackPanel>
+                            <StackPanel Tag="set:TerminalSpacing" Orientation="Horizontal" Spacing="12">
+                                <NumberBox
+                                    x:Name="LineHeightBox"
+                                    Width="170"
+                                    Header="{loc:Loc Key=SettingLineHeight}"
+                                    LargeChange="0.5"
+                                    Maximum="2"
+                                    Minimum="1"
+                                    SmallChange="0.1"
+                                    SpinButtonPlacementMode="Inline"
+                                    Value="{x:Bind Shell.TerminalLineHeight, Mode=TwoWay}" />
+                                <NumberBox
+                                    x:Name="LetterSpacingBox"
+                                    Width="170"
+                                    Header="{loc:Loc Key=SettingLetterSpacing}"
+                                    Maximum="8"
+                                    Minimum="0"
+                                    SmallChange="1"
+                                    SpinButtonPlacementMode="Inline"
+                                    Value="{x:Bind app:Ui.ToDouble(Shell.TerminalLetterSpacing), BindBack=SetLetterSpacing, Mode=TwoWay}" />
+                            </StackPanel>
+                            <StackPanel Tag="set:TerminalLigatures" Spacing="2">
+                                <CheckBox Content="{loc:Loc Key=SettingLigatures}" IsChecked="{x:Bind Shell.TerminalLigatures, Mode=TwoWay}" />
+                                <TextBlock
+                                    Margin="28,0,0,0"
+                                    Style="{StaticResource HintStyle}"
+                                    Text="{loc:Loc Key=SettingLigaturesHint}" />
+                            </StackPanel>
+                            <!--  Regeln zum Hervorheben; jede Änderung gilt sofort für neue Ausgabe  -->
+                            <StackPanel Tag="set:Highlights" Spacing="4">
+                                <TextBox
+                                    Width="420"
+                                    Height="110"
+                                    HorizontalAlignment="Left"
+                                    AcceptsReturn="True"
+                                    FontFamily="Cascadia Mono, Consolas"
+                                    Header="{loc:Loc Key=HighlightsLabel}"
+                                    IsSpellCheckEnabled="False"
+                                    PlaceholderText="red: ERROR&#x0a;yellow: WARN&#x0a;cyan: /\b\d{1,3}(\.\d{1,3}){3}\b/"
+                                    ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                    Text="{x:Bind Shell.Highlights, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                <TextBlock
+                                    MaxWidth="420"
+                                    HorizontalAlignment="Left"
+                                    Style="{StaticResource HintStyle}"
+                                    Text="{loc:Loc Key=HighlightsHint}"
+                                    TextWrapping="Wrap" />
+                                <TextBlock
+                                    Foreground="{ThemeResource SystemFillColorCautionBrush}"
+                                    Text="{x:Bind Shell.HighlightHint, Mode=OneWay}"
+                                    Visibility="{x:Bind app:Ui.VisibleIfText(Shell.HighlightHint), Mode=OneWay}" />
+                            </StackPanel>
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource SectionTitleStyle}" Text="{loc:Loc Key=SettingsTerminalUse}" />
+                        <StackPanel Style="{StaticResource SectionStyle}">
+                            <!--  Die Shell für Strg+Umschalt+T und den Knopf „Lokales Terminal“; die Auswahl liefert der Kern  -->
+                            <StackPanel Tag="set:LocalShell" Spacing="2">
+                                <ComboBox
+                                    Width="380"
+                                    AutomationProperties.Name="{loc:Loc Key=SettingsLocalShell}"
+                                    Header="{loc:Loc Key=SettingsLocalShell}"
+                                    ItemsSource="{x:Bind Shell.LocalShellChoices, Mode=OneWay}"
+                                    SelectedIndex="{x:Bind Shell.DefaultLocalShellIndex, Mode=TwoWay}">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate x:DataType="models:LocalShell">
+                                            <TextBlock Text="{x:Bind DisplayName}" />
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                                <TextBlock
+                                    Style="{StaticResource HintStyle}"
+                                    Text="{loc:Loc Key=SettingsLocalShellHint}"
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
+                            <CheckBox Tag="set:MouseCopyPaste" Content="{loc:Loc Key=SettingMouseCopyPaste}" IsChecked="{x:Bind Shell.MouseCopyPaste, Mode=TwoWay}" />
+                            <StackPanel Tag="set:PasteClean" Spacing="2">
+                                <CheckBox Content="{loc:Loc Key=SettingPasteClean}" IsChecked="{x:Bind Shell.PasteClean, Mode=TwoWay}" />
+                                <TextBlock
+                                    Margin="28,0,0,0"
+                                    Style="{StaticResource HintStyle}"
+                                    Text="{loc:Loc Key=SettingPasteCleanHint}"
+                                    TextWrapping="Wrap" />
+                                <CheckBox
+                                    Margin="28,0,0,0"
+                                    Content="{loc:Loc Key=SettingPasteTabs}"
+                                    IsChecked="{x:Bind Shell.PasteTabs, Mode=TwoWay}"
+                                    IsEnabled="{x:Bind Shell.PasteClean, Mode=OneWay}" />
+                            </StackPanel>
+                            <StackPanel Tag="set:SnippetSuggestions" Spacing="2">
+                                <CheckBox Content="{loc:Loc Key=SettingSnippetSuggestions}" IsChecked="{x:Bind Shell.SnippetSuggestions, Mode=TwoWay}" />
+                                <TextBlock
+                                    Margin="28,0,0,0"
+                                    Style="{StaticResource HintStyle}"
+                                    Text="{loc:Loc Key=SettingSnippetSuggestionsHint}" />
+                            </StackPanel>
+                            <StackPanel Tag="set:OptionSuggestions" Spacing="2">
+                                <CheckBox Content="{loc:Loc Key=SettingOptionSuggestions}" IsChecked="{x:Bind Shell.OptionSuggestions, Mode=TwoWay}" />
+                                <TextBlock
+                                    Margin="28,0,0,0"
+                                    Style="{StaticResource HintStyle}"
+                                    Text="{loc:Loc Key=SettingOptionSuggestionsHint}" />
+                            </StackPanel>
+                            <StackPanel Tag="set:PathSuggestions" Spacing="2">
+                                <CheckBox Content="{loc:Loc Key=SettingPathSuggestions}" IsChecked="{x:Bind Shell.PathSuggestions, Mode=TwoWay}" />
+                                <TextBlock
+                                    Margin="28,0,0,0"
+                                    Style="{StaticResource HintStyle}"
+                                    Text="{loc:Loc Key=SettingPathSuggestionsHint}" />
+                            </StackPanel>
+                            <StackPanel Tag="set:CommandSuggestions" Spacing="2">
+                                <CheckBox Content="{loc:Loc Key=SettingCommandSuggestions}" IsChecked="{x:Bind Shell.CommandSuggestions, Mode=TwoWay}" />
+                                <TextBlock
+                                    Margin="28,0,0,0"
+                                    Style="{StaticResource HintStyle}"
+                                    Text="{loc:Loc Key=SettingCommandSuggestionsHint}" />
+                            </StackPanel>
+                            <StackPanel Tag="set:KnownNameSuggestions" Spacing="2">
+                                <CheckBox Content="{loc:Loc Key=SettingKnownNameSuggestions}" IsChecked="{x:Bind Shell.KnownNameSuggestions, Mode=TwoWay}" />
+                                <TextBlock
+                                    Margin="28,0,0,0"
+                                    Style="{StaticResource HintStyle}"
+                                    Text="{loc:Loc Key=SettingKnownNameSuggestionsHint}" />
+                            </StackPanel>
+                            <StackPanel Tag="set:TabCompletes" Spacing="2">
+                                <CheckBox Content="{loc:Loc Key=SettingTabCompletes}" IsChecked="{x:Bind Shell.TabCompletes, Mode=TwoWay}" />
+                                <TextBlock
+                                    Margin="28,0,0,0"
+                                    Style="{StaticResource HintStyle}"
+                                    Text="{loc:Loc Key=SettingTabCompletesHint}" />
+                            </StackPanel>
+                            <StackPanel Tag="set:ServerTabTitles" Spacing="2">
+                                <CheckBox Content="{loc:Loc Key=SettingServerTabTitles}" IsChecked="{x:Bind Shell.ServerTabTitles, Mode=TwoWay}" />
+                                <TextBlock
+                                    Margin="28,0,0,0"
+                                    Style="{StaticResource HintStyle}"
+                                    Text="{loc:Loc Key=SettingServerTabTitlesHint}" />
+                            </StackPanel>
+                            <!--  Bilder vom Server: aus, bis der Benutzer es will – mit dem Hinweis, was das bedeutet  -->
+                            <StackPanel Tag="set:TerminalImages" Spacing="2">
+                                <CheckBox
+                                    x:Name="TerminalImagesBox"
+                                    Content="{loc:Loc Key=SettingTerminalImages}"
+                                    IsChecked="{x:Bind Shell.TerminalImages, Mode=TwoWay}" />
+                                <TextBlock
+                                    Margin="28,0,0,0"
+                                    Style="{StaticResource HintStyle}"
+                                    Text="{loc:Loc Key=SettingTerminalImagesHint}"
+                                    TextWrapping="Wrap" />
+                                <InfoBar
+                                    Margin="28,6,0,0"
+                                    IsClosable="False"
+                                    IsOpen="{x:Bind Shell.TerminalImages, Mode=OneWay}"
+                                    Message="{loc:Loc Key=SettingTerminalImagesWarning}"
+                                    Severity="Warning" />
+                            </StackPanel>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <StackPanel x:Name="PageFiles" Spacing="8">
+                        <TextBlock Style="{StaticResource SectionTitleStyle}" Text="{loc:Loc Key=SettingsEditors}" />
+                        <StackPanel Style="{StaticResource SectionStyle}">
+                            <!--  Editor für „Datei bearbeiten“ im Dateibrowser; leer = der Editor von Windows  -->
+                            <StackPanel Spacing="4">
+                                <Grid Tag="set:EditorPath" ColumnSpacing="6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox
+                                        x:Name="EditorBox"
+                                        Header="{loc:Loc Key=EditorLabel}"
+                                        IsSpellCheckEnabled="False"
+                                        PlaceholderText="notepad.exe"
+                                        TextChanged="OnEditorPathChanged" />
+                                    <Button
+                                        x:Name="BrowseEditorButton"
+                                        Grid.Column="1"
+                                        VerticalAlignment="Bottom"
+                                        AutomationProperties.Name="{loc:Loc Key=Browse}"
+                                        Click="OnBrowseEditor"
+                                        ToolTipService.ToolTip="{loc:Loc Key=Browse}">
+                                        <FontIcon FontSize="14" Glyph="&#xE8E5;" />
+                                    </Button>
+                                </Grid>
+                                <!--  Vergleichsprogramm: bekommt zwei Dateien als Argumente (VS Code mit - -diff davor)  -->
+                                <Grid Tag="set:ComparePath" ColumnSpacing="8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox
+                                        x:Name="CompareBox"
+                                        Header="{loc:Loc Key=CompareLabel}"
+                                        IsSpellCheckEnabled="False"
+                                        PlaceholderText="C:\Program Files\WinMerge\WinMergeU.exe"
+                                        TextChanged="OnComparePathChanged" />
+                                    <Button
+                                        x:Name="BrowseCompareButton"
+                                        Grid.Column="1"
+                                        VerticalAlignment="Bottom"
+                                        AutomationProperties.Name="{loc:Loc Key=Browse}"
+                                        Click="OnBrowseCompare"
+                                        ToolTipService.ToolTip="{loc:Loc Key=Browse}">
+                                        <FontIcon FontSize="14" Glyph="&#xE8E5;" />
+                                    </Button>
+                                </Grid>
+                                <TextBlock
+                                    Style="{StaticResource HintStyle}"
+                                    Text="{loc:Loc Key=CompareHint}"
+                                    TextWrapping="Wrap" />
+                                <TextBlock Style="{StaticResource HintStyle}" Text="{loc:Loc Key=EditorHint}" />
+                            </StackPanel>
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource SectionTitleStyle}" Text="{loc:Loc Key=SettingsTransfers}" />
+                        <StackPanel Style="{StaticResource SectionStyle}">
+                            <ComboBox Tag="set:TransferRule"
+                                x:Name="TransferRuleBox"
+                                Width="380"
+                                Header="{loc:Loc Key=TransferRuleLabel}"
+                                SelectionChanged="OnTransferRuleChanged">
+                                <ComboBoxItem Content="{loc:Loc Key=TransferRuleAsk}" />
+                                <ComboBoxItem Content="{loc:Loc Key=ExistingOverwrite}" />
+                                <ComboBoxItem Content="{loc:Loc Key=ExistingSkipSame}" />
+                                <ComboBoxItem Content="{loc:Loc Key=ExistingNewer}" />
+                                <ComboBoxItem Content="{loc:Loc Key=ExistingRename}" />
+                            </ComboBox>
+                            <!--  Bandbreite: eine Grenze für alle Transfers zusammen, 0 = keine  -->
+                            <StackPanel Tag="set:TransferLimitKib" Spacing="4">
+                                <NumberBox
+                                    Width="260"
+                                    HorizontalAlignment="Left"
+                                    AutomationProperties.Name="{loc:Loc Key=SettingTransferLimit}"
+                                    Header="{loc:Loc Key=SettingTransferLimit}"
+                                    LargeChange="1024"
+                                    Maximum="1000000"
+                                    Minimum="0"
+                                    SmallChange="128"
+                                    SpinButtonPlacementMode="Inline"
+                                    Value="{x:Bind app:Ui.ToDouble(Shell.TransferLimitKib), BindBack=SetTransferLimit, Mode=TwoWay}" />
+                                <TextBlock Style="{StaticResource HintStyle}" Text="{loc:Loc Key=SettingTransferLimitHint}" />
+                            </StackPanel>
+                            <!--  Ausschlüsse: Muster, die ein Ordner-Transfer und ein Abgleich auslassen; gefragt wird vorher  -->
+                            <StackPanel Tag="set:ExcludePatterns" Spacing="4">
+                                <TextBox
+                                    x:Name="ExcludePatternsBox"
+                                    Width="380"
+                                    Height="110"
+                                    HorizontalAlignment="Left"
+                                    AcceptsReturn="True"
+                                    AutomationProperties.Name="{loc:Loc Key=SettingExcludePatterns}"
+                                    FontFamily="Cascadia Mono, Consolas"
+                                    Header="{loc:Loc Key=SettingExcludePatterns}"
+                                    IsSpellCheckEnabled="False"
+                                    LostFocus="OnExcludePatternsLostFocus"
+                                    ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                    TextChanged="OnExcludePatternsChanged" />
+                                <TextBlock
+                                    x:Name="ExcludePatternsError"
+                                    Foreground="{ThemeResource SystemFillColorCautionBrush}"
+                                    Style="{StaticResource HintStyle}"
+                                    Visibility="Collapsed" />
+                                <TextBlock
+                                    Style="{StaticResource HintStyle}"
+                                    Text="{loc:Loc Key=SettingExcludePatternsHint}"
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
+                            <!--  Transfer-Protokoll: eine CSV-Datei im Datenordner, nur wenn eingeschaltet  -->
+                            <StackPanel Tag="set:TransferLog" Spacing="4">
+                                <CheckBox Content="{loc:Loc Key=SettingTransferLog}" IsChecked="{x:Bind Shell.KeepTransferLog, Mode=TwoWay}" />
+                                <TextBlock
+                                    Style="{StaticResource HintStyle}"
+                                    Text="{loc:Loc Key=SettingTransferLogHint}"
+                                    TextWrapping="Wrap" />
+                                <Button
+                                    HorizontalAlignment="Left"
+                                    Click="OnShowTransferLogClicked"
+                                    Content="{loc:Loc Key=CmdTransferLog}" />
+                            </StackPanel>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <StackPanel x:Name="PageShortcuts" Spacing="8">
+                        <!--  Tastenkürzel: je Befehl ändern, entfernen oder auf die Vorgabe zurücksetzen  -->
+                        <StackPanel Style="{StaticResource SectionStyle}">
+                            <TextBlock
+                                Style="{StaticResource HintStyle}"
+                                Text="{loc:Loc Key=ShortcutsHint}"
+                                TextWrapping="Wrap" />
+                            <ListView
+                                MaxHeight="520"
+                                AutomationProperties.Name="{loc:Loc Key=SettingsShortcuts}"
+                                ItemsSource="{x:Bind Shell.ShortcutRows, Mode=OneWay}"
+                                SelectionMode="None">
+                                <ListView.ItemContainerStyle>
+                                    <Style BasedOn="{StaticResource DefaultListViewItemStyle}" TargetType="ListViewItem">
+                                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                        <Setter Property="Padding" Value="4,2" />
+                                        <Setter Property="MinHeight" Value="36" />
+                                    </Style>
+                                </ListView.ItemContainerStyle>
+                                <ListView.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:ShortcutRow">
+                                        <Grid ColumnSpacing="8">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock
+                                                VerticalAlignment="Center"
+                                                Text="{x:Bind Title}"
+                                                TextTrimming="CharacterEllipsis" />
+                                            <TextBlock
+                                                Grid.Column="1"
+                                                VerticalAlignment="Center"
+                                                FontFamily="Cascadia Mono, Consolas"
+                                                FontSize="12"
+                                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                Text="{x:Bind Shortcut}" />
+                                            <Button
+                                                Grid.Column="2"
+                                                Padding="8,3"
+                                                AutomationProperties.Name="{x:Bind app:Ui.ChangeShortcutName(Title)}"
+                                                Click="OnChangeShortcutClicked"
+                                                Content="{loc:Loc Key=ShortcutChange}"
+                                                Tag="{x:Bind}" />
+                                            <Button
+                                                Grid.Column="3"
+                                                Padding="8,3"
+                                                AutomationProperties.Name="{x:Bind app:Ui.ResetShortcutName(Title)}"
+                                                Click="OnResetShortcutClicked"
+                                                Content="{loc:Loc Key=ShortcutReset}"
+                                                IsEnabled="{x:Bind IsCustom}"
+                                                Tag="{x:Bind}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListView.ItemTemplate>
+                            </ListView>
+                            <Button Click="OnResetShortcutsClicked" Content="{loc:Loc Key=ShortcutResetAll}" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <StackPanel x:Name="PageData" Spacing="8">
+                        <!--  Profile, gespeicherte Befehle und Einstellungen als Datei – ohne Geheimnisse  -->
+                        <StackPanel Style="{StaticResource SectionStyle}">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Button Click="OnExportDataClicked" Content="{loc:Loc Key=DataExport}" />
+                                <Button Click="OnImportDataClicked" Content="{loc:Loc Key=DataImport}" />
+                            </StackPanel>
+                            <TextBlock Style="{StaticResource HintStyle}" Text="{loc:Loc Key=DataHint}" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <StackPanel x:Name="PageMcp" Spacing="8">
+                        <!--  KI-Programme über MCP: von Haus aus aus, nur freigegebene Server, Befehle nur nach Rückfrage  -->
+                        <StackPanel Style="{StaticResource SectionStyle}">
+                            <StackPanel Tag="set:McpEnabled" Spacing="2">
+                                <CheckBox Content="{loc:Loc Key=SettingMcpEnabled}" IsChecked="{x:Bind Shell.McpEnabled, Mode=TwoWay}" />
+                                <TextBlock
+                                    Margin="28,0,0,0"
+                                    Style="{StaticResource HintStyle}"
+                                    Text="{loc:Loc Key=SettingMcpHint}"
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="{loc:Loc Key=McpSetupLabel}" />
+                                <TextBlock
+                                    x:Name="McpSetupText"
+                                    FontFamily="Cascadia Mono, Consolas"
+                                    IsTextSelectionEnabled="True"
+                                    TextWrapping="Wrap" />
+                                <Button Click="OnCopyMcpSetupClicked" Content="{loc:Loc Key=McpSetupCopy}" />
+                            </StackPanel>
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="{loc:Loc Key=McpServersLabel}" />
+                                <TextBlock Style="{StaticResource HintStyle}" Text="{loc:Loc Key=McpServersHint}" TextWrapping="Wrap" />
+                                <TextBlock x:Name="McpServersNone" Style="{StaticResource HintStyle}" Text="{loc:Loc Key=McpServersNone}" />
+                                <StackPanel x:Name="McpServerList" Spacing="2" />
+                            </StackPanel>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <StackPanel x:Name="PageAbout" Spacing="8">
+                        <StackPanel Style="{StaticResource SectionStyle}">
+                            <Grid ColumnSpacing="16" RowSpacing="4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="{loc:Loc Key=AppVersion}" />
+                                <TextBlock x:Name="AppVersionText" Grid.Column="1" />
+                                <TextBlock
+                                    Grid.Row="1"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    Text="{loc:Loc Key=CoreVersion}" />
+                                <TextBlock
+                                    x:Name="CoreVersionText"
+                                    Grid.Row="1"
+                                    Grid.Column="1"
+                                    TextWrapping="Wrap" />
+                            </Grid>
+                            <HyperlinkButton
+                                x:Name="HelpLink"
+                                Padding="0"
+                                Click="OnHelpClicked"
+                                Content="{loc:Loc Key=CmdHelp}" />
+                            <!--  Für einen Fehlerbericht: Versionen, Protokoll, Einstellungen – ohne Servernamen, ohne Geheimnisse  -->
+                            <Button
+                                x:Name="DiagnosticsButton"
+                                Click="OnSaveDiagnosticsClicked"
+                                Content="{loc:Loc Key=CmdSaveDiagnostics}" />
+                            <TextBlock
+                                Style="{StaticResource HintStyle}"
+                                Text="{loc:Loc Key=DiagnosticsHint}"
+                                TextWrapping="Wrap" />
+                        </StackPanel>
+                    </StackPanel>
+                </Grid>
+            </ScrollViewer>
+        </Grid>
+    </Grid>
+</UserControl>

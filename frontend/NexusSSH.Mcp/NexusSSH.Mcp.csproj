@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>NexusSSH.Mcp</RootNamespace>
+    <AssemblyName>nexusssh-mcp</AssemblyName>
+    <Description>Verbindet MCP-Programme (stdio) mit der laufenden App (Named Pipe).</Description>
+    <PublishAot>true</PublishAot>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\NexusSSH.Core\NexusSSH.Core.csproj" />
+  </ItemGroup>
+
+</Project>

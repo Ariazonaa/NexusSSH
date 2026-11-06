@@ -1,0 +1,370 @@
+/* Hintergrund = TerminalBackground in App.xaml; das gewählte Farbschema setzt ihn zur Laufzeit (terminal.js) */
+html,
+body {
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    background: #000000;
+}
+
+/* Ein Terminal füllt die Fläche – oder der oberste Zweig einer Teilung (.split.row nebeneinander, .split.column
+   untereinander, beliebig ineinander). #terminals.split heißt: Die Fläche ist geteilt (auch groß geschaltet). */
+#terminals {
+    --accent: #3b78ff;
+    --foreground: #cccccc;
+    /* Die Trennlinien: ein Hauch der Schriftfarbe – so sind sie auf hellen wie auf dunklen Farbschemata zu sehen. */
+    --line: color-mix(in srgb, var(--foreground) 22%, transparent);
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: row;
+}
+
+/* Ein Zweig: seine Teile teilen sich den Platz nach ihren Anteilen (Flex-Gewichte aus terminal.js). */
+.split.row,
+.split.column {
+    display: flex;
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 0;
+}
+
+.split.row {
+    flex-direction: row;
+}
+
+.split.column {
+    flex-direction: column;
+}
+
+/* Der Rand liegt hier und nicht am xterm-Element: Das Fit-Addon rechnet mit der Innengröße des Elternelements. */
+.terminal-frame {
+    position: relative;
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 0;
+    box-sizing: border-box;
+    padding: 6px 4px 4px 9px;
+    border-top: 2px solid transparent;
+    /* Die Kennfarbe des Servers (--mark, von der App gesetzt); ohne sie bleibt der Rand unsichtbar. */
+    border-left: 3px solid var(--mark, transparent);
+    display: flex;
+    flex-direction: column;
+}
+
+/* Die Kopfzeile je Terminal gibt es nur, wenn die Fläche geteilt ist – allein sagt der Reiter, was zu sehen ist.
+   Ihre Schrift hat die Farbe des Farbschemas (gedämpft, beim aktiven Terminal voll) – auf hellen Schemata wie auf
+   dunklen zu lesen. Keine feste Höhe: Mit großer Schrift wüchse der Name sonst über den Rand. */
+.terminal-header {
+    display: none;
+    flex: 0 0 auto;
+    min-height: 22px;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+    margin: -4px 0 3px -3px;
+    font: 12px "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    color: color-mix(in srgb, var(--foreground) 65%, transparent);
+    user-select: none;
+    cursor: default;
+}
+
+#terminals.split .terminal-header {
+    display: flex;
+}
+
+/* Am Kopf lässt sich ein Terminal an die Kante eines anderen ziehen – nicht bei tmux, nicht groß geschaltet. */
+#terminals.split:not(.fixed):not(.zoomed) .terminal-header {
+    cursor: grab;
+}
+
+#terminals.moving .terminal-header {
+    cursor: grabbing;
+}
+
+.terminal-frame.moving {
+    opacity: 0.55;
+}
+
+/* Das Zeichen für „groß geschaltet“ vor dem Namen. */
+.terminal-header .zoom {
+    display: none;
+    flex: none;
+    font-size: 13px;
+}
+
+#terminals.zoomed .terminal-header .zoom {
+    display: inline;
+}
+
+/* Über einem Bild hinter dem Terminal stünde der Name sonst mitten im Motiv – er steht auf einem dunklen Schild. */
+#terminals.backdrop .terminal-header {
+    padding: 0 6px;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.6);
+    color: rgba(255, 255, 255, 0.65);
+}
+
+#terminals.backdrop .terminal-frame.active .terminal-header {
+    color: rgba(255, 255, 255, 0.92);
+}
+
+.terminal-frame.active .terminal-header {
+    color: var(--foreground);
+}
+
+.terminal-header .state {
+    flex: 0 0 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #8a8a8a;
+}
+
+.terminal-header .state.connected {
+    background: #3fb950;
+}
+
+.terminal-header .state.connecting {
+    background: #d29922;
+}
+
+.terminal-header .name {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.terminal-header .leave {
+    flex: 0 0 22px;
+    height: 20px;
+    padding: 0;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: inherit;
+    font: 15px/1 "Segoe UI", system-ui, sans-serif;
+    cursor: pointer;
+}
+
+.terminal-header .leave[hidden] {
+    display: none;
+}
+
+.terminal-header .leave:hover {
+    background: color-mix(in srgb, var(--foreground) 16%, transparent);
+    color: var(--foreground);
+}
+
+.terminal-frame[hidden] {
+    display: none;
+}
+
+/* Geteilt: Eine Linie oben zeigt, welches Terminal die Tasten bekommt. */
+#terminals.split .terminal-frame.active {
+    border-top-color: var(--accent);
+}
+
+/* Wohin ein gezogener Kopf das Terminal stellt: die Hälfte des Ziels an der Kante, der der Zeiger am nächsten ist. */
+.terminal-frame.drop-left::after,
+.terminal-frame.drop-right::after,
+.terminal-frame.drop-top::after,
+.terminal-frame.drop-bottom::after {
+    content: '';
+    position: absolute;
+    z-index: 30;
+    box-sizing: border-box;
+    border: 2px solid var(--accent);
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--accent) 22%, transparent);
+    pointer-events: none;
+}
+
+.terminal-frame.drop-left::after {
+    inset: 0 50% 0 0;
+}
+
+.terminal-frame.drop-right::after {
+    inset: 0 0 0 50%;
+}
+
+.terminal-frame.drop-top::after {
+    inset: 0 0 50% 0;
+}
+
+.terminal-frame.drop-bottom::after {
+    inset: 50% 0 0 0;
+}
+
+/* Nimmt, was die Kopfzeile übrig lässt; das Fit-Addon rechnet mit dieser Fläche. */
+.terminal-surface {
+    flex: 1 1 0;
+    min-height: 0;
+    width: 100%;
+}
+
+/* Trennlinie zwischen zwei Teilen eines Zweigs: schmal gezeichnet, aber breit genug zum Greifen. Die Linie ist ein
+   eigenes Stück (::before) mit schlichter Farbe – ein Verlauf fiele im Kontrastdesign weg. Gegriffen, unter der Maus
+   oder mit dem Fokus füllt sie die ganze Breite in der Akzentfarbe. */
+.divider {
+    position: relative;
+    flex: 0 0 5px;
+    touch-action: none;
+    outline: none;
+}
+
+.divider::before {
+    content: '';
+    position: absolute;
+    background: var(--line);
+}
+
+.split.row > .divider {
+    cursor: col-resize;
+}
+
+.split.row > .divider::before {
+    top: 0;
+    bottom: 0;
+    left: 2px;
+    width: 1px;
+}
+
+.split.column > .divider {
+    cursor: row-resize;
+}
+
+.split.column > .divider::before {
+    left: 0;
+    right: 0;
+    top: 2px;
+    height: 1px;
+}
+
+.split > .divider:hover::before,
+.split > .divider:focus::before,
+.split > .divider.dragging::before {
+    inset: 0;
+    width: auto;
+    height: auto;
+    background: var(--accent);
+}
+
+/*
+ * Mit einem Kontrastdesign von Windows erzwingt der Browser dessen Farben – auch für Ränder, die hier nur
+ * Platzhalter sind: Der durchsichtige Rand oben und die Kennfarbe links stünden dann als Linie in der
+ * Schriftfarbe um jedes Terminal (gesehen 2026-10-13). Systemfarben lässt er stehen: unsichtbar in der Farbe
+ * der Fläche, und nur die Linie des aktiven Terminals einer Teilung in der Farbe für Hervorgehobenes. Die
+ * Trennlinien stehen in der Schriftfarbe, gegriffen oder mit dem Fokus in der für Hervorgehobenes; ebenso das
+ * Ziel beim Ziehen eines Kopfes.
+ */
+@media (forced-colors: active) {
+    .terminal-frame {
+        border-top-color: Canvas;
+        border-left-color: Canvas;
+    }
+
+    #terminals.split .terminal-frame.active {
+        border-top-color: Highlight;
+    }
+
+    .divider::before {
+        background: CanvasText;
+    }
+
+    .split > .divider:hover::before,
+    .split > .divider:focus::before,
+    .split > .divider.dragging::before {
+        background: Highlight;
+    }
+
+    .terminal-frame.drop-left::after,
+    .terminal-frame.drop-right::after,
+    .terminal-frame.drop-top::after,
+    .terminal-frame.drop-bottom::after {
+        border-color: Highlight;
+        background: Highlight;
+        opacity: 0.4;
+    }
+}
+
+/* Vorschläge aus den gespeicherten Befehlen, über der Zeile mit dem Cursor. */
+.suggestions {
+    position: fixed;
+    z-index: 20;
+    max-width: min(640px, calc(100vw - 8px));
+    padding: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 8px;
+    background: #111111;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6);
+    font: 12px "Segoe UI Variable Text", "Segoe UI", sans-serif;
+    color: #cccccc;
+    pointer-events: none;
+}
+
+.suggestions[hidden] {
+    display: none;
+}
+
+.suggestion {
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+    padding: 4px 8px;
+    border-radius: 5px;
+    white-space: nowrap;
+}
+
+.suggestion.first {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.suggestion-name {
+    flex: none;
+    color: #ffffff;
+}
+
+.suggestion-text {
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-family: "Cascadia Mono", Consolas, monospace;
+    opacity: 0.7;
+}
+
+.suggestion-key {
+    flex: none;
+    padding: 0 5px;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 4px;
+    font-size: 11px;
+    opacity: 0.8;
+}
+
+/* Ligaturen der Schrift (=> != ->) nur, wenn eingestellt: Sonst zeigte eine Schrift, die welche hat, sie von selbst –
+   und in einem Terminal soll erst einmal jedes Zeichen das sein, was der Server geschickt hat. */
+.xterm-rows {
+    font-variant-ligatures: none;
+}
+
+.ligatures .xterm-rows {
+    font-variant-ligatures: normal;
+    font-feature-settings: "liga" 1, "calt" 1;
+}
+
+/* Ein Bild hinter den Terminals (von der App gesetzt): füllt die Fläche, die Terminals darüber sind durchsichtig. */
+#terminals.backdrop {
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+/* xterm malt die Fläche hinter den Zeilen selbst schwarz (xterm.css) – mit einem Bild dahinter muss sie durchsichtig sein. */
+#terminals.backdrop .xterm .xterm-viewport {
+    background-color: transparent !important;
+    /* Ohne dunkle Fläche dahinter zeichnete der Browser die Leiste zum Blättern hell. */
+    color-scheme: dark;
+    scrollbar-color: rgba(204, 204, 204, 0.35) transparent;
+}

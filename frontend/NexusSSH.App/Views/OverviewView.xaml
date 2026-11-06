@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Übersicht – eine Seite der Startseite: je offener Sitzung eine Zeile mit CPU, Arbeitsspeicher, Platte und Last.
+    Solange sie zu sehen ist, messen alle Sitzungen (ShellViewModel.IsOverviewShown); die Werte selbst kommen aus
+    dem Inspector jeder Sitzung. Ein Klick auf eine Zeile öffnet die Sitzung.
+-->
+<UserControl
+    x:Class="NexusSSH.App.Views.OverviewView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:app="using:NexusSSH.App"
+    xmlns:loc="using:NexusSSH.App.Localization"
+    xmlns:vm="using:NexusSSH.Core.ViewModels">
+
+    <Grid RowSpacing="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Style="{StaticResource SubtitleTextBlockStyle}" Text="{loc:Loc Key=HomeOverview}" />
+
+        <TextBlock
+            Grid.Row="1"
+            MaxWidth="900"
+            HorizontalAlignment="Left"
+            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+            Style="{StaticResource CaptionTextBlockStyle}"
+            Text="{loc:Loc Key=OverviewHint}"
+            TextWrapping="Wrap" />
+
+        <TextBlock
+            x:Name="EmptyText"
+            Grid.Row="2"
+            Margin="0,12,0,0"
+            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+            Text="{loc:Loc Key=OverviewEmpty}" />
+        <ListView
+            x:Name="SessionsList"
+            Grid.Row="2"
+            MaxWidth="1100"
+            HorizontalAlignment="Stretch"
+            AutomationProperties.Name="{loc:Loc Key=OverviewList}"
+            IsItemClickEnabled="True"
+            ItemClick="OnSessionClicked"
+            ItemsSource="{x:Bind Shell.Sessions}"
+            SelectionMode="None">
+            <ListView.ItemContainerStyle>
+                <Style BasedOn="{StaticResource DefaultListViewItemStyle}" TargetType="ListViewItem">
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                    <Setter Property="Padding" Value="0,0,0,8" />
+                </Style>
+            </ListView.ItemContainerStyle>
+            <ListView.ItemTemplate>
+                <DataTemplate x:DataType="vm:SessionViewModel">
+                    <Grid
+                        Padding="14,10,14,10"
+                        Background="{ThemeResource RaisedBackgroundBrush}"
+                        BorderBrush="{ThemeResource CardBorderBrush}"
+                        BorderThickness="1"
+                        ColumnSpacing="18"
+                        CornerRadius="10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="200" />
+                            <ColumnDefinition Width="*" MinWidth="70" />
+                            <ColumnDefinition Width="2*" MinWidth="150" />
+                            <ColumnDefinition Width="2*" MinWidth="150" />
+                            <ColumnDefinition Width="140" />
+                        </Grid.ColumnDefinitions>
+                        <Ellipse
+                            Width="8"
+                            Height="8"
+                            VerticalAlignment="Center"
+                            Fill="{x:Bind app:Ui.StatusBrush(Inspector.IsOnline), Mode=OneWay}" />
+                        <!--  Name und Adresse; der Name kann vom Server stammen und steht als Text da  -->
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+                            <TextBlock Text="{x:Bind Title, Mode=OneWay}" TextTrimming="CharacterEllipsis" />
+                            <TextBlock
+                                Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Text="{x:Bind Profile.Address}"
+                                TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                        <!--  Ohne Werte steht hier, warum: misst noch, nicht verbunden, keine Auslastung  -->
+                        <TextBlock
+                            Grid.Column="2"
+                            Grid.ColumnSpan="4"
+                            VerticalAlignment="Center"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Text="{x:Bind app:Ui.OverviewNote(CanMeasure, State, Inspector.HasMetrics, Inspector.IsUnavailable), Mode=OneWay}"
+                            Visibility="{x:Bind app:Ui.CollapsedIf(Inspector.HasMetrics), Mode=OneWay}" />
+                        <StackPanel
+                            Grid.Column="2"
+                            VerticalAlignment="Center"
+                            Spacing="3"
+                            Visibility="{x:Bind Inspector.HasMetrics, Mode=OneWay}">
+                            <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" Style="{StaticResource CaptionTextBlockStyle}" Text="{loc:Loc Key=Cpu}" />
+                            <TextBlock Style="{StaticResource CaptionTextBlockStyle}" Text="{x:Bind Inspector.CpuText, Mode=OneWay}" TextTrimming="CharacterEllipsis" />
+                            <ProgressBar AutomationProperties.Name="{loc:Loc Key=Cpu}" Value="{x:Bind Inspector.CpuPercent, Mode=OneWay}" />
+                        </StackPanel>
+                        <StackPanel
+                            Grid.Column="3"
+                            VerticalAlignment="Center"
+                            Spacing="3"
+                            Visibility="{x:Bind Inspector.HasMetrics, Mode=OneWay}">
+                            <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" Style="{StaticResource CaptionTextBlockStyle}" Text="{loc:Loc Key=Memory}" />
+                            <TextBlock Style="{StaticResource CaptionTextBlockStyle}" Text="{x:Bind Inspector.MemoryText, Mode=OneWay}" TextTrimming="CharacterEllipsis" />
+                            <ProgressBar AutomationProperties.Name="{loc:Loc Key=Memory}" Value="{x:Bind Inspector.MemoryPercent, Mode=OneWay}" />
+                        </StackPanel>
+                        <StackPanel
+                            Grid.Column="4"
+                            VerticalAlignment="Center"
+                            Spacing="3"
+                            Visibility="{x:Bind Inspector.HasMetrics, Mode=OneWay}">
+                            <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" Style="{StaticResource CaptionTextBlockStyle}" Text="{loc:Loc Key=Disk}" />
+                            <TextBlock Style="{StaticResource CaptionTextBlockStyle}" Text="{x:Bind Inspector.DiskText, Mode=OneWay}" TextTrimming="CharacterEllipsis" />
+                            <ProgressBar AutomationProperties.Name="{loc:Loc Key=Disk}" Value="{x:Bind Inspector.DiskPercent, Mode=OneWay}" />
+                        </StackPanel>
+                        <StackPanel
+                            Grid.Column="5"
+                            VerticalAlignment="Center"
+                            Spacing="1"
+                            Visibility="{x:Bind Inspector.HasMetrics, Mode=OneWay}">
+                            <TextBlock Foreground="{ThemeResource TextFillColorSecondaryBrush}" Style="{StaticResource CaptionTextBlockStyle}" Text="{loc:Loc Key=LoadAverage}" />
+                            <TextBlock Style="{StaticResource CaptionTextBlockStyle}" Text="{x:Bind Inspector.LoadText, Mode=OneWay}" />
+                        </StackPanel>
+                    </Grid>
+                </DataTemplate>
+            </ListView.ItemTemplate>
+        </ListView>
+    </Grid>
+</UserControl>

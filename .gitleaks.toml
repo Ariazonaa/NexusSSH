@@ -1,0 +1,13 @@
+# Gitleaks-Konfiguration für die öffentliche Version. Standardregeln bleiben an; ausgenommen ist nur das
+# eingecheckte, minifizierte xterm.js samt Addons (MIT, unter Assets/terminal/vendor/): dessen Token treffen die
+# Regel „generic-api-key", sind aber keine eigenen Geheimnisse.
+title = "NexusSSH gitleaks"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Vendored third-party JS (xterm.js + addons, minified, MIT) – no own secrets"
+paths = [
+  '''Assets/terminal/vendor/.*''',
+]

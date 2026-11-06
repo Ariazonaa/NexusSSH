@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <!--
+        Die Seite zeigt Ausgabe fremder Server. Deshalb: nur eigene Skripte, keine Netzzugriffe, keine Frames.
+        style-src braucht 'unsafe-inline', weil xterm.js seine Farben als <style>-Element einsetzt.
+        'wasm-unsafe-eval' erlaubt allein das Übersetzen von WebAssembly – das braucht der Sixel-Leser des Bild-Addons,
+        das nur läuft, wenn der Benutzer „Bilder im Terminal“ einschaltet. JavaScript aus Text bleibt verboten.
+    -->
+    <meta http-equiv="Content-Security-Policy"
+          content="default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'">
+    <title>NexusSSH Terminal</title>
+    <link rel="stylesheet" href="vendor/xterm.css">
+    <link rel="stylesheet" href="terminal.css">
+</head>
+<body>
+    <div id="terminals" class="ligatures"></div>
+    <script src="vendor/xterm.js"></script>
+    <script src="vendor/addon-fit.js"></script>
+    <script src="vendor/addon-search.js"></script>
+    <script src="vendor/addon-serialize.js"></script>
+    <script src="terminal.js"></script>
+</body>
+</html>
