@@ -1,6 +1,6 @@
 # Funktionen
 
-Was NexusSSH heute kann – nach Bereichen, nicht nach Datum. Stand: Version 0.1.0 (Phase 3 samt Resten,
+Was NexusSSH heute kann – nach Bereichen, nicht nach Datum. Stand: Version 0.1.1 (Phase 3 samt Resten,
 Auslieferung).
 
 Geprüft ist alles gegen den eingebauten Testserver und das meiste an echten OpenSSH-Servern: Debian als root,

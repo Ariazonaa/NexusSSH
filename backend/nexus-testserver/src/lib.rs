@@ -369,6 +369,10 @@ impl Connection {
             format!("{}x{}\r\n", size.0, size.1)
         } else if line == "conn" {
             format!("connection {}\r\n", self.number)
+        } else if line == "mouse" {
+            // Schaltet die Maus des Terminals ein und nie wieder aus – wie htop, unter dem die Verbindung abriss.
+            // Ein Klick kommt dann als Eingabe an; ESC fällt hier wie in bash weg, der Rest steht in der Zeile.
+            "\u{1b}[?1000h\u{1b}[?1006h".to_owned()
         } else if let Some(count) = line.strip_prefix("flood ").and_then(|count| count.parse::<u32>().ok()) {
             // Viel Ausgabe auf einmal, wie `cat` einer großen Datei.
             let closed = Arc::new(AtomicBool::new(false));

@@ -495,6 +495,17 @@ public sealed partial class SessionViewModel : ObservableObject, ITerminalSessio
 
     internal void ClearBell() => HasBell = false;
 
+    /// <summary>
+    /// Schaltet im Terminal ab, was ein Programm der vorigen Verbindung eingeschaltet haben kann: den zweiten
+    /// Bildschirm, jede Art Mausmeldung samt Kodierung, dann der Soft-Reset (DECSTR: Cursortasten, Ziffernblock,
+    /// Bracketed Paste, Fokusmeldungen, sichtbarer Cursor, Farben). Den Inhalt lässt das stehen. Die Maus und der
+    /// zweite Bildschirm stehen einzeln da, weil xterm.js sie bei DECSTR nicht zurücksetzt. Zurück zum ersten
+    /// Bildschirm mit 1047, nicht 1049: Bei 1049 setzt xterm.js den Cursor immer auf den gemerkten Platz, auch wenn
+    /// gar kein zweiter Bildschirm an war – die neue Verbindung schrieb dann über den alten Inhalt.
+    /// </summary>
+    internal const string ModesReset =
+        "\e[?1047l\e[?9l\e[?1000l\e[?1002l\e[?1003l\e[?1005l\e[?1006l\e[?1015l\e[?1016l\e[!p";
+
     /// <summary>Verwirft die alte Verbindung und baut eine neue auf; der Terminal-Inhalt bleibt stehen.</summary>
     public void Reconnect()
     {
@@ -516,6 +527,10 @@ public sealed partial class SessionViewModel : ObservableObject, ITerminalSessio
 
         Detach();
         _connection.Dispose();
+
+        // Riss die Verbindung ab, während htop oder vim lief, kam deren „Maus aus“ nie an: Jeder Klick ins Terminal
+        // ginge sonst als Mausmeldung an die neue Shell und stünde dort als Text in der Zeile.
+        Output?.Invoke(Encoding.ASCII.GetBytes(ModesReset));
         _connection = Open();
         Begin();
     }

@@ -5,7 +5,7 @@ WinUI 3 front end (C# / .NET 10), Rust core.
 
 ![NexusSSH main window](docs/images/main.png)
 
-> **Status:** version 0.1.0, the first public release. SSH sessions with a terminal (including jump hosts), server profiles with
+> **Status:** version 0.1.1 (the first public release was 0.1.0). SSH sessions with a terminal (including jump hosts), server profiles with
 > `~/.ssh/config` import, an SFTP browser with up-/download and edit-in-place, server monitoring, split terminals,
 > search, color schemes, a command palette, saved commands, local terminals, Mosh and AI access through MCP. Full
 > list: [`FEATURES.md`](FEATURES.md).
@@ -79,18 +79,17 @@ An honest snapshot against the usual Windows suspects — including where NexusS
 | Snippets / saved commands | ✅ | ✅ | ✅ | ❌ | ✅ |
 | Server resource monitor | ✅ | ◐ | ❌ | ❌ | ❌ |
 | Cloud sync | ❌ *(export/import)* | ❌ | ✅ (paid) | ❌ | ❌ |
-| Lightweight native (startup) | ✅ AOT ~0.25 s | ◐ | ❌ (Electron) | ✅ tiny | ✅ native C++ |
 | Maturity | young (v0.1) | very mature | very mature | very mature | mature |
 
 ¹ Linux is kept possible but not shipped.
 
 **Where NexusSSH wins:** rock-solid SFTP transfers (resume across reconnect, restart and crash; folders in
-parallel; drag whole folders into Explorer), a fast native footprint (AOT, no Electron), fully local with no
+parallel; drag whole folders into Explorer), lighter than Electron-based clients, fully local with no
 account or telemetry, a built-in server resource monitor, and free under MIT.
 
 **Where it's still behind:** no RDP or VNC, no bundled X server (X11 forwarding needs one such as VcXsrv),
-broadcast only to the panes of a split terminal, no cloud sync (by design), Windows-only, young, and the installer
-isn't code-signed. If you need a Swiss-army knife, MobaXterm is broader; for multi-device with sync,
+broadcast only to the panes of a split terminal, no cloud sync (by design), Windows-only, young, a heavier footprint
+than native terminals (the terminal runs in WebView2), and the installer isn't code-signed. If you need a Swiss-army knife, MobaXterm is broader; for multi-device with sync,
 Termius; for a broad native open-source all-rounder, WindTerm.
 
 ## Install

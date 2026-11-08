@@ -2,6 +2,12 @@
 
 Newest version first. For everything NexusSSH can do, see [FEATURES.md](FEATURES.md) (German).
 
+## 0.1.1 – 2026-11-08
+
+- **Fixed:** after a reconnect, a terminal kept the modes of a program that was running when the connection dropped
+  (htop, vim, tmux). Mouse clicks then showed up as text like `0;64;34M` at the shell prompt. A reconnect now switches
+  mouse reporting and the alternate screen off and soft-resets the terminal; its content stays
+
 ## 0.1.0 – 2026-11-06
 
 The first public release: a Windows SSH client with a built-in SFTP file manager, a lightweight alternative to

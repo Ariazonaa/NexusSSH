@@ -122,6 +122,36 @@ public sealed class SessionViewModelTests
         Assert.Equal("Connected", session.StateLabel);
     }
 
+    [Fact]
+    public void A_new_connection_does_not_inherit_the_modes_a_program_of_the_old_one_switched_on()
+    {
+        var session = Create();
+        session.Start();
+        _backend.Last.Set(new ConnectionStatus(ConnectionState.Connected));
+        Assert.DoesNotContain(SessionViewModel.ModesReset, _terminal.ToString(), StringComparison.Ordinal);
+
+        // htop läuft, die Verbindung reißt ab: Das „Maus aus“ beim Beenden kommt nie.
+        _backend.Last.Emit("\e[?1049h\e[?1000h\e[?1006h");
+        _backend.Last.Set(new ConnectionStatus(ConnectionState.Closed, CloseReason.ConnectionLost));
+        _terminal.Clear();
+
+        session.Reconnect();
+        _backend.Last.Emit("root@web01:~# ");
+
+        // Ins Terminal, vor allem von der neuen Verbindung – nicht an den Server.
+        var shown = _terminal.ToString();
+        Assert.StartsWith(SessionViewModel.ModesReset, shown, StringComparison.Ordinal);
+        Assert.EndsWith("root@web01:~# ", shown, StringComparison.Ordinal);
+        Assert.Empty(_backend.Last.Input);
+        // Nicht 1049: xterm.js setzte den Cursor dabei auf den gemerkten Platz, auch ohne zweiten Bildschirm, und die
+        // neue Verbindung schrieb über den alten Inhalt (in der Sandbox gesehen, 2026-11-08).
+        Assert.DoesNotContain("?1049", SessionViewModel.ModesReset, StringComparison.Ordinal);
+        foreach (var mode in new[] { "?1047l", "?9l", "?1000l", "?1002l", "?1003l", "?1005l", "?1006l", "?1015l", "?1016l", "!p" })
+        {
+            Assert.Contains("\e[" + mode, SessionViewModel.ModesReset, StringComparison.Ordinal);
+        }
+    }
+
     /// <summary>Führt „später“ erst aus, wenn der Test es sagt, und merkt sich die Wartezeiten.</summary>
     private sealed class ManualSchedule
     {

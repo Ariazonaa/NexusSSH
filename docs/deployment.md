@@ -7,7 +7,7 @@ Für alle, die NexusSSH auf vielen Rechnern einrichten: wie das Setup ohne Fenst
 Das Setup (`NexusSSH-Setup-<Version>.exe`, Inno Setup) läuft ohne Fenster und ohne Rückfragen:
 
 ```powershell
-NexusSSH-Setup-0.1.0.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CURRENTUSER
+NexusSSH-Setup-0.1.1.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CURRENTUSER
 ```
 
 | Schalter | Wirkung |
