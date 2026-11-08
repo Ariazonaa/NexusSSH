@@ -1,708 +1,694 @@
-# Funktionen
+# Features
 
-Was NexusSSH heute kann – nach Bereichen, nicht nach Datum. Stand: Version 0.1.1 (Phase 3 samt Resten,
-Auslieferung).
+What NexusSSH can do today – by area, not by date. As of version 0.1.1 (phase 3 including its remaining items,
+packaging).
 
-Geprüft ist alles gegen den eingebauten Testserver und das meiste an echten OpenSSH-Servern: Debian als root,
-dazu Container mit 2FA, Schlüssel mit Passphrase, Alpine/BusyBox, fish und einem gewöhnlichen Benutzer, sowie
-FreeBSD, OpenBSD, OpenWrt (dropbear ohne SFTP), OPNsense und OpenSSH unter Windows Server – dort als
-Administrator und mit einem gewöhnlichen Konto, mit `cmd` und mit PowerShell als Anmelde-Shell. Ein gewöhnliches
-Konto darf unter Windows kein WMI; die Auslastung kommt dann aus anderen Quellen (ohne Auslagerung und Durchsatz
-der Platten).
+Everything is tested against the built-in test server and most of it against real OpenSSH servers: Debian as root,
+plus containers with 2FA, a key with a passphrase, Alpine/BusyBox, fish and an ordinary user, as well as FreeBSD,
+OpenBSD, OpenWrt (dropbear without SFTP), OPNsense and OpenSSH on Windows Server – there as Administrator and with an
+ordinary account, with `cmd` and with PowerShell as the login shell. On Windows an ordinary account may not use WMI;
+the server load then comes from other sources (without paging and disk throughput).
 
-## Fenster
+## Window
 
-- **Fenster merkt sich seinen Platz:** Position, Größe und „maximiert“ gelten beim nächsten Start wieder. Fehlt der
-  Bildschirm von damals, geht es auf dem nächstgelegenen auf
-- Dunkle Oberfläche in reinem Schwarz (AMOLED), ohne durchscheinenden Desktop: Die Bereiche liegen als abgerundete
-  Karten mit Abstand auf dem schwarzen Fenster; schlichte Linien-Symbole in Titelleiste, Startseite, Dateibrowser
-  und Snippets; Fensterknöpfe von Windows, eigenes Symbol
-- **Einstellungen als eigene Seite** (unten in der Seitenleiste der Startseite oder Palette): links die Bereiche,
-  rechts der gewählte – Allgemein, Aussehen, Verbindungen, Hinweise und Töne, Terminal, Dateien und Transfers, Tastenkürzel, Daten, Über
-- **Einstellungen durchsuchen:** Ein Suchfeld oben zeigt aus allen Bereichen nur, was zum Getippten passt (jedes
-  Wort muss vorkommen; Groß- und Kleinschreibung und Umlaute spielen keine Rolle). Was nicht mehr auf der
-  Vorgabe steht, trägt rechts eine Marke – ein Klick darauf stellt genau diese Einstellung zurück
-- **Größe der Oberfläche** stufenlos von 70 bis 160 % – zusätzlich zur Skalierung von Windows, gilt sofort und für
-  alles im Fenster (Menüs, Dialoge, Terminal): in den Einstellungen, über die Palette („Oberfläche größer“,
-  „kleiner“, „zurücksetzen“; Strg+Umschalt+Plus, +Minus, +0) oder mit Strg+Mausrad außerhalb des Terminals
-- **Kompakte Darstellung** wählbar (dichtere Listen, kleinere Rundungen und Abstände; wirkt nach einem Neustart);
-  Bereiche und Startseite blenden weich ein (abschaltbar)
-- **Akzentfarbe wählbar** (Einstellungen): Himmelblau (Vorgabe für neue Installationen), wie Windows oder Violett,
-  Blau, Türkis, Grün, Orange, Rot, Pink – für Fortschritt, Auswahl und Fokus; wirkt nach einem Neustart
-- **Titelleiste**: links „Start“ und die Reiter der Sitzungen (als Pillen, mit Punkt für den Zustand der
-  Verbindung; das × nur am aktiven und am überfahrenen Reiter; der Tooltip nennt Adresse und Zustand), in der
-  Mitte die Befehlspalette, rechts die Knöpfe **Dateien** und **Snippets** (Bereich ein/aus), das Menü
-  **Teilen** (rechts oder unten teilen, aufheben, gleich groß, groß schalten, an alle senden, Dateien in zwei
-  Spalten) und **Suchen**; die freie Fläche zieht das Fenster. Trennen, „Erneut verbinden“ und „Als Server
-  speichern“ stehen im Menü des Reiters (Rechtsklick) und in der Palette
-- **„Erneut verbinden“ über dem Terminal**: Ist die Verbindung zu Ende, liegt eine Leiste mit dem Grund und dem
-  Knopf über dem Terminal; der Verlauf darunter bleibt
-- **Kennfarbe je Profil oder für eine ganze Gruppe** (rot, orange, gelb, grün, blau, violett): als Streifen am
-  Reiter, als Farbe des Quadrats auf der Kachel und als Streifen am linken Rand jedes Terminals – auch in
-  der geteilten Ansicht. Die Farbe einer Gruppe (Kontextmenü ihrer Überschrift) gilt für alles darin und darunter,
-  was keine eigene hat – gegen die Verwechslung von Produktion und Test
-- **Eigenes Symbol oder Buchstaben je Server und je Gruppe** (Menü „⋯“ der Kachel bzw. Kontextmenü der
-  Überschrift der Gruppe): eines von zwölf Symbolen oder ein, zwei Buchstaben oder Ziffern; das Zeichen einer
-  Gruppe gilt für alles darin, was kein eigenes hat, und steht klein in der Kennfarbe vor dem Namen der Gruppe.
-  Im Quadrat der Kachel steht der Reihe nach: das eigene Zeichen des Servers, sonst das **Logo seines
-  Betriebssystems** in dessen Markenfarbe (sobald es bekannt ist), sonst das Zeichen der Gruppe, sonst bei einem
-  lokalen Terminal dessen Symbol, sonst der erste Buchstabe des Namens
-- **Reiter anheften** (Rechtsklick oder Palette): Der Reiter rückt nach links, bekommt eine Nadel statt des × und
-  bleibt dort – auch über einen Neustart, wenn die Tabs wiederhergestellt werden. Dazu „Alle anderen Tabs
-  schließen“ (angeheftete bleiben), „Alle trennen“ und „Alle neu verbinden“
-- **Terminal in eigenem Fenster**: Einen Reiter aus der Leiste weit ins Terminal oder aus dem Fenster ziehen (knapp
-  unter der Leiste losgelassen bleibt er, wo er war; oder Rechtsklick, Palette) – sein
-  Terminal steht dann in einem schlanken eigenen Fenster, etwa auf dem zweiten Bildschirm. Der Inhalt samt Farben
-  wandert mit, die Sitzung läuft weiter. Der Reiter bleibt im Hauptfenster: Dort zeigen Dateibrowser und
-  Auslastung die Sitzung wie jede andere, an der Stelle des Terminals steht, wo es ist. Das Fenster zu schließen
-  holt das Terminal zurück und trennt nichts. Mit „Tabs wiederherstellen“ steht es nach einem Neustart wieder
-  an seinem Platz
-- **Erreichbarkeit auf der Kachel** (Einstellung, standardmäßig aus): ein Punkt zeigt, ob der Port des Servers
-  antwortet; geprüft wird nur, solange die Startseite zu sehen ist, höchstens alle drei Minuten
-- **Startseite mit den Servern als Kacheln** in Spalten, die die Breite füllen (bis zu vier): Favoriten als
-  eigener Abschnitt oben, darunter die Gruppen; jede Kachel zeigt ein Quadrat mit Zeichen, Logo des Systems oder Anfangsbuchstabe,
-  den Namen und die Adresse (Schlagworte im Tooltip). Im Kopf ein **Suchfeld**, das beim Tippen nur stehen lässt,
-  was jedes Wort in Name, Host, Benutzer, Gruppe oder Schlagwort trägt, der Knopf **„+ Neuer Server“** und ein
-  Menü „⋯“ mit Tabelle, Mehrere auswählen, Reihenfolge, Importieren und Lokales Terminal. Ein Klick auf eine
-  Kachel verbindet; ihr Menü „⋯“ (beim Überfahren und mit dem Fokus zu sehen, auch per Rechtsklick, Menütaste
-  oder Umschalt+F10) ändert, dupliziert, löscht. „Start“ (Symbol vor den Reitern) führt jederzeit dorthin
-  zurück, ohne eine Sitzung zu schließen – die Tabs laufen weiter (auch per Palette: „Startseite“); die Startseite
-  nimmt dann den ganzen Platz zwischen Titelleiste und Zeile unten
-- **Zeile unten** für das ganze Fenster: links die Auslastung des Servers im aktiven Tab (siehe
-  „Server-Details“), rechts **Details** (öffnet die Seite „Server-Details“), **Transfers n** (die Zahl dessen,
-  was läuft oder wartet; ein Klick blendet den unteren Bereich mit den Transfers ein und wieder aus) und
-  **Probleme n** (nur, wenn es welche gibt; ebenso mit den Problemen). Ohne aktive Sitzung und bei einer, die
-  sich nicht messen lässt (lokales Terminal, Telnet, seriell), stehen dort nur die Knöpfe rechts
-- Layout: Dateibrowser links, Terminal in der Mitte, **Snippets** rechts, darunter (von Haus aus zu)
-  Ausgabe/Transfers/Probleme/Suche
-- **Snippets rechts**: die gespeicherten Befehle mit Name und dem Anfang des Befehls; ein Suchfeld filtert nach
-  Name und Text, **ein Klick führt den Befehl im aktiven Terminal aus** (auf Wunsch gleich mit Enter), Enter im
-  Suchfeld den ersten Treffer, Esc springt ins Terminal zurück. Ohne verbundene Sitzung mit Shell sind die
-  Einträge grau, und ein Satz sagt, warum. Der Stift einer Zeile (beim Überfahren) und „+“ öffnen die Seite
-  „Snippets“ der Startseite zum Bearbeiten. Die Spalte gibt es auch für ein lokales Terminal. **Ordner**: Befehle
-  ohne Ordner stehen oben, darunter jeder Ordner unter seiner Überschrift (Symbol, Name, Anzahl); ein Klick auf die
-  Überschrift klappt ihn ein und aus, gemerkt auf diesem Rechner
-- Bereiche ein- und ausblendbar, die Lücken zwischen den Karten ziehbar (Doppelklick = Standardgröße) und per
-  Tastatur bedienbar
-- **Mit der Tastatur von Bereich zu Bereich**: Strg+F6 und Strg+Umschalt+F6 wechseln zwischen Dateibrowser,
-  Terminal, Snippets (ins Suchfeld) und unterem Bereich – auch aus dem Terminal heraus, wo Tab der Shell gehört. Außerhalb
-  des Terminals genügt F6 bzw. Umschalt+F6
-  (Pfeiltasten, Pos1); Größen bleiben erhalten
-- **Kontrastdesigns und große Schrift von Windows**: Mit einem Kontrastdesign (hell oder dunkel) nimmt die App
-  dessen Farben an, auch für Verlaufskurven und Balken, und folgt einem Wechsel, während sie läuft. Die
-  vergrößerte Schrift aus den Bedienhilfen von Windows gilt in der ganzen Oberfläche
-- Deutsch, Englisch, Französisch und Spanisch (die beiden letzten übersetzt, aber noch nicht von Muttersprachlern gegengelesen)
-- Auf Wunsch kommen beim Start die Tabs wieder, die beim Beenden offen waren – samt Teilung
+- **The window remembers its place:** position, size and "maximized" apply again at the next start. If the screen
+  from back then is missing, it opens on the nearest one
+- Dark interface in pure black (AMOLED), without the desktop showing through: the panes sit as rounded cards with gaps
+  on the black window; plain line icons in the title bar, home page, file browser and snippets; window buttons from
+  Windows, its own icon
+- **Settings as a page of their own** (at the bottom of the home page sidebar or via the command palette): the
+  sections on the left, the selected one on the right – "General", "Appearance", "Connections", "Notifications and
+  sounds", "Terminal", "Files and transfers", "Keyboard shortcuts", "Data", "About"
+- **Search the settings:** a search box at the top shows, from all sections, only what matches what you type (every
+  word must appear; case and umlauts do not matter). Anything no longer at its default carries a marker on the
+  right – a click on it resets exactly that setting
+- **Interface size** continuously from 70 to 160 % – on top of Windows scaling, applies immediately and to everything
+  in the window (menus, dialogs, terminal): in the settings, via the command palette ("Make the interface larger",
+  "Make the interface smaller", "Reset the interface size"; Ctrl+Shift+Plus, +Minus, +0) or with Ctrl+mouse wheel
+  outside the terminal
+- **Compact layout** selectable (denser lists, smaller corner radii and gaps; takes effect after a restart); panes and
+  the home page fade in softly (can be turned off)
+- **Selectable accent color** (settings): sky blue (default for new installations), like Windows, or violet, blue,
+  teal, green, orange, red, pink – for progress, selection and focus; takes effect after a restart
+- **Title bar**: on the left "Home" and the session tabs (as pills, with a dot for the connection state; the × only on
+  the active tab and the one under the pointer; the tooltip names address and state), in the middle the command
+  palette, on the right the buttons **Files** and **Snippets** (pane on/off), the **Split** menu (split right or
+  down, unsplit, equal size, zoom, send to all, files in two columns) and **Search**; the empty area drags the window.
+  "Disconnect", "Reconnect" and "Save this connection as a server" are in the tab's menu (right-click) and in the
+  command palette
+- **"Reconnect" above the terminal**: when the connection has ended, a bar with the reason and the button lies over
+  the terminal; the scrollback underneath stays
+- **Color tag per profile or for a whole group** (red, orange, yellow, green, blue, violet): as a stripe on the tab, as
+  the color of the square on the tile and as a stripe along the left edge of every terminal – in the split view too.
+  A group's color (context menu of its heading) applies to everything in and below it that has none of its own –
+  against mixing up production and test
+- **Custom icon or letters per server and per group** (the tile's "⋯" menu or the context menu of the group heading):
+  one of twelve icons or one or two letters or digits; a group's sign applies to everything in it that has none of
+  its own, and appears small in the color tag before the group name. The square on the tile shows, in this order: the
+  server's own sign, otherwise the **logo of its operating system** in its brand color (once it is known), otherwise
+  the group's sign, otherwise, for a local terminal, its icon, otherwise the first letter of the name
+- **Pin tabs** (right-click or command palette): the tab moves to the left, gets a pin instead of the × and stays
+  there – also across a restart when tabs are restored. Plus "Close all other tabs" (pinned ones stay), "Disconnect
+  all" and "Reconnect all"
+- **Terminal in its own window**: drag a tab from the bar far into the terminal or out of the window (released just
+  below the bar it stays where it was; or right-click, command palette) – its terminal then sits in a slim window of
+  its own, for example on the second screen. The content including colors moves along, the session keeps running. The
+  tab stays in the main window: there the file browser and server load show the session like any other, and where
+  the terminal was, it says where it is. Closing the window brings the terminal back and disconnects nothing. With
+  "Reopen tabs at startup" it is back in its place after a restart
+- **Reachability on the tile** (setting, off by default): a dot shows whether the server's port answers; it is checked
+  only while the home page is visible, at most every three minutes
+- **Home page with the servers as tiles** in columns that fill the width (up to four): favorites as a section of their
+  own at the top, the groups below; each tile shows a square with a sign, the system logo or the initial letter, the
+  name and the address (tags in the tooltip). In the header a **search box** that, as you type, keeps only what
+  carries every word in name, host, user, group or tag, the **"+ New server"** button and a "⋯" menu with "Table",
+  "Select several", "Order", "Import" and "Local terminal". A click on a tile connects; its "⋯" menu (visible on hover
+  and with focus, also via right-click, Menu key or Shift+F10) edits, duplicates, deletes. "Home" (the icon before the
+  tabs) leads back there at any time without closing a session – the tabs keep running (also via the command palette:
+  "Home"); the home page then takes the whole space between the title bar and the bottom bar
+- **Bottom bar** for the whole window: on the left the server load of the server in the active tab (see "Server
+  details"), on the right **Details** (opens the "Server details" page), **Transfers n** (the number of what is
+  running or waiting; a click shows and hides the bottom pane with the transfers) and **Problems n** (only when there
+  are any; likewise with the problems). Without an active session, and with one that cannot be measured (local
+  terminal, Telnet, serial), only the buttons on the right are there
+- Layout: file browser on the left, terminal in the middle, **snippets** on the right, below (closed by default)
+  Output/Transfers/Problems/Search
+- **Snippets on the right**: the saved commands with name and the beginning of the command; a search box filters by
+  name and text, **a click runs the command in the active terminal** (optionally with Enter right away), Enter in the
+  search box the first match, Esc jumps back into the terminal. Without a connected session with a shell the entries
+  are grayed out, and a sentence says why. A row's pencil (on hover) and "+" open the home page's "Snippets" page for
+  editing. The column exists for a local terminal too. **Folders**: commands without a folder are at the top, below
+  them each folder under its heading (icon, name, count); a click on the heading collapses and expands it, remembered
+  on this computer
+- Panes can be shown and hidden, the gaps between the cards can be dragged (double-click = default size) and operated
+  from the keyboard (arrow keys, Home); sizes are kept
+- **From pane to pane with the keyboard**: Ctrl+F6 and Ctrl+Shift+F6 switch between file browser, terminal, snippets
+  (into the search box) and bottom pane – also from inside the terminal, where Tab belongs to the shell. Outside
+  the terminal F6 or Shift+F6 is enough
+- **Windows contrast themes and large text**: with a contrast theme (light or dark) the app takes on its colors, for
+  history curves and bars too, and follows a change while it is running. The enlarged text from the Windows
+  accessibility settings applies throughout the interface
+- German, English, French and Spanish (the last two translated, but not yet proofread by native speakers)
+- Optionally the tabs that were open on exit come back at startup – including the split
 
-## Auslieferung
+## Packaging
 
-- **Installer** (`NexusSSH-Setup-<version>.exe`): je Benutzer, ohne Adminrechte, mit Deinstallation; läuft auch
-  still, ohne Fenster (`docs/deployment.md`)
-- Native-AOT-Build: kein JIT, das Fenster steht nach rund einer Viertelsekunde
-- Ein Tag `v*` im Repo baut das Setup in der CI und legt ein Release an
-- **Hinweis auf neue Versionen**: Beim Start (höchstens 1×/Tag, in den Einstellungen abschaltbar) sieht die App
-  bei den GitHub-Releases nach und zeigt einen Hinweis mit Link zur Download-Seite, wenn eine neuere Version da
-  ist. Auch von Hand über die Palette („Nach Updates suchen"). Nur ein Aufruf an GitHub – kein Konto, keine Daten
+- **Installer** (`NexusSSH-Setup-<version>.exe`): per user, without admin rights, with uninstaller; also runs
+  silently, without a window (`docs/deployment.md`)
+- Native AOT build: no JIT, the window is up after about a quarter of a second
+- A tag `v*` in the repo builds the setup in CI and creates a release
+- **Notice of new versions**: at startup (at most once a day, can be turned off in the settings) the app checks the
+  GitHub releases and shows a notice with a link to the download page when a newer version is available. Also by hand
+  via the command palette ("Check for updates"). Just one request to GitHub – no account, no data
 
-## Server
+## Servers
 
-- **Startseite als Tabelle** statt als Kacheln (Menü „⋯“ im Kopf der Startseite): alle Server in einer Liste mit
-  Name, Adresse, Gruppe und letzter Verbindung; ein Klick auf einen Spaltenkopf sortiert, ein zweiter dreht die
-  Richtung um. Der Filter gilt auch dort
-- **Mehrere Server auf einmal** (Startseite, „Mehrere auswählen“): markieren und zusammen verbinden, in eine
-  Gruppe legen, Schlagworte hinzufügen oder entfernen, löschen
-- **Einführung statt leerer Seite**: Solange es kein Profil gibt, zeigt die Startseite die drei ersten Schritte –
-  Server anlegen oder übernehmen (mit den Knöpfen dafür), verbinden, Palette
-- **Startseite mit Seitenleiste**: fünf Einträge – Server, Snippets, Schlüssel & Identitäten (eine Seite, oben
-  umschaltbar), Tunnel und „Mehr“, das Abgleiche, Bekannte Server und die Übersicht aufklappt; unten die
-  Einstellungen. Die Palette führt direkt zu jeder Seite
-- **Gruppen in Gruppen**: `Kunde/Projekt/Prod` als Gruppe eines Profils ergibt Ordner auf der Startseite – eine
-  Ebene je Ansicht, ein Klick auf den Namen führt tiefer, Brotkrumen führen zurück
-- **Gruppen einklappen und ordnen**: Ein Klick auf die Überschrift klappt ein (ein kleiner Pfeil zeigt, wie es
-  steht); „Nach oben“/„Nach unten“, Farbe und Zeichen der Gruppe im Kontextmenü der Überschrift (Rechtsklick,
-  Menütaste, Umschalt+F10). Ein Profil wechselt die Gruppe über „In Gruppe verschieben“ oder durch Ziehen der
-  Kachel auf eine Überschrift
-- Profile mit Host, Port, Benutzer, Name, Gruppe, Schlagworten, Favorit, Schlüsseldatei; der Editor ist in drei
-  Reiter gegliedert (Server, Anmeldung, Verbindungsweg)
-- **Notizen je Server:** freier Text im Profil (Zweck, Ansprechpartner, Wartungsfenster), auf der Seite
-  „Server-Details“ zu sehen und über Filter und Palette zu finden
-- **Identitäten**: Benutzer und Schlüssel einmal anlegen (Startseite, „Schlüssel & Identitäten“) und in mehreren Profilen wählen –
-  ändert sich der Schlüssel, ändert man ihn an einer Stelle. Sie wandern beim Export mit
-- **Betriebssystem erkannt**: Beim ersten Verbinden merkt sich die App das System des Servers (Ubuntu, Debian,
-  Alpine, FreeBSD …) – aus `/etc/os-release` über die Dateiverbindung, sonst aus der Auslastung; es klappt also auch
-  bei Servern, die keine Befehle zulassen. Sein Logo steht im Quadrat auf der Kachel (außer der Server hat ein
-  eigenes Zeichen), sein Name im Tooltip. Liefert ein Server keine Auslastung, steht der Grund unter „Ausgabe“
-- Serverliste nach Gruppen auf der Startseite; anlegen, ändern, **duplizieren**, löschen
-- **Reihenfolge** wählbar (Menü „⋯“ der Startseite): wie angelegt, nach Name, zuletzt verbunden zuerst (Favoriten immer vorn)
-- Über **Sprung-Server** nennt das Terminal beim Verbinden den Weg („Dieser Rechner → bastion → web01“);
-  scheitert der Aufbau, sagt es, an welchem Server
-- **Verbindung halten**: wie oft ein Lebenszeichen an den Server geht und nach wie vielen unbeantworteten die
-  Verbindung als abgerissen gilt – allgemein in den Einstellungen und je Server im Profil
-- **Terminal je Server**: als welches Terminal sich die App ausgibt (`TERM`, etwa `vt100`), in welchem Zeichensatz
-  der Server spricht (UTF-8, ISO-8859-1, ISO-8859-15, Windows-1252) und welche Umgebungsvariablen er bekommt
-  (`LANG` …) – für alte Systeme, auf denen Umlaute oder Farben sonst kaputt ankommen
-- **Import aus `~/.ssh/config`**: `HostName`, `User`, `Port`, `IdentityFile`, `ProxyJump` (auch mehrere Sprünge als
-  Kette, auch ausgeschrieben als `user@host:port`), `ForwardAgent`; auch `Include` und Blöcke mit Mustern (`Host *`); auswählen, was übernommen wird; die
-  Datei wird nur gelesen. Dazu `IdentitiesOnly`, `ServerAliveInterval`/`ServerAliveCountMax` (Lebenszeichen),
-  `LocalForward`/`RemoteForward`/`DynamicForward` (als Tunnel, die nur für diesen Rechner lauschen),
-  `Compression`, `ConnectTimeout`, `AddressFamily`, `SetEnv` – und `Match`-Blöcke nach Host, Benutzer und lokalem
-  Benutzer (ein `Match exec` gilt nie: Die App startet nichts, was in einer Datei steht). Je Server nennt der
-  Dialog, **was nicht übernommen wurde** (`ProxyCommand`, `Ciphers` …)
-- **Nur diesen Schlüssel anbieten** (im Profil, wie `IdentitiesOnly`): keine weiteren Schlüssel aus dem Agenten –
-  für Agenten und Passwort-Manager mit vielen Schlüsseln
-- **Profile, die `~/.ssh/config` folgen** (Häkchen beim Import oder Auswahl im Editor eines Profils): Adresse,
-  Port, Benutzer, Schlüsseldatei, Sprung-Server und Agent Forwarding kommen dann aus der Datei – beim Start,
-  beim Speichern und wenige Sekunden nachdem sich die Datei (oder eine eingebundene) ändert, auch während die App
-  läuft. Im Editor sind diese Felder gesperrt. Hat das Profil eine Identität, bestimmt sie Benutzer und
-  Schlüssel, die Datei nur den Rest. Name, Gruppe, Farbe, Notizen und alles Übrige bleiben, wie sie im Profil
-  stehen. Fehlt der Eintrag in der Datei, bleibt das Profil unverändert; lösen lässt sich die Verknüpfung im Editor
-- **Sitzungen übernehmen** aus PuTTY und WinSCP (gespeicherte Sitzungen des Benutzers) und aus MobaXterm (dessen
-  Konfiguration oder eine exportierte `.mxtsessions`-Datei): Name, Host, Port, Benutzer, Ordner und Schlüsseldatei
-  (auch PuTTYs `.ppk`); auswählen, was übernommen wird. Nur lesend, ohne Passwörter
-- **Sitzungen aus Dateien anderer Programme**: eine `ssh_config` von irgendwo (auch die, die das
-  Kommandozeilenwerkzeug von Termius mit `termius export-ssh-config` schreibt), mRemoteNG (`confCons.xml`), Royal TS
-  (`.rtsz`, unverschlüsselt), SecureCRT (Sitzungsdateien oder XML-Export), Remmina (`.remmina`) und Xshell (`.xsh`) –
-  mehrere Dateien auf einmal, SSH und Telnet, mit Ordnern als Gruppen und ohne Passwörter. Außer MobaXterm und
-  `ssh_config` nach den Formaten gebaut, noch nicht mit echten Dateien dieser Programme geprüft
-- **Schlüssel erzeugen und hinterlegen**: ein neues Ed25519-Schlüsselpaar in `~/.ssh` (auf Wunsch mit Passphrase),
-  der öffentliche Teil wird auf dem verbundenen Server in `authorized_keys` eingetragen und das Profil auf den
-  Schlüssel umgestellt – was sonst `ssh-keygen` und `ssh-copy-id` tun. Vorhandene Dateien bleiben unberührt
-- **Schlüssel verwalten**: eine Seite der Startseite mit den eigenen Schlüsseldateien (was in `~/.ssh` liegt und
-  was ein Profil oder eine Identität nennt) – Art und Länge, Fingerabdruck, Kommentar, Format, ob eine Passphrase
-  sie schützt und wer sie benutzt, gelesen ohne Passphrase. Die **Passphrase ändern**, setzen oder entfernen; die
-  Datei behält ihr Format. **Umwandeln** zwischen den Formaten von OpenSSH und PuTTY (`.ppk`, Fassung 3) als neue
-  Datei daneben, mit derselben Passphrase – die alte bleibt. Der öffentliche Schlüssel lässt sich kopieren
-- **Gespeichertes Passwort vergessen**, ohne das Profil zu löschen
-- **Export und Import**: Profile (samt Gruppen und Sprung-Servern), gespeicherte Befehle und Einstellungen als
-  Datei, um sie auf einem anderen Rechner zu übernehmen – **ohne Passwörter**. Vor dem Import zeigt die App, was
-  neu wäre und was ersetzt würde, und man wählt, was übernommen wird; ein Profil, das es schon gibt, wird ersetzt
-  statt verdoppelt. Schlüsselpfade im Benutzerordner stimmen auch bei anderem Benutzernamen
+- **Home page as a table** instead of tiles ("⋯" menu in the home page header): all servers in one list with name,
+  address, group and last connection; a click on a column header sorts, a second one reverses the direction. The
+  filter applies there too
+- **Several servers at once** (home page, "Select several"): mark them and connect together, put them into a group,
+  add or remove tags, delete
+- **Introduction instead of an empty page**: as long as there is no profile, the home page shows the first three
+  steps – create or import a server (with the buttons for it), connect, command palette
+- **Home page with a sidebar**: five entries – "Servers", "Snippets", "Keys & identities" (one page, switchable at the
+  top), "Tunnels" and "More", which expands "Synchronizations", "Known servers" and the "Overview"; the settings at the
+  bottom. The command palette leads straight to every page
+- **Groups within groups**: `Kunde/Projekt/Prod` as a profile's group yields folders on the home page – one level per
+  view, a click on the name goes deeper, breadcrumbs lead back
+- **Collapse and order groups**: a click on the heading collapses it (a small arrow shows its state); "Move up"/"Move
+  down", the group's color and sign in the context menu of the heading (right-click, Menu key, Shift+F10). A profile
+  changes group via "Move to group" or by dragging the tile onto a heading
+- Profiles with host, port, user, name, group, tags, favorite, key file; the editor is divided into three tabs
+  (Server, Sign-in, Route)
+- **Notes per server:** free text in the profile (purpose, contact person, maintenance window), visible on the "Server
+  details" page and findable via filter and command palette
+- **Identities**: create a user and key once (home page, "Keys & identities") and choose them in several profiles –
+  if the key changes, you change it in one place. They travel along with an export
+- **Operating system detected**: on the first connection the app remembers the server's system (Ubuntu, Debian,
+  Alpine, FreeBSD …) – from `/etc/os-release` over the file connection, otherwise from the server load; so it also
+  works on servers that allow no commands. Its logo appears in the square on the tile (unless the server has its own
+  sign), its name in the tooltip. If a server delivers no server load, the reason is under "Output"
+- Server list by groups on the home page; create, edit, **duplicate**, delete
+- **Order** selectable (the home page's "⋯" menu): as created, by name, most recently connected first (favorites
+  always in front)
+- Through **jump hosts** the terminal names the route when connecting ("This computer → bastion → web01"); if setting
+  up the connection fails, it says at which server
+- **Keep the connection alive**: how often a keepalive goes to the server and after how many unanswered ones the
+  connection counts as broken – in general in the settings and per server in the profile
+- **Terminal per server**: which terminal the app presents itself as (`TERM`, e.g. `vt100`), which character set the
+  server speaks (UTF-8, ISO-8859-1, ISO-8859-15, Windows-1252) and which environment variables it gets (`LANG` …) –
+  for old systems on which umlauts or colors otherwise arrive broken
+- **Import from `~/.ssh/config`**: `HostName`, `User`, `Port`, `IdentityFile`, `ProxyJump` (also several hops as a
+  chain, also written out as `user@host:port`), `ForwardAgent`; also `Include` and blocks with patterns (`Host *`);
+  choose what is imported; the file is only read. Plus `IdentitiesOnly`, `ServerAliveInterval`/`ServerAliveCountMax`
+  (keepalives), `LocalForward`/`RemoteForward`/`DynamicForward` (as tunnels that listen only for this computer),
+  `Compression`, `ConnectTimeout`, `AddressFamily`, `SetEnv` – and `Match` blocks by host, user and local user (a
+  `Match exec` never applies: the app starts nothing that is written in a file). Per server the dialog names **what
+  was not imported** (`ProxyCommand`, `Ciphers` …)
+- **"Offer only this key"** (in the profile, like `IdentitiesOnly`): no further keys from the agent – for agents and
+  password managers with many keys
+- **Profiles that follow `~/.ssh/config`** (checkbox on import or selection in a profile's editor): address, port,
+  user, key file, jump hosts and agent forwarding then come from the file – at startup, on saving and a few seconds
+  after the file (or an included one) changes, even while the app is running. In the editor these fields are locked.
+  If the profile has an identity, it determines user and key, the file only the rest. Name, group, color, notes and
+  everything else stay as they are in the profile. If the entry is missing from the file, the profile stays
+  unchanged; the link can be removed in the editor
+- **Import sessions** from PuTTY and WinSCP (the user's saved sessions) and from MobaXterm (its configuration or an
+  exported `.mxtsessions` file): name, host, port, user, folder and key file (also PuTTY's `.ppk`); choose what is
+  imported. Read-only, without passwords
+- **Sessions from other programs' files**: an `ssh_config` from anywhere (also the one Termius's command-line tool
+  writes with `termius export-ssh-config`), mRemoteNG (`confCons.xml`), Royal TS (`.rtsz`, unencrypted), SecureCRT
+  (session files or XML export), Remmina (`.remmina`) and Xshell (`.xsh`) – several files at once, SSH and Telnet,
+  with folders as groups and without passwords. Apart from MobaXterm and `ssh_config` built from the formats, not yet
+  tested with real files from these programs
+- **Generate and deploy keys**: a new Ed25519 key pair in `~/.ssh` (optionally with a passphrase), the public part is
+  added to `authorized_keys` on the connected server and the profile is switched to the key – what `ssh-keygen` and
+  `ssh-copy-id` otherwise do. Existing files stay untouched
+- **Manage keys**: a home page page with your own key files (what is in `~/.ssh` and what a profile or an identity
+  names) – type and length, fingerprint, comment, format, whether a passphrase protects it and who uses it, read
+  without the passphrase. **Change the passphrase**, set or remove it; the file keeps its format. **Convert** between
+  the OpenSSH and PuTTY formats (`.ppk`, version 3) as a new file next to it, with the same passphrase – the old one
+  stays. The public key can be copied
+- **"Forget saved password"** without deleting the profile
+- **Export and import**: profiles (including groups and jump hosts), saved commands and settings as a file, to take
+  them over on another computer – **without passwords**. Before the import the app shows what would be new and what
+  would be replaced, and you choose what is imported; a profile that already exists is replaced instead of
+  duplicated. Key paths in the user folder stay correct even with a different user name
 
-## Verbindung
+## Connection
 
-- **Schnellverbinden**: `benutzer@host` oder `benutzer@host:2222` in die Befehlspalette tippen und Enter – die
-  Sitzung geht auf, ohne dass es einen Server dazu gibt. Das Menü des Reiters und die Palette bieten an, einen
-  daraus zu machen („Diese Verbindung als Server speichern“); sonst ist er mit dem Tab wieder weg
-- **Start mit Ziel**: `NexusSSH.exe benutzer@host[:port]` auf der Kommandozeile oder ein Klick auf einen Link
-  `ssh://[benutzer@]host[:port]` öffnet eine Sitzung – nach einer Rückfrage, die das Ziel nennt (und sagt, ob es
-  ein gespeicherter Server ist). Ein Link nennt nur Benutzer, Host und Port, nie einen Befehl oder eine Option;
-  ohne Benutzer gilt der gespeicherte Server dazu, sonst wie bei `ssh` der Name des Kontos. Läuft die App schon,
-  bekommt sie das Ziel, statt eine zweite zu öffnen. Links mit NexusSSH zu öffnen ist eine Wahl beim Installieren
-  (von Haus aus aus)
-- **Sprungliste**: Ein Rechtsklick auf das Symbol in der Taskleiste zeigt die zuletzt verbundenen Server; ein Klick
-  verbindet
-- **Portweiterleitung (Tunnel)**, je Server und wie bei OpenSSH: **lokal** (`ssh -L` – ein Port auf diesem Rechner
-  führt zu einem Dienst hinter dem Server, etwa `localhost:5432` zur Datenbank dort), **entfernt** (`ssh -R` – ein
-  Port am Server führt zu diesem Rechner) und **dynamisch** (`ssh -D` – ein SOCKS-Proxy über den Server). Ein
-  Tunnel steht, solange eine Verbindung zu seinem Server steht. Die Seite „Tunnel“ der Startseite listet alle mit
-  Zustand und Schalter; die Seite „Server-Details“ zeigt die der aktiven Sitzung. Gelauscht wird nur für diesen Rechner –
-  für das ganze Netz nur auf ausdrücklichen Wunsch am Tunnel. Tunnel stehen nicht im Export
-- **X11-Forwarding**: grafische Programme des Servers erscheinen auf dem X-Server dieses Rechners (VcXsrv, Xming);
-  je Profil zu erlauben, nur für das Ziel und nie für einen Sprung-Server. Verlangt der X-Server selbst eine
-  Anmeldung (VcXsrv mit `-auth`), meldet die App die Programme mit dessen Geheimnis aus der `.Xauthority`
-  des Benutzers an
-- **Seriell** (COM-Anschluss, nur Windows): die Konsole eines Switches oder Mikrocontrollers im Terminal –
-  Schnittstelle und Geschwindigkeit im Profil, fest 8N1 ohne Flusskontrolle
-- **Telnet** für Geräte, die kein SSH können (Switches, alte Router): im Profil „Telnet statt SSH“. Unverschlüsselt
-  – anmelden muss man sich im Terminal selbst; Dateien, Auslastung und Sprung-Server gibt es dabei nicht
-- **Lokales Terminal**: eine Shell dieses Rechners in einem Tab – ohne Verbindung, aber sonst wie jede Sitzung
-  (geteilt, Suche, Farbschema, Tab umbenennen). Gestartet wird nur, was der Kern selbst
-  gefunden hat: unter Windows PowerShell 7, Windows PowerShell, Eingabeaufforderung, WSL (je Distribution) und
-  Git Bash, sonst die Anmelde-Shell und die Shells aus `/etc/shells`. Geöffnet wird es mit Strg+Umschalt+T, über
-  die Befehlspalette (ein Eintrag je gefundener Shell), „Lokales Terminal“ im Menü „⋯“ der Startseite oder als
-  gespeichertes Profil mit Shell und Startordner (fehlt der Ordner, beginnt die Shell im Benutzerordner, und ein
-  Hinweis sagt es). Welche Shell Strg+Umschalt+T öffnet, steht in den Einstellungen. Ein lokaler Tab hat keinen
-  Dateibrowser, keine Auslastung und keine Server-Details (die Snippets rechts gibt es); schließt man ihn,
-  endet auch alles, was die Shell gestartet hat. Lokale Terminals bleiben auf diesem Rechner: nicht im Export, und
-  ein Import übergeht sie
-- **Mosh** je SSH-Profil („Terminal über Mosh führen“): Das Terminal läuft über UDP und übersteht Funklöcher, einen
-  Wechsel des Netzes, ohne dass die Sitzung abreißt; Getipptes zeigt die App
-  schon an, bevor der Server geantwortet hat (sobald er in der Zeile ein Zeichen bestätigt hat; bei langsamer
-  Leitung oder im Funkloch unterstrichen, bis er es bestätigt – „Vorhersage beim Tippen“:
-  automatisch bei langsamer Leitung, immer oder nie). Angemeldet wird wie immer über SSH (Schlüssel, Agent,
-  Passwort, 2FA, Host-Schlüssel-Prüfung), danach startet die App `mosh-server` auf dem Server und verbindet sich mit
-  ihm über UDP; die UDP-Ports lassen sich im Profil festlegen (`60001:60010`). Steht kein `mosh-server`, keine
-  UTF-8-Locale oder kommt kein UDP-Paket durch (Firewall, NAT), läuft das Terminal binnen 15 s über SSH weiter,
-  und ein Hinweis nennt den Grund. Der Reiter trägt ein Zeichen für Mosh, und hört das Terminal nichts vom Server,
-  steht dort, seit wann. **Dateien, Auslastung und Tunnel** bleiben an der SSH-Verbindung: Reißt sie, läuft das
-  Terminal weiter, und sie verbinden sich von selbst neu, sobald der Server wieder antwortet (oder sofort mit
-  „Jetzt neu verbinden“) – im Ordner, in dem man war. Grenzen: nicht über einen Sprung-Server, kein Agent
-  Forwarding, kein X11, nur UTF-8, und das Terminal hat keinen Verlauf zum Zurückrollen (Mosh schickt nur den
-  Bildschirm). Gegenstelle ist das gewöhnliche `mosh-server` (geprüft mit 1.4.0)
-- SSH über `russh`: Host-Schlüssel-Prüfung, PTY, Shell, Größenänderung, Keepalive
-- Anmeldung in dieser Reihenfolge: Schlüsseldatei des Profils, SSH-Agent (OpenSSH-Agent von Windows, Pageant),
-  Standardschlüssel aus `~/.ssh`, Passwort, Fragen des Servers (2FA); verschlüsselte Schlüssel mit Passphrase
-- **Schlüssel in Bitwarden / Vaultwarden:** Hält der Agent den Schlüssel, den das Profil nennt, signiert der Agent –
-  zuerst und ohne Frage nach der Passphrase. Als Schlüsseldatei genügt dafür der öffentliche Teil (`….pub`), so
-  wie Bitwarden ihn ablegt; damit findet sich unter vielen Schlüsseln der richtige. Ohne Angabe
-  werden die ersten drei des Agenten angeboten; scheitert die Anmeldung und er hielt mehr, sagt ein Hinweis,
-  was zu tun ist. Ein gesperrter Agent hat gut eine Minute Zeit, sich entsperren zu lassen; bleibt er gesperrt
-  oder wird die Freigabe im Passwort-Manager abgelehnt, geht die Anmeldung mit dem Nächsten weiter, und ein
-  Hinweis nennt den Grund. Unterstützt und geprüft ist das mit Bitwarden – auch an einem selbst
-  gehosteten Tresor (Vaultwarden); andere Passwort-Manager sind nicht vorgesehen
-- **Sprung-Server** (wie `ProxyJump`): ein Profil verbindet über ein anderes, auch über mehrere hintereinander;
-  jeder Server wird einzeln geprüft und hat seine eigene Anmeldung
-- **Eine Verbindung für mehrere Sitzungen:** Geteilte Terminals, duplizierte Tabs und jeder weitere Tab zum selben
-  Server benutzen die stehende Verbindung mit – ohne neue Anmeldung; geht das nicht (Grenze des Servers),
-  verbindet die Sitzung selbst. Starten zwei Tabs zum selben Server zugleich, wartet der zweite auf die Anmeldung
-  des ersten
-- **Konten ohne Shell** (nur SFTP erlaubt, wie bei vielen Hostern; Shell `nologin`): Die Sitzung bleibt für
-  Dateien offen – Dateibrowser und Transfers gehen, im Terminal steht, was der Server gesagt hat
-- **Agent Forwarding** je Profil, standardmäßig aus; ein Sprung-Server bekommt den Agenten nie
-- Unbekannter Host-Schlüssel: Rückfrage mit Fingerabdruck. Geänderter Schlüssel: Warnung mit dem bisherigen und
-  dem neuen Fingerabdruck nebeneinander und der Stelle des alten Eintrags – steht er in der eigenen
-  `~/.ssh/known_hosts`, sagt die Rückfrage, welche Zeile man dort selbst entfernen müsste. Server aus
-  `~/.ssh/known_hosts` gelten als bekannt (die Datei wird nie geändert)
-- **Host-Zertifikate**: Steht in `known_hosts` eine Zertifizierungsstelle für den Server (`@cert-authority`), wird
-  ein Server, dessen Schlüssel sie unterschrieben hat, ohne Rückfrage angenommen – wie bei OpenSSH. Ein
-  Zertifikat, das nicht hält (abgelaufen, anderer Name, fremde Stelle), wird gemeldet, und es gilt die gewöhnliche
-  Rückfrage zum Schlüssel. Eine Stelle lässt sich auf der Startseite unter „Bekannte Server“ eintragen und wieder
-  entfernen; der Verbindungstest nennt einen so vertrauten Server. Ein widerrufener Schlüssel (`@revoked`) und
-  eine widerrufene Stelle gelten nie
-- Der **Banner** des Servers erscheint vor der Anmeldung im Terminal (als reiner Text)
-- Passwörter und Passphrasen nur in der Windows-Anmeldeinformationsverwaltung und nur auf Wunsch; nie in einer Datei
-- **Ein Schlüssel mit Passphrase wird nur einmal je Start entsperrt** (abschaltbar): Er bleibt im Speicher, bis die
-  App endet – nie auf der Platte; „Entsperrte Schlüssel vergessen“ in der Palette fragt beim nächsten Mal wieder
-- Sitzung überlebt ihre Verbindung: Tab und Terminal-Inhalt bleiben, „Erneut verbinden“ baut neu auf
-- **`exit` schließt den Tab:** Endet die Shell, nachdem darin getippt wurde (`exit`, Strg+D), geht der Tab zu.
-  Wirft der Server gleich nach dem Verbinden wieder hinaus, bleibt der Tab mit der Meldung stehen
-- **Automatisch neu verbinden** nach einem Abriss: mit wachsenden Pausen (2 s bis 60 s), höchstens acht Versuche;
-  nicht nach „Trennen“, `exit` oder gescheiterter Anmeldung. Abschaltbar. Der Reiter zeigt, was gerade geschieht
-  („2. Versuch in 8 s“) – auch wenn ein anderer Tab oder die Startseite vorn ist
-- **Verbindung je Profil einstellbar:** nur IPv4 oder nur IPv6, wie lange auf den Aufbau gewartet wird,
-  Komprimierung für langsame Leitungen, automatisches Wiederverbinden für diesen Server aus
-- **Ältere Verfahren erlauben** je Profil, für alte Geräte, die keine heutigen sprechen (SHA-1, CBC) – mit
-  Warnung, nie von selbst und nie aus einer Export-Datei
-- **Scheitert der Aufbau, steht da, woran es lag** – Name nicht auflösbar, Port zu, keine Antwort, kein Weg, kein
-  gemeinsames Verfahren – jeweils mit dem, was man versuchen kann
-- **Verbindungstest** im Profil-Dialog: löst den Namen auf, öffnet den Port, zeigt, als was sich der Dienst
-  vorstellt, den Host-Schlüssel (bekannt, unbekannt, geändert) und die angebotenen Anmeldeverfahren – ohne sich
-  anzumelden und ohne etwas zu speichern
-- **Antwortzeit und Traceroute** auf der Seite „Server-Details“: wie lange der Server zum Öffnen des Ports
-  braucht (gemessen nur auf Klick, nie von selbst), und der Weg
-  dorthin Station für Station im Reiter „Ausgabe“
-- **Verlauf der Verbindungen** (Reiter „Verlauf“): Server, Beginn, Dauer und wie sie endete – nur das, nichts aus
-  der Sitzung
-- **Bekannte Server** in den Einstellungen ansehen (Art des Schlüssels, Fingerabdruck) und einzeln vergessen
+- **Quick connect**: type `user@host` or `user@host:2222` into the command palette and press Enter – the session
+  opens without a server existing for it. The tab's menu and the command palette offer to make one from it ("Save
+  this connection as a server"); otherwise it is gone again with the tab
+- **Start with a target**: `NexusSSH.exe user@host[:port]` on the command line or a click on a link
+  `ssh://[user@]host[:port]` opens a session – after a confirmation that names the target (and says whether it is a
+  saved server). A link names only user, host and port, never a command or an option; without a user the matching
+  saved server applies, otherwise, as with `ssh`, the account name. If the app is already running, it receives the
+  target instead of opening a second one. Opening links with NexusSSH is a choice during installation (off by
+  default)
+- **Jump list**: a right-click on the icon in the taskbar shows the most recently connected servers; a click
+  connects
+- **Port forwarding (tunnels)**, per server and as with OpenSSH: **local** (`ssh -L` – a port on this computer leads
+  to a service behind the server, e.g. `localhost:5432` to the database there), **remote** (`ssh -R` – a port on the
+  server leads to this computer) and **dynamic** (`ssh -D` – a SOCKS proxy through the server). A tunnel is up as long
+  as a connection to its server is up. The home page's "Tunnels" page lists all of them with state and switch; the
+  "Server details" page shows those of the active session. Listening is only for this computer – for the whole
+  network only on explicit request on the tunnel. Tunnels are not part of the export
+- **X11 forwarding**: graphical programs on the server appear on this computer's X server (VcXsrv, Xming); to be
+  allowed per profile, only for the target and never for a jump host. If the X server itself requires authentication
+  (VcXsrv with `-auth`), the app signs the programs in with its secret from the user's `.Xauthority`
+- **Serial** (COM port, Windows only): the console of a switch or microcontroller in the terminal – port and speed in
+  the profile, fixed 8N1 without flow control
+- **Telnet** for devices that cannot do SSH (switches, old routers): "Telnet instead of SSH" in the profile.
+  Unencrypted – you have to sign in in the terminal yourself; files, server load and jump hosts are not available
+  with it
+- **Local terminal**: a shell of this computer in a tab – without a connection, but otherwise like any session
+  (split, search, color scheme, rename tab). Only what the core itself has found is started: on Windows PowerShell 7,
+  Windows PowerShell, Command Prompt, WSL (per distribution) and Git Bash, elsewhere the login shell and the shells
+  from `/etc/shells`. It opens with Ctrl+Shift+T, via the command palette (one entry per shell found), "Local
+  terminal" in the home page's "⋯" menu or as a saved profile with shell and start folder (if the folder is missing,
+  the shell starts in the user folder, and a notice says so). Which shell Ctrl+Shift+T opens is set in the settings.
+  A local tab has no file browser, no server load and no server details (the snippets on the right are there);
+  closing it also ends everything the shell started. Local terminals stay on this computer: not in the export, and
+  an import skips them
+- **Mosh** per SSH profile ("Run the terminal over Mosh"): the terminal runs over UDP and survives dead spots and a
+  change of network without the session dropping; the app shows what you type
+  before the server has answered (as soon as it has confirmed a character in the line; on a slow line or in a dead
+  spot underlined until it confirms it – "Typing prediction":
+  automatic on a slow line, always or never). Sign-in works as always over SSH (key, agent, password, 2FA, host key
+  check), then the app starts `mosh-server` on the server and connects to it over UDP; the UDP ports can be set in
+  the profile (`60001:60010`). If there is no `mosh-server`, no UTF-8 locale or no UDP packet gets through (firewall,
+  NAT), the terminal continues over SSH within 15 s, and a notice names the reason. The tab carries a Mosh sign, and
+  if the terminal hears nothing from the server, it shows since when. **Files, server load and tunnels** stay on the
+  SSH connection: if it breaks, the terminal keeps running, and they reconnect by themselves as soon as the server
+  answers again (or immediately with "Reconnect now") – in the folder you were in. Limits: not through a jump host,
+  no agent forwarding, no X11, UTF-8 only, and the terminal has no scrollback to scroll back through (Mosh sends only
+  the screen). The counterpart is the ordinary `mosh-server` (tested with 1.4.0)
+- SSH via `russh`: host key check, PTY, shell, resizing, keepalive
+- Sign-in in this order: the profile's key file, SSH agent (Windows OpenSSH agent, Pageant), default keys from
+  `~/.ssh`, password, server prompts (2FA); encrypted keys with a passphrase
+- **Keys in Bitwarden / Vaultwarden:** if the agent holds the key the profile names, the agent signs – first and
+  without asking for the passphrase. As the key file, the public part (`….pub`) is enough for this, the way Bitwarden
+  stores it; that way the right one is found among many keys. Without one specified,
+  the agent's first three are offered; if sign-in fails and it held more, a notice says
+  what to do. A locked agent has a good minute to get unlocked; if it stays locked
+  or the approval is declined in the password manager, sign-in continues with the next method, and a
+  notice names the reason. Supported and tested with Bitwarden – also with a self-hosted
+  vault (Vaultwarden); other password managers are not intended
+- **Jump hosts** (like `ProxyJump`): one profile connects through another, also through several in a row; every
+  server is checked individually and has its own sign-in
+- **One connection for several sessions:** split terminals, duplicated tabs and every further tab to the same server
+  share the existing connection – without a new sign-in; if that is not possible (the server's limit), the session
+  connects itself. If two tabs to the same server start at the same time, the second waits for the first one's
+  sign-in
+- **Accounts without a shell** (SFTP only, as with many hosting providers; shell `nologin`): the session stays open
+  for files – file browser and transfers work, the terminal shows what the server said
+- **Agent forwarding** per profile, off by default; a jump host never gets the agent
+- Unknown host key: confirmation with fingerprint. Changed key: warning with the previous and the new fingerprint side
+  by side and the location of the old entry – if it is in your own `~/.ssh/known_hosts`, the confirmation says which
+  line you would have to remove there yourself. Servers from `~/.ssh/known_hosts` count as known (the file is never
+  changed)
+- **Host certificates**: if `known_hosts` contains a certificate authority for the server (`@cert-authority`), a
+  server whose key it has signed is accepted without confirmation – as with OpenSSH. A certificate that does not hold
+  (expired, other name, foreign authority) is reported, and the usual confirmation for the key applies. An authority
+  can be added and removed again on the home page under "Known servers"; the connection test names a server trusted
+  this way. A revoked key (`@revoked`) and a revoked authority never apply
+- The server's **banner** appears in the terminal before sign-in (as plain text)
+- Passwords and passphrases only in the Windows Credential Manager and only on request; never in a file
+- **A key with a passphrase is unlocked only once per start** (can be turned off): it stays in memory until the app
+  ends – never on disk; "Forget unlocked keys" in the command palette asks again next time
+- A session outlives its connection: tab and terminal content stay, "Reconnect" sets it up again
+- **`exit` closes the tab:** if the shell ends after something was typed in it (`exit`, Ctrl+D), the tab closes. If
+  the server kicks you out right after connecting, the tab stays with the message
+- **Automatic reconnect** after a drop: with growing pauses (2 s to 60 s), at most eight attempts; not after
+  "Disconnect", `exit` or a failed sign-in. Can be turned off. The tab shows what is happening ("attempt 2 in 8 s") –
+  even when another tab or the home page is in front
+- **Connection adjustable per profile:** IPv4 only or IPv6 only, how long to wait for the connection to be set up,
+  compression for slow lines, automatic reconnect off for this server
+- **Allow older algorithms** per profile, for old devices that speak none of today's (SHA-1, CBC) – with a warning,
+  never by itself and never from an export file
+- **If setting up the connection fails, it says why** – name cannot be resolved, port closed, no answer, no route, no
+  common algorithm – each with what you can try
+- **Connection test** in the profile dialog: resolves the name, opens the port, shows how the service introduces
+  itself, the host key (known, unknown, changed) and the offered sign-in methods – without signing in and without
+  saving anything
+- **Response time and traceroute** on the "Server details" page: how long the server takes to open the port
+  (measured only on click, never by itself), and the route
+  there hop by hop in the "Output" tab
+- **Connection history** ("History" tab): server, start, duration and how it ended – only that, nothing from the
+  session
+- View **known servers** in the settings (key type, fingerprint) and forget them individually
 
 ## Terminal
 
-- **Tab umbenennen**; auf Wunsch steht am Reiter der Titel, den der Server setzt (vim, htop, tmux)
-- xterm.js: 256 Farben, 10 000 Zeilen Verlauf, Strg+C kopiert bei Markierung (sonst Abbruch), Strg+V fügt ein;
-  auch Text, den ein anderes Programm „tippt“ (Auto-Type eines Passwortmanagers, Texterweiterung, Fernsteuerung),
-  kommt richtig an
-- Tabs, je Server beliebig viele; Tab duplizieren; Wechsel mit Strg+Tab; **Tabs verschieben** durch Ziehen
-  mit der Maus oder mit Strg+Umschalt+Bild↑/Bild↓ – der verschobene Tab ist danach der aktive
-- **Geteiltes Terminal**: bis zu sechzehn Sitzungen in jeder Anordnung – „nebeneinander“ (Strg+Umschalt+E) und
-  „untereinander“ (Strg+Umschalt+O) teilen das aktive Terminal in der gewählten Richtung, auch innerhalb einer
-  Teilung und beliebig ineinander geschachtelt (ein breites Terminal links, rechts drei übereinander). Klick
-  wechselt das aktive Terminal; auch offene Tabs lassen sich dazustellen. Geteilt hat jedes Terminal eine
-  schmale Kopfzeile: ein Punkt für den Zustand der Verbindung, der Name der Sitzung, bei einem groß
-  geschalteten ein Zeichen davor und ein ×, das dieses Terminal aus der Teilung nimmt (sein Tab bleibt offen)
-  - **Trennlinien** lassen sich mit der Maus ziehen (jede für sich) oder, angeklickt, mit den Pfeiltasten
-    verschieben (Umschalt: größere Schritte, Esc zurück ins Terminal); ohne Maus wählt „Trennlinie mit den
-    Pfeiltasten verschieben“ in der Palette die neben dem aktiven Terminal. Ein Doppelklick darauf gibt allen
-    Teilen des Zweigs gleich viel Platz
-  - **Umstellen**: Die Kopfzeile eines Terminals auf eine der vier Kanten eines anderen ziehen – es steht dann
-    dort; der Rest ordnet sich neu, und kein Terminal verliert dabei seinen Verlauf
-  - **Groß schalten** (Strg+Umschalt+Z oder Doppelklick auf die Kopfzeile): ein Terminal bekommt vorübergehend die
-    ganze Fläche, die anderen laufen weiter; noch einmal umschalten holt sie zurück (wird nicht gespeichert)
-  - **Mit der Tastatur zum Nachbarn**: Strg+Umschalt+Pfeil (belegbar wie alle Kürzel) – nur, solange mehr als ein
-    Terminal zu sehen ist; sonst gehören die Tasten dem Programm im Terminal
-  - „Terminals gleich groß machen“ (Befehlspalette) verteilt den Platz gleichmäßig
-  - Anordnung und Größen bleiben erhalten, auch beim Neustart (Tabs wieder öffnen); eine ältere
-    Einstellungsdatei öffnet sich in der Anordnung, die sie hatte
-- **Flusskontrolle**: Sehr viel Ausgabe (`cat` einer großen Datei) bremst den Server, statt den Speicher zu füllen;
-  die anderen Sitzungen laufen ungestört weiter
-- **Suche im Terminal** (Strg+Umschalt+F): Fundstellen hervorgehoben, „3 von 12“, weiter/zurück,
-  Groß-/Kleinschreibung
-- **Suche über alle Terminals** im Reiter „Suche“: Trefferliste, Klick springt zur Zeile
-- **Verlauf speichern**: alles, was im Terminal steht, als Textdatei
-- **Ausgabe mitschreiben**: auf Befehl je Sitzung läuft die Ausgabe des Servers als lesbarer Text in eine Datei,
-  bis man es wieder ausschaltet; ein roter Punkt am Reiter zeigt es. Nie von selbst, nie das Getippte
-- **An mehrere Terminals zugleich tippen**: in einer geteilten Ansicht geht die Eingabe auf Wunsch an alle ihre
-  Terminals – dasselbe Kommando auf mehreren Servern
-- **Hinweis von Windows** (und blinkendes Taskleistensymbol), wenn im Hintergrund ein Transfer fertig wird oder
-  das Terminal die Glocke läutet; abschaltbar
-- **Meldungen aus dem Terminal**: Schickt ein Programm eine Meldung mit Text (OSC 9, OSC 777 – etwa am Ende eines
-  langen Befehls), markiert die App den Reiter und zeigt einen Hinweis von Windows, wenn das Fenster nicht vorn
-  ist – mit dem Namen des Servers davor, höchstens alle paar Sekunden (zusammen mit der Glocke); abschaltbar
-- **Eine Rückfrage im Hintergrund** (eine Sitzung verbindet von selbst neu und braucht das Passwort) lässt das
-  Symbol in der Taskleiste blinken; den Vordergrund nimmt sich die App dafür nicht
-- **Was die Glocke tut**, ist einstellbar: den Reiter markieren, einen Ton spielen, das Symbol in der Taskleiste
-  blinken lassen – jedes für sich, oder nichts davon
-- **Töne bei Fehlern und Ereignissen:** Server nicht zu erreichen, Anmeldung abgelehnt, Verbindung abgerissen,
-  Transfer gescheitert (von Haus aus an), auf Wunsch auch „verbunden“ und „Transfer fertig“ – jedes für sich
-  schaltbar, mit einem Knopf zum Probehören, auf Wunsch nur, wenn das Fenster nicht vorn ist. Gespielt werden
-  die Töne von Windows; derselbe Ton kommt höchstens alle paar Sekunden
-- **Laufende tmux- und screen-Sitzungen** des Servers finden und daran anhängen: auf Befehl über die Palette
-  oder, je Server gemerkt, gleich nach dem Verbinden (anbieten oder von selbst an dieselbe Sitzung)
-- **Steuermodus von tmux** (`tmux -CC`, ab tmux 2.1; geprüft mit 2.1, 2.6 und 3.7): Die Fenster einer tmux-Sitzung stehen als Tabs der App –
-  neue, umbenannte und beendete Fenster folgen von selbst. Einen dieser Tabs zu schließen hängt ab; die Sitzung
-  läuft auf dem Server weiter und übersteht einen Abriss der Verbindung. Die Bereiche eines Fensters stehen als
-  geteiltes Terminal, in jeder Anordnung bis zu sechzehn Bereichen (ein breiter links, vier rechts übereinander
-  …); bei mehr zeigt das Fenster seinen aktiven Bereich. Die Aufteilung gehört tmux – umstellen und groß schalten
-  geht dort nicht –, die Trennlinien dagegen lassen sich ziehen, und tmux bekommt die Größen der App. Jedes Fenster bringt seinen Verlauf
-  mit (bis 2000 Zeilen). „tmux: Neues Fenster“ in der Palette; „Tab umbenennen“ benennt das Fenster bei tmux um.
-  Bei sehr viel Ausgabe hält die App den Bereich an und zeichnet danach neu, und tmux bremst auch von sich aus,
-  wenn die Leitung nicht nachkommt (tmux ab 3.2)
-- **Gespeicherte Befehle** (Snippets): selbst angelegte Befehle, mit einem Klick in der Spalte rechts oder über
-  die Palette ins aktive Terminal getippt, auf Wunsch gleich mit Enter; verwaltet auf der Seite „Snippets“ der
-  Startseite. Jeder Befehl kann in einem **Ordner** stehen (eine Ebene; das Feld „Ordner“ schlägt die vorhandenen
-  vor, ein neuer Name legt einen an); ↑ ↓ bzw. Alt+Pfeil verschieben ihn in seinem Ordner, ein neuer landet im
-  Ordner des gewählten. Der Ordner wandert mit in den Export
-- **Farbschemata**: Black (Standard: Campbell auf reinem Schwarz), Campbell, One Half Dark, Dracula, Nord, Gruvbox Dark, Solarized Dark, Tango Dark
-- **Bilder im Terminal** (Sixel und das Protokoll von iTerm2; Einstellung, von Haus aus **aus**): für `img2sixel`,
-  `chafa`, `imgcat` oder die Vorschau in Dateimanagern. Die Bilddaten kommen vom Server – deshalb mit Warnung und
-  festen Grenzen für Größe und Speicher
-- **Bild hinter dem Terminal** (Einstellungen, von Haus aus keines – dann bleibt es beim Schwarz des Farbschemas):
-  PNG, JPEG, WebP oder BMP, mit einstellbarer Abdunklung, damit der Text lesbar bleibt
-- **Eigene Farbschemata importieren** (Einstellungen): aus einer Datei von iTerm2 (`.itermcolors`), Windows
-  Terminal (JSON) oder Xresources; sie stehen danach neben den mitgelieferten, auch in der Palette, und lassen
-  sich wieder entfernen
-- **Eigene Farbschemata** anlegen und ändern: zwanzig Farben mit Farbwähler und Vorschau; sie wandern im
-  Export mit. **Je Profil** lässt sich ein Schema festlegen – Produktion etwa immer mit dunkelrotem Hintergrund
-- Schriftgröße 8–32 (Strg +, Strg −, Strg 0, Strg+Mausrad); **Schrift wählbar** (Vorschläge oder jede installierte)
-- Wie PuTTY und MobaXterm: **Markieren kopiert, Rechtsklick fügt ein** (von Haus aus an, in den Einstellungen abschaltbar)
-- **Cursor und Abstände einstellbar:** Block, Strich oder Unterstrich, blinkend oder nicht; Zeilen- und
-  Zeichenabstand; Ligaturen der Schrift (`=>`, `!=`) an oder aus
-- **Eingefügter Text wird bereinigt** (abschaltbar): Steuerzeichen und unsichtbare Zeichen fallen weg, geschützte
-  Leerzeichen werden gewöhnliche, und der Zeilenumbruch am Ende entfällt – eine eingefügte Zeile läuft erst mit
-  Enter. Auf Wunsch werden Tabulatoren zu Leerzeichen
-- **Anklickbare Adressen und Pfade**: Strg+Klick öffnet eine Web-Adresse im Browser und zeigt einen Pfad im
-  Dateibrowser (Ordner öffnen, Datei auswählen)
-- **Vorschläge beim Tippen** aus den gespeicherten Befehlen: eine kleine Liste am Cursor, Tab übernimmt;
-  abschaltbar. Was getippt wird, bleibt dabei im Terminal und wird nirgends gespeichert
-- **Ergänzen beim Tippen**: Unterbefehle und Schalter von `git`, `docker`, `systemctl`, `apt`, `journalctl` und
-  `tar`, und hinter `cd`, `ls`, `cat`, `vim` … die Dateien und Ordner aus dem Verzeichnis der Shell (Namen mit
-  Leerzeichen kommen in Anführungszeichen). Die Pfeiltaste nach rechts übernimmt, Tab bleibt der Shell; beides
-  einzeln abschaltbar. Die Namen liest die App über die Dateiverbindung – verlässlich folgt das einer Shell, die
-  ihr Verzeichnis meldet (OSC 7), sonst gilt es bis zum ersten `cd`. Auch eine Ebene tiefer (`cat archiv/ne…`).
-  Dazu: schon das erste Wort einer Zeile aus den **Programmen des Servers**; die Adressen
-  der gespeicherten Server hinter `ssh` und `scp`. Auf Wunsch nimmt auch Tab eine Ergänzung an
-- **Wörter hervorheben** nach eigenen Regeln (Einstellungen): Text oder regulärer Ausdruck, je Regel eine von
-  sechs Farben des Farbschemas – etwa `ERROR` rot, `WARN` gelb, IP-Adressen cyan
-- Terminal leeren
+- **Rename tab**; optionally the tab shows the title the server sets (vim, htop, tmux)
+- xterm.js: 256 colors, 10,000 lines of scrollback, Ctrl+C copies when there is a selection (otherwise interrupts),
+  Ctrl+V pastes; text that another program "types" (a password manager's auto-type, text expansion, remote control)
+  also arrives correctly
+- Tabs, as many as you like per server; duplicate tab; switch with Ctrl+Tab; **move tabs** by dragging with the mouse
+  or with Ctrl+Shift+PgUp/PgDn – the moved tab is the active one afterwards
+- **Split terminal**: up to sixteen sessions in any arrangement – "side by side" (Ctrl+Shift+E) and "stacked"
+  (Ctrl+Shift+O) split the active terminal in the chosen direction, also within a split and nested any way you like
+  (one wide terminal on the left, three stacked on the right). A click switches the active terminal; open tabs can
+  also be added. When split, every terminal has a narrow header: a dot for the connection state, the session name, a
+  sign in front for a zoomed one and a × that takes this terminal out of the split (its tab stays open)
+  - **Dividers** can be dragged with the mouse (each on its own) or, once clicked, moved with the arrow keys (Shift:
+    larger steps, Esc back to the terminal); without a mouse, "Move the divider with the arrow keys" in the command
+    palette selects the one next to the active terminal. A double-click on it gives all parts of the branch equal
+    space
+  - **Rearrange**: drag a terminal's header onto one of the four edges of another – it then sits there; the rest
+    rearranges itself, and no terminal loses its scrollback in the process
+  - **Zoom** (Ctrl+Shift+Z or double-click on the header): one terminal temporarily gets the whole area, the others
+    keep running; toggling again brings them back (not saved)
+  - **To the neighbor with the keyboard**: Ctrl+Shift+Arrow (rebindable like all shortcuts) – only while more than
+    one terminal is visible; otherwise the keys belong to the program in the terminal
+  - "Make all terminals the same size" (command palette) distributes the space evenly
+  - Arrangement and sizes are kept, also across a restart (reopening tabs); an older settings file opens in the
+    arrangement it had
+- **Flow control**: a great deal of output (`cat` of a large file) slows the server down instead of filling memory;
+  the other sessions keep running undisturbed
+- **Search in the terminal** (Ctrl+Shift+F): matches highlighted, "3 of 12", next/previous, case
+  sensitivity
+- **Search across all terminals** in the "Search" tab: list of matches, a click jumps to the line
+- **Save scrollback**: everything in the terminal as a text file
+- **Log output**: on command, per session, the server's output goes into a file as readable text until you turn it
+  off again; a red dot on the tab shows it. Never by itself, never what is typed
+- **Type into several terminals at once**: in a split view the input optionally goes to all of its terminals – the
+  same command on several servers
+- **Windows notification** (and flashing taskbar icon) when a transfer finishes in the background or the terminal
+  rings the bell; can be turned off
+- **Messages from the terminal**: if a program sends a message with text (OSC 9, OSC 777 – e.g. at the end of a long
+  command), the app marks the tab and shows a Windows notification when the window is not in front – with the server
+  name before it, at most every few seconds (together with the bell); can be turned off
+- **A confirmation in the background** (a session reconnects by itself and needs the password) makes the taskbar icon
+  flash; the app does not take the foreground for it
+- **What the bell does** is configurable: mark the tab, play a sound, flash the taskbar icon – each on its own, or
+  none of them
+- **Sounds for errors and events:** server unreachable, sign-in rejected, connection dropped, transfer failed (on by
+  default), optionally also "connected" and "transfer finished" – each switchable on its own, with a button to listen,
+  optionally only when the window is not in front. The sounds played are those of Windows; the same sound comes at
+  most every few seconds
+- **Find running tmux and screen sessions** on the server and attach to them: on command via the command palette
+  or, remembered per server, right after connecting (offer, or attach to the same session automatically)
+- **tmux control mode** (`tmux -CC`, from tmux 2.1; tested with 2.1, 2.6 and 3.7): the windows of a tmux session
+  appear as tabs of the app – new, renamed and closed windows follow by themselves. Closing one of these tabs detaches;
+  the session keeps running on the server and survives a dropped connection. A window's panes appear as a split
+  terminal, in any arrangement of up to sixteen panes (one wide on the left, four stacked on the right …); with more,
+  the window shows its active pane. The layout belongs to tmux – rearranging and zooming are not available there –,
+  the dividers, however, can be dragged, and tmux gets the app's sizes. Every window brings its scrollback along
+  (up to 2000 lines). "tmux: New window" in the command palette; "Rename tab" renames the window in tmux.
+  With a great deal of output the app pauses the pane and redraws it afterwards, and tmux also slows down on its own
+  when the line cannot keep up (tmux 3.2 and later)
+- **Saved commands** (snippets): commands you create yourself, typed into the active terminal with one click in the
+  column on the right or via the command palette, optionally with Enter right away; managed on the home page's
+  "Snippets" page. Every command can sit in a **folder** (one level; the "Folder" field suggests the existing ones, a
+  new name creates one); ↑ ↓ or Alt+Arrow move it within its folder, a new one lands in the folder of the selected
+  one. The folder travels along into the export
+- **Color schemes**: Black (default: Campbell on pure black), Campbell, One Half Dark, Dracula, Nord, Gruvbox Dark,
+  Solarized Dark, Tango Dark
+- **Images in the terminal** (Sixel and the iTerm2 protocol; setting, **off** by default): for `img2sixel`, `chafa`,
+  `imgcat` or the preview in file managers. The image data comes from the server – hence the warning and fixed limits
+  for size and memory
+- **Image behind the terminal** (settings, none by default – then it stays with the color scheme's black): PNG, JPEG,
+  WebP or BMP, with adjustable dimming so the text stays readable
+- **Import your own color schemes** (settings): from an iTerm2 file (`.itermcolors`), Windows Terminal (JSON) or
+  Xresources; they then appear next to the bundled ones, in the command palette too, and can be removed
+  again
+- **Create and edit your own color schemes**: twenty colors with color picker and preview; they travel along in the
+  export. **Per profile** a scheme can be set – production, for example, always with a dark red background
+- Font size 8–32 (Ctrl +, Ctrl −, Ctrl 0, Ctrl+mouse wheel); **selectable font** (suggestions or any installed one)
+- Like PuTTY and MobaXterm: **selecting copies, right-click pastes** (on by default, can be turned off in the settings)
+- **Adjustable cursor and spacing:** block, bar or underline, blinking or not; line and character spacing; font
+  ligatures (`=>`, `!=`) on or off
+- **Pasted text is cleaned up** (can be turned off): control characters and invisible characters are dropped,
+  non-breaking spaces become ordinary ones, and the line break at the end is removed – a pasted line only runs with
+  Enter. Optionally tabs become spaces
+- **Clickable addresses and paths**: Ctrl+click opens a web address in the browser and shows a path in the file
+  browser (opens the folder, selects the file)
+- **Suggestions while typing** from the saved commands: a small list at the cursor, Tab accepts; can be turned off.
+  What you type stays in the terminal and is not stored anywhere
+- **Completion while typing**: subcommands and options of `git`, `docker`, `systemctl`, `apt`, `journalctl` and
+  `tar`, and after `cd`, `ls`, `cat`, `vim` … the files and folders from the shell's directory (names with spaces
+  come in quotes). The Right Arrow key accepts, Tab stays with the shell; both can be turned off individually. The app
+  reads the names over the file connection – this reliably follows a shell that reports its directory (OSC 7),
+  otherwise it holds until the first `cd`. One level deeper too (`cat archiv/ne…`).
+  Plus: even the first word of a line from the **server's programs**; the addresses
+  of the saved servers after `ssh` and `scp`. Optionally Tab also accepts a completion
+- **Highlight words** by your own rules (settings): text or regular expression, per rule one of six colors of the
+  color scheme – e.g. `ERROR` red, `WARN` yellow, IP addresses cyan
+- Clear terminal
 
-## Befehlspalette
+## Command palette
 
-- **Tastenkürzel selbst belegen** (Einstellungen): je Befehl ändern, entfernen oder zurücksetzen; die App sagt,
-  wenn ein Kürzel schon vergeben ist oder im Terminal dem Server gehört
-- **Übersicht aller Tastenkürzel** (Strg+F1 oder Palette): die Hilfe-Seite an der Stelle der Kürzel, so wie sie
-  gerade belegt sind; „Zum Drucken speichern …“ schreibt sie als schlichte HTML-Seite, die jeder Browser druckt
-- Suchfeld in der Titelleiste (Strg+Umschalt+P): Server verbinden, zu offenen Tabs wechseln, Befehle ausführen,
-  gespeicherte Befehle abschicken; `>` am Anfang zeigt nur Befehle
-- Befehle: Server hinzufügen, importieren, teilen, Teilung aufheben, Terminal vergrößern, zum Nachbarn wechseln, Terminals gleich groß machen, suchen, leeren, Verlauf speichern,
-  Schriftgröße, trennen, erneut verbinden, duplizieren, Tab schließen (Strg+Umschalt+W), nächster/voriger Tab, Tab
-  verschieben, Dateiliste aktualisieren, versteckte Dateien, gespeicherte Befehle verwalten, Bereiche
-  ein-/ausblenden, Farbschema wählen
-- Dieselben Befehle im Kontextmenü eines Tabs und, fürs Teilen, im Menü „Teilen“ der Titelleiste
+- **Define your own keyboard shortcuts** (Settings): change, remove or reset per command; the app tells you when a
+  shortcut is already taken or belongs to the server in the terminal
+- **Overview of all keyboard shortcuts** (Ctrl+F1 or command palette): the help page at the shortcuts section, as they
+  are currently assigned; "Save for printing…" writes them as a plain HTML page that any browser can print
+- Search box in the title bar (Ctrl+Shift+P): connect to servers, switch to open tabs, run commands, send saved
+  commands; a leading `>` shows commands only
+- Commands: add server, import, split, unsplit, enlarge terminal, move to neighbor, make terminals equal size, search,
+  clear, save history, font size, disconnect, reconnect, duplicate, close tab (Ctrl+Shift+W), next/previous tab, move
+  tab, refresh file list, hidden files, manage saved commands, show/hide panels, choose color scheme
+- The same commands in a tab's context menu and, for splitting, in the "Split" menu of the title bar
 
-## Dateien (SFTP)
+## Files (SFTP)
 
-- Dateibrowser für den Server des aktiven Tabs: Liste (Ordner zuerst, Namen natürlich sortiert – `datei-2` vor
-  `datei-10`), Navigation (hoch, zurück, vor), Links werden verfolgt; der Pfad steht immer als Feld da und lässt
-  sich eintippen (`~` = Startverzeichnis, relativ zum angezeigten Verzeichnis; Enter wechselt, Esc verwirft)
-- **Aufbau wie bei MobaXterm**: oben sechs Symbole ohne Text (hoch, neu laden, herunterladen, hochladen, neuer
-  Ordner, löschen) und das Menü **„Ansicht und mehr“** (zurück, vor, auf dem Server suchen, Lesezeichen, Ordner
-  hochladen, neue Datei, versteckte Dateien, Rechte, Datum, Baum, Sortierung, als root, Bereich ausblenden).
-  Das **Kontextmenü ist kurz** – Öffnen bzw. Bearbeiten, Herunterladen, Umbenennen, Löschen, Pfad kopieren,
-  Eigenschaften –, alles Übrige steht darin unter **„Mehr“** (Vorschau, Kopieren, Duplizieren, Ausschneiden,
-  zum Kopieren vormerken, Einfügen, mehrere umbenennen, rückgängig, Packen, Entpacken, Vergleichen, an anderen
-  Server senden, Verknüpfung anlegen, Belegung, Mitlesen, Abgleich, im Terminal öffnen, Pfad kopieren als). Keine
-  Funktion fiel dabei weg. Die Liste zeigt Name und Größe unter kleinen Spaltenköpfen (das Änderungsdatum steht
-  im Tooltip und in den Eigenschaften), unten die Zahl der Einträge
-- **„Terminal-Ordner folgen“** (Kästchen unter dem Pfad, je Tab, von Haus aus aus): Der Dateibrowser wechselt in
-  den Ordner, den die Shell meldet (OSC 7; fish von selbst, bash und zsh mit einer Zeile in der Konfiguration –
-  „Wie?“ daneben führt zur Hilfe). Die App tippt dafür nie etwas in die Shell; meldet sie nichts, ist das
-  Kästchen grau
-- **Auf dem Server suchen**: Suchfeld im Dateibereich, findet Namen unter dem angezeigten Ordner (auch ohne
-  Shell-Zugang, höchstens 500 Treffer); ein Klick auf einen Treffer wechselt in dessen Ordner und wählt ihn aus
-- **Liste filtern**: Strg+F in der Dateiliste (oder das Feld unten) – übrig bleibt, was den Text im Namen hat; in der Liste lostippen springt dagegen zum Namen, wie im Explorer;
-  Esc hebt den Filter auf, Enter öffnet den einzigen Treffer
-- **Dateien in zwei Spalten** (einschaltbar: Menü „Teilen“ der Titelleiste oder Befehl in der Palette): links
-  ein Ordner dieses Rechners, rechts der Server, beide in voller Breite an der Stelle des Terminals – das
-  weiterläuft und beim Zurückschalten wieder da ist. Links: Laufwerke, Brotkrumen, Pfad eintippen, sortiert wie die
-  Serverliste; neuer Ordner, Umbenennen (F2) und Löschen (Entf, in den Papierkorb) über Rechtsklick oder „…“.
-  Dazwischen: Auswahl hochladen, Auswahl hierher laden oder von einer Spalte in die andere ziehen; vor dem
-  Überschreiben wird gefragt. Ein Knopf gleicht die beiden angezeigten Ordner ab (Richtung wählen, Vorschau, dann
-  erst Übertragung). Der Schalter und der lokale Ordner bleiben über einen Neustart erhalten
-- **Lesezeichen für Ordner**, je Server: im Menü „Ansicht und mehr“ unter „Lesezeichen“ den angezeigten Ordner
-  merken und später mit einem Klick dorthin springen
-- **An anderen Server senden**: gewählte Dateien und Ordner in den Ordner, den eine andere Sitzung gerade zeigt –
-  direkt von Server zu Server, ohne Umweg über die Platte dieses Rechners; ein abgebrochener oder angehaltener
-  Versuch geht am Ziel weiter, statt von vorn zu beginnen
-- **Ordner abgleichen**: einen lokalen Ordner mit dem angezeigten vergleichen und zum oder vom Server nur
-  übertragen, was fehlt, anders groß oder älter ist – mit Vorschau, was geschähe, als ein Auftrag mit gemeinsamem
-  Fortschritt. Gelöscht wird am Ziel nur auf ausdrücklichen Wunsch
-- **Ausschlüsse**: Muster in den Einstellungen (`.git`, `node_modules`, `*.tmp`, auch Pfade wie `build/*.map`),
-  die beim Übertragen eines Ordners und beim Abgleich ausgelassen werden. Liegt im Ordner etwas davon, fragt die
-  App vor dem Transfer, was trotzdem mit soll – je Muster ein Kästchen, mit Zahl und Beispiel. Für einen
-  einzelnen Abgleich lassen sich die Muster im Dialog ändern
-- **Abgleich nach Inhalt**: auf Wunsch vergleicht der Abgleich Prüfsummen statt Größe und Uhrzeit
-- **Gemerkte Abgleiche**: ein Abgleich lässt sich unter einem Namen merken (lokaler Ordner, Ordner am Server,
-  Richtung, Vergleich, Ausschlüsse) und von der Startseite („Abgleiche“) oder der Befehlspalette mit einem Klick
-  erneut ausführen – über eine stehende Verbindung zum Server oder einen neuen Tab, mit der gewohnten Vorschau
-  davor
-- **Vorschau**: Textdateien und Bilder ansehen, ohne einen Editor zu starten
-- **Tempo und Restzeit** je Transfer, **alle anhalten** und später dort fortsetzen, **Obergrenze für die
-  Bandbreite** aller Transfers zusammen
-- **Warteschlange ordnen:** über das Menü einer Zeile einen wartenden Transfer früher, später oder als Nächstes
-  laufen lassen und einen einzelnen anhalten (fortsetzen mit „Wiederholen“)
-- **Größe eines Ordners** in den Eigenschaften, auf Klick vom Server ausgerechnet
-- **Packen und Entpacken auf dem Server** aus dem Kontextmenü (unter „Mehr“): die Auswahl als `.tar.gz`, ein Archiv (`tar`,
-  `zip`) in seinen Ordner – ohne etwas zu überschreiben; braucht ein Konto, das Befehle ausführen darf
-- **Ordnen auf dem Server**, ohne den Umweg über diesen Rechner: Ausschneiden, Kopieren und Einfügen zwischen
-  Ordnern (Strg+X/C/V), **Duplizieren** (Strg+D), **mehrere umbenennen** nach Muster mit Vorschau
-  (Suchen/Ersetzen, `{name}`, `{ext}`, laufende Nummer) und **Rückgängig** für die letzte Umbenennung oder
-  Verschiebung (Strg+Z). Liegt am Ziel schon etwas, wird gefragt
-- **Belegung des Datenträgers**: was unter einem Ordner wie viel Platz braucht, das Größte zuerst, zum
-  Hineingehen – „wo ist der Platz hin?“ (rechnet auf dem Server)
-- **Spaltenköpfe** in beiden Listen: ein Klick auf die Überschrift sortiert (nochmal klicken kehrt um), Rechtsklick
-  wählt die Spalten (Größe, Datum, Rechte, **Besitzer, Gruppe, Typ**), Ziehen am Rand ändert die Breite – Spalten
-  und Breiten bleiben je Liste erhalten. Ordner stehen immer vorn; auch die lokale Liste sortiert Namen wie der
-  Server (natürlich, ohne auf Groß und Klein zu achten – ein `ä` steht hinter dem `z`). Sortieren geht auch über
-  das Menü „Ansicht und mehr“ (in der lokalen Liste „…“)
-- **Tastatur wie im Explorer**, in der Serverliste und der lokalen: Lostippen springt zum Namen, Strg+A,
-  Umschalt+Pfeile, F2 (umbenennen), F5 (aktualisieren), Entf und Umschalt+Entf, Strg+L, Alt+D oder F4 (Pfad
-  eintippen), Rücktaste und Alt+Hoch (ein Ordner hinauf), Alt+Links/Rechts (zurück, vor), in der Serverliste
-  Alt+Eingabe (Eigenschaften)
-- **Pfad kopieren als …**: der Pfad als `sftp://benutzer@host/pfad`, als Ziel für `scp` (`benutzer@host:/pfad`, bei
-  anderem Port samt `-P`) oder bei FTP als `ftp://`- bzw. `ftps://`-Link – um jemandem zu sagen, wo die Datei
-  liegt. Steuerzeichen im Pfad kommen nie hindurch; Verdächtiges steht in einfachen Anführungszeichen. In der
-  lokalen Liste bleibt es der bloße Pfad
-- **Verknüpfungen**: Die Liste nennt, wohin ein symbolischer Link zeigt, und kennzeichnet Links ins Leere (auch für
-  Sprachausgaben); die Eigenschaften zeigen das Ziel ebenfalls. Über Befehle (Konten ohne SFTP) und auf Servern,
-  deren `readlink` scheitert (Synology DSM), steht kein Ziel da – dann bleibt es beim Symbol. Über FTP steht das Ziel da, wenn der Server es in seiner Liste nennt; ob es ins Leere zeigt, lässt sich dort nicht sagen
-- **„Neue Datei“** (Menü „Ansicht und mehr“), **„Verknüpfung anlegen“** (symbolischer Link), **„Pfad kopieren
-  als“** und **„Im Terminal öffnen“** (`cd` in den Ordner; die drei im Kontextmenü unter „Mehr“)
-- **Verzeichnisbaum** über der Liste (standardmäßig aus – der Browser ist eine einzelne Liste): klappt sich bis
-  zum angezeigten Ordner auf und markiert ihn, ein Klick wechselt dorthin, Unterordner werden erst beim Aufklappen
-  geladen. Ein- und ausblendbar (auch über die Palette), die Höhe lässt sich ziehen; ausgeblendet fragt er den
-  Server nichts
-- **Versteckte Dateien** ein- und ausblendbar
-- **Eigenschaften**: Größe, Zeit, Rechte (`-rw-r--r-- (644)`), Besitzer und Gruppe mit Namen; **Rechte, Besitzer
-  und Gruppe ändern** wie mit `chmod` und `chown` (Name oder Nummer) – bei einem Ordner auf Wunsch **für alles
-  darin**; Ordner bleiben dabei betretbar, Links werden nicht verfolgt
-- Neuer Ordner, Umbenennen (überschreibt nie), Löschen (Ordner samt Inhalt, mit Rückfrage)
-- **Datei bearbeiten** (Doppelklick, wie bei MobaXterm): holen, im eingestellten Editor öffnen, nach jedem
-  Speichern wieder hochladen
-- **Konflikt beim Bearbeiten**: Hat sich die Datei am Server geändert, seit sie geholt wurde, fragt die App vor
-  dem Hochladen, statt sie zu überschreiben
-- **Regeln beim Übertragen**: Gibt es am Ziel schon etwas mit demselben Namen, fragt die App einmal für alles –
-  überschreiben, überspringen, was gleich groß und nicht älter ist, nur Neueres übertragen, oder beide behalten
-  („Name (2)“). In Ordnern gilt die Wahl für jede Datei einzeln; sie lässt sich merken (Einstellungen). Das
-  gilt für Hochladen (auch per Ziehen aus dem Explorer), Herunterladen und „An anderen Server senden“
-- **Fortschritt im Symbol der Taskleiste**: ein Balken über alle laufenden Transfers zusammen, wandernd, solange
-  die Menge noch nicht bekannt ist, gelb, wenn alles angehalten ist
-- **Transfer-Protokoll** (Einstellungen, von Haus aus aus): Jeder beendete Transfer bekommt eine Zeile in einer
-  CSV-Datei im Datenordner – wann, Richtung, Server, Name, woher, wohin, wie viel, Ergebnis (fertig, gescheitert
-  mit Grund, abgebrochen, angehalten). Die Datei wird nur ergänzt; „Transfer-Protokoll anzeigen“ (auch in der
-  Palette) öffnet ihren Ordner. Getrennt wird mit dem Listentrennzeichen des Rechners (in Deutschland das
-  Semikolon), damit Excel die Datei beim Öffnen gleich in Spalten teilt
-- **Kopieren am Server auch ohne Shell**: Darf ein Konto nur SFTP (oder ist es FTP), kopiert die App über die
-  Dateiverbindung statt mit `cp`
-- **Zwei Dateien vergleichen** im eingestellten Vergleichsprogramm (WinMerge, Beyond Compare, VS Code …): zwei
-  Dateien des Servers, Server gegen lokale Datei, oder vorgemerkt auch zwischen zwei Servern
-- **Datei mitlesen** (`tail -f`) im unteren Bereich, ohne Terminal: mit Filter, Hervorhebung und Anhalten.
-  Wird die Datei rotiert (`app.log` → `app.log.1`, neue `app.log`), zeigt die Anzeige die neue weiter
-- **Betrachter** für Dateien des Servers als eigene Seite: Text mit Syntaxfarben, Hex-Ansicht, Bilder und PDF;
-  große Dateien werden in Stücken direkt vom Server gelesen
-- **Eingebauter Editor** für kleine Textdateien (UTF-8, bis 1 MiB): Strg+S speichert auf dem Server,
-  Zeilenenden und BOM bleiben; bei einer Änderung am Server inzwischen wird gefragt
-- **Dateibrowser als root** (`sudo`), je Sitzung und nur auf ausdrücklichen Wunsch: ansehen, bearbeiten und
-  übertragen mit den Rechten von root; deutlich gekennzeichnet, mit einem Klick zurück. Ein Passwort für `sudo`
-  wird nur gefragt, wenn der Server es verlangt, und nie gespeichert
-- **Dateien ohne SFTP**: Hat ein Server kein SFTP, erlaubt aber Befehle (Geräte, BusyBox), arbeitet der
-  Dateibrowser über Shell-Befehle weiter – langsamer, aber mit Auflisten, Bearbeiten und Übertragen
-- **Server unter Windows** (OpenSSH von Microsoft): Terminal mit `cmd.exe` oder PowerShell, Dateien über dessen
-  SFTP-Server. Der Kern erkennt den Server nach dem Verbinden und schickt seine Befehle dort als PowerShell:
-  **Auslastung** in der Zeile unten, auf „Server-Details“, in der Übersicht und für die Hinweise zu Schwellen (CPU samt
-  Kernen, Speicher, Auslagerung, Laufwerke, Netz mit Adressen, Datenträger, Laufzeit), im Dateibrowser
-  **Belegung, Kopieren und Verschieben am Server, Packen und Entpacken** (`.tar.gz` und ZIP, mit dem `tar` von
-  Windows) und der **Abgleich nach Inhalt**. Nur unter Linux und den BSDs gibt es Mitlesen, „als root“,
-  Protokolle und das Anhängen an tmux – das ist dort ausgeblendet. Legt ein Konto ohne
-  Adminrechte eine Verknüpfung an, sagt die Meldung, dass Windows das meist nur Administratoren erlaubt. Bei
-  einem Konto ohne Befehle ist alles ausgeblendet, was welche braucht; Kopieren und Duplizieren gehen dann über
-  die Dateiverbindung
-- **FTP/FTPS**: Ein Profil kann statt SSH einen FTP-Server meinen – nur Dateien, kein Terminal. Verschlüsselt
-  mit TLS, auch die Datenverbindungen; ein Zertifikat, das Windows nicht kennt, wird mit Fingerabdruck
-  nachgefragt, gemerkt und bei einer Änderung gemeldet. Unverschlüsseltes FTP gibt es nur auf ausdrücklichen
-  Wunsch im Profil, mit einer Warnung bei jedem Verbinden. Dateibrowser, Transfers samt Ordnern, Fortsetzen und
-  Bearbeiten arbeiten wie über SFTP. Geprüft gegen vsftpd, ProFTPD, Pure-FTPd und FileZilla Server, mit und
-  ohne TLS; hält ein Server die Stelle zum Fortsetzen nicht, merkt die App das und nimmt einen sicheren
-  Umweg. Ein Ordner
-  überträgt über FTP zwei Dateien zugleich (Server begrenzen die Zahl der Verbindungen). Was Befehle am Server
-  braucht (Packen, Kopieren am Server, Belegung, Mitlesen, als root), bietet der Dateibrowser dort
-  nicht an. Auch **implizites FTPS** (TLS vom ersten Byte an, meist Port 990) als Wahl im Profil. Lässt der
-  Server keine weitere Verbindung zu, steht das samt seinem Text unter „Probleme“. Für Server ohne passiven
-  Modus gibt es auf Wunsch den **aktiven Modus** (der Server baut die Datenverbindungen zu diesem Rechner auf).
-  Für alte Server, die Dateinamen nicht als UTF-8 schreiben, nennt das Profil die **Kodierung der Dateinamen**
-  (ISO-8859-1 oder Windows-1252) – dann stehen Umlaute richtig in der Liste und kommen beim Server richtig an
-- Upload und Download von Dateien und ganzen Ordnern (**„Ordner hochladen …“** oder per Ziehen aus dem
-  Explorer); der Ordnerdialog beginnt beim Ziel des letzten Downloads
-- **In den Explorer**: Dateien und ganze Ordner aus der Liste in ein Explorer-Fenster ziehen, oder **kopieren**
-  (Strg+C, Kontextmenü) und dort einfügen – beliebig groß, auch gemischt markiert. Geladen wird erst, wenn
-  abgelegt oder eingefügt ist: Der Explorer zeigt seinen Kopierdialog, die App den Transfer; „Abbrechen“ auf
-  einer der beiden Seiten beendet beides. Auch ein Browser nimmt die Dateien an. Beim Ziehen zeigt Windows ein
-  Bild (Datei- bzw. Ordnersymbol) und darunter, was beim Loslassen geschieht („Nach Downloads kopieren“)
-- **Viele kleine Dateien**: Bis zu acht Dateien eines Ordners sind zugleich unterwegs – 3.000 kleine Dateien
-  brauchen über eine Leitung mit 23 ms Laufzeit rund 45 s (`scp -r`: 300 s)
-- **Viele Ordner**: Auch das Erfassen eines Baums vor dem Download (und vor dem Ziehen in den Explorer) läuft
-  nebeneinander, 16 Verzeichnisse zugleich – 421 Verzeichnisse sind über dieselbe Leitung in 2,7 s erfasst statt
-  in 40 s
-- Transfer-Warteschlange: zwei gleichzeitig, Fortschritt mit Menge (bei lauter leeren Dateien nach Dateien:
-  „12 von 30 Dateien“), Abbrechen, **Wiederholen**, Erledigte entfernen;
-  ein Transfer läuft weiter, wenn sein Tab schließt, solange ein anderer Tab dieselbe Verbindung benutzt.
-  „Wiederholen“ nimmt eine Verbindung, die zum selben Server steht – auch nach „Erneut verbinden“ oder aus einem
-  anderen Tab
-- Antwortet das Dateisystem des Servers nicht mehr, holt sich der Dateibrowser einen **neuen Kanal** auf der
-  stehenden Verbindung, ohne neue Anmeldung
-- Downloads und Uploads neuer Dateien über eine Teil-Datei – nie eine halbe Datei unter dem richtigen Namen; ein
-  abgebrochener Upload räumt seine Teil-Datei auf dem Server weg
-- **Ein abgebrochener Upload geht weiter, wo er aufgehört hat**: „Wiederholen“ schickt bei einer einzelnen Datei
-  nur noch den Rest – nach einem Abbruch von Hand wie nach einer abgerissenen Verbindung, bei einer vorhandenen
-  Datei wie bei einer neuen (deren Teil-Datei dann noch auf dem Server liegt). Vorher wird geprüft, dass die
-  Datei hier unverändert ist und dass auf dem Server wirklich ihr Anfang liegt; sonst beginnt der Upload von
-  vorn
-- **Ein Ordner wird nicht noch einmal ganz übertragen**: „Wiederholen“ überspringt in beiden Richtungen die
-  Dateien, die der Versuch davor vollständig übertragen hat, und setzt die fort, die unterwegs waren – jeweils
-  nur, wenn die Quelle seither dieselbe ist (Größe und Änderungszeit) und am Ziel noch liegt, was dort ankam
-- **Ein abgebrochener Download geht weiter** – ob die Verbindung riss oder man ihn selbst abgebrochen hat: Seine
-  Teil-Datei bleibt liegen, und „Wiederholen“ lädt nur den Rest, solange die Datei auf dem Server dieselbe ist.
-  Nimmt man ihn aus der Liste („Fertige entfernen“), verschwindet die Teil-Datei damit
-- Die Zeile im Transfer Center nennt, wie viel vom Versuch davor schon da war („… – 142 MB vom Versuch davor“)
-- **Das übersteht einen Neustart**: Gescheiterte und abgebrochene Transfers stehen nach dem nächsten Start
-  wieder in der Liste, und „Wiederholen“ setzt fort wie vorher. Was beim Schließen der App noch lief, hält sie
-  an und zeigt es danach als unterbrochen – es geht dort weiter, wo es stand. Downloads zum Bearbeiten und zum
-  Ziehen in andere Programme bleiben draußen
-- **Auch nach einem Absturz** (der App oder von Windows) geht ein Download weiter: Seine Teil-Datei wird
-  unterwegs regelmäßig fest auf die Platte geschrieben, und „Wiederholen“ macht an der letzten sicheren Stelle
-  weiter; Ordner überspringen, was schon vollständig war. Entfernt man die Zeile, verschwindet die Teil-Datei.
-  Ein Upload geht nach einem Absturz ebenso weiter – an der Stelle, die der Server hat und die der Kern unterwegs
-  mitgeschrieben hat, nach demselben Vergleich wie sonst
-- Reißt die Verbindung unter einem Transfer ab, steht er als gescheitert da (mit dem Grund), nicht als
-  abgebrochen; schließt man dagegen den Tab, ist er abgebrochen
-- Schutz vor Dateinamen des Servers, die den Zielordner verlassen würden; Dateien vom Server werden nie ausgeführt
-- **Namen, die Windows nicht kennt** (`backup-12:00.tar`, Maildir, `CON`), kommen unter einem Ersatznamen an
-  (`backup-12_00.tar`, `_CON`) statt gar nicht; fallen zwei Namen eines Ordners hier zusammen (`Makefile` und
-  `makefile`), bekommt der zweite eine Nummer. Eine bearbeitete Datei geht unter ihrem echten Namen zurück
-- Namen mit Zeilenumbruch, Tabulator oder umgekehrter Schreibrichtung werden entschärft angezeigt (␊, ␉)
-- **Pipes, Geräte und Sockets** sind als solche zu erkennen und werden nie geöffnet – das Öffnen einer Named Pipe
-  hielte den Dateibrowser der Sitzung an
-- Scheitert ein Transfer, steht der Grund als Satz da („Zugriff verweigert.“) statt als Fehlercode
+- File browser for the server of the active tab: list (folders first, names sorted naturally – `datei-2` before
+  `datei-10`), navigation (up, back, forward), links are followed; the path is always shown as a field and can be
+  typed in (`~` = home directory, relative to the displayed directory; Enter switches, Esc discards)
+- **Layout like MobaXterm**: at the top six icons without text (up, reload, download, upload, new folder, delete) and
+  the **"View and more"** menu (back, forward, search on the server, bookmarks, upload folder, new file, hidden files,
+  permissions, date, tree, sorting, as root, hide panel). The **context menu is short** – open or edit, download,
+  rename, delete, copy path, properties –, everything else is in it under **"More"** (preview, copy, duplicate, cut,
+  mark for copying, paste, rename several, undo, pack, unpack, compare, send to another server, create link, disk
+  usage, follow, sync, open in terminal, copy path as). No function was lost in the process. The list shows name and
+  size under small column headers (the modified date is in the tooltip and the properties), the number of entries at
+  the bottom
+- **"Follow the terminal folder"** (checkbox below the path, per tab, off by default): the file browser moves to the
+  folder the shell reports (OSC 7; fish by itself, bash and zsh with one line in the configuration – "How?" next to it
+  leads to the help). The app never types anything into the shell for this; if the shell reports nothing, the
+  checkbox is gray
+- **Search on the server**: search box in the file panel, finds names below the displayed folder (even without shell
+  access, at most 500 hits); clicking a hit switches to its folder and selects it
+- **Filter the list**: Ctrl+F in the file list (or the field at the bottom) – what remains is whatever has the text in
+  its name; typing in the list, by contrast, jumps to the name, as in Explorer; Esc clears the filter, Enter opens the
+  only hit
+- **Files in two columns** (can be switched on: "Split" menu in the title bar or command in the command palette): on
+  the left a folder on this computer, on the right the server, both at full width in place of the terminal – which
+  keeps running and is back when you switch back. Left: drives, breadcrumbs, typing a path, sorted like the server
+  list; new folder, rename (F2) and delete (Del, to the Recycle Bin) via right-click or "…". In between: upload the
+  selection, download the selection here, or drag from one column to the other; you are asked before anything is
+  overwritten. A button syncs the two displayed folders (choose direction, preview, only then transfer). The switch
+  and the local folder survive a restart
+- **Bookmarks for folders**, per server: in the "View and more" menu under "Bookmarks", remember the displayed folder
+  and later jump there with one click
+- **Send to another server**: selected files and folders into the folder another session is currently showing –
+  directly from server to server, without a detour via this computer's disk; a canceled or paused attempt continues
+  at the destination instead of starting over
+- **Sync folders**: compare a local folder with the displayed one and transfer to or from the server only what is
+  missing, differs in size or is older – with a preview of what would happen, as one job with shared progress.
+  Deletion at the destination happens only on explicit request
+- **Exclusions**: patterns in the settings (`.git`, `node_modules`, `*.tmp`, also paths like `build/*.map`) that are
+  skipped when transferring a folder and when syncing. If the folder contains any of them, the app asks before the
+  transfer what should go along anyway – one checkbox per pattern, with count and example. For a single sync the
+  patterns can be changed in the dialog
+- **Sync by content**: on request, sync compares checksums instead of size and time
+- **Saved syncs**: a sync can be saved under a name (local folder, folder on the server, direction, comparison,
+  exclusions) and run again with one click from the home page ("Synchronizations") or the command palette – over an
+  existing connection to the server or a new tab, with the usual preview first
+- **Preview**: view text files and images without starting an editor
+- **Speed and remaining time** per transfer, **pause all** and resume later where they were, **bandwidth limit** for
+  all transfers together
+- **Order the queue:** via a row's menu, let a waiting transfer run earlier, later or next, and pause a single one
+  (resume with "Retry")
+- **Size of a folder** in the properties, calculated by the server on click
+- **Pack and unpack on the server** from the context menu (under "More"): the selection as `.tar.gz`, an archive
+  (`tar`, `zip`) into its folder – without overwriting anything; needs an account that may run commands
+- **Organize on the server**, without the detour via this computer: cut, copy and paste between folders
+  (Ctrl+X/C/V), **duplicate** (Ctrl+D), **rename several** by pattern with preview (search/replace, `{name}`, `{ext}`,
+  sequential number) and **undo** for the last rename or move (Ctrl+Z). If something already exists at the
+  destination, you are asked
+- **Disk usage**: what takes how much space below a folder, largest first, to drill into – "where did the space go?"
+  (calculated on the server)
+- **Column headers** in both lists: clicking the header sorts (clicking again reverses), right-click chooses the
+  columns (size, date, permissions, **owner, group, type**), dragging the edge changes the width – columns and widths
+  are kept per list. Folders always come first; the local list also sorts names like the server (naturally,
+  ignoring case – an `ä` comes after the `z`). Sorting also works via the "View and more" menu ("…" in the local
+  list)
+- **Keyboard like in Explorer**, in the server list and the local one: typing jumps to the name, Ctrl+A,
+  Shift+Arrows, F2 (rename), F5 (refresh), Del and Shift+Del, Ctrl+L, Alt+D or F4 (type a path), Backspace and
+  Alt+Up (one folder up), Alt+Left/Right (back, forward), in the server list Alt+Enter (properties)
+- **Copy path as…**: the path as `sftp://benutzer@host/pfad`, as a target for `scp` (`benutzer@host:/pfad`, with a
+  different port including `-P`) or, for FTP, as an `ftp://` or `ftps://` link – to tell someone where the file is.
+  Control characters in the path never get through; anything suspicious is put in single quotes. In the local list it
+  stays the bare path
+- **Links**: the list names where a symbolic link points and marks links to nowhere (also for screen readers); the
+  properties show the target as well. Via commands (accounts without SFTP) and on servers whose `readlink` fails
+  (Synology DSM), no target is shown – then only the icon remains. Over FTP the target is shown if the server names it
+  in its listing; whether it points to nowhere cannot be told there
+- **"New file"** ("View and more" menu), **"Create link"** (symbolic link), **"Copy path as"** and **"Open in
+  terminal"** (`cd` into the folder; the three in the context menu under "More")
+- **Directory tree** above the list (off by default – the browser is a single list): expands down to the displayed
+  folder and marks it, a click switches there, subfolders are only loaded when expanded. Can be shown and hidden (also
+  via the command palette), its height can be dragged; when hidden it asks the server nothing
+- **Hidden files** can be shown and hidden
+- **Properties**: size, time, permissions (`-rw-r--r-- (644)`), owner and group with names; **change permissions,
+  owner and group** like with `chmod` and `chown` (name or number) – for a folder, on request, **for everything in
+  it**; folders stay enterable, links are not followed
+- New folder, rename (never overwrites), delete (folders including contents, with a confirmation prompt)
+- **Edit a file** (double-click, as in MobaXterm): fetch, open in the configured editor, upload again after every
+  save
+- **Conflict when editing**: if the file on the server has changed since it was fetched, the app asks before
+  uploading instead of overwriting it
+- **Transfer rules**: if something with the same name already exists at the destination, the app asks once for
+  everything – overwrite, skip what is the same size and not older, transfer only newer, or keep both ("name (2)"). In
+  folders the choice applies to each file individually; it can be remembered (Settings). This applies to uploading
+  (also by dragging from Explorer), downloading and "Send to another server"
+- **Progress in the taskbar icon**: one bar across all running transfers together, moving while the amount is not
+  yet known, yellow when everything is paused
+- **Transfer log** (Settings, off by default): every finished transfer gets a line in a CSV file in the data folder –
+  when, direction, server, name, from where, to where, how much, result (done, failed with reason, canceled, paused).
+  The file is only appended to; "Show transfer log" (also in the command palette) opens its folder. Fields are
+  separated with the computer's list separator (in Germany the semicolon), so Excel splits the file into columns
+  right away when opening it
+- **Copying on the server even without a shell**: if an account may only use SFTP (or it is FTP), the app copies via
+  the file connection instead of with `cp`
+- **Compare two files** in the configured diff tool (WinMerge, Beyond Compare, VS Code …): two files on the server,
+  server against local file, or, when marked, also between two servers
+- **Follow a file** (`tail -f`) in the bottom panel, without a terminal: with filter, highlighting and pause. If the
+  file is rotated (`app.log` → `app.log.1`, new `app.log`), the view keeps showing the new one
+- **Viewer** for files on the server as a separate page: text with syntax colors, hex view, images and PDF; large
+  files are read in chunks directly from the server
+- **Built-in editor** for small text files (UTF-8, up to 1 MiB): Ctrl+S saves on the server, line endings and BOM are
+  kept; if the file has changed on the server in the meantime, you are asked
+- **File browser as root** (`sudo`), per session and only on explicit request: view, edit and transfer with root's
+  permissions; clearly marked, back with one click. A password for `sudo` is only asked for if the server requires
+  it, and never stored
+- **Files without SFTP**: if a server has no SFTP but allows commands (devices, BusyBox), the file browser keeps
+  working via shell commands – slower, but with listing, editing and transferring
+- **Servers on Windows** (Microsoft's OpenSSH): terminal with `cmd.exe` or PowerShell, files via its SFTP server. The
+  core detects the server after connecting and sends its commands there as PowerShell: **server load** in the bottom
+  row, on "Server details", in the overview and for threshold alerts (CPU including cores, memory, swap, drives,
+  network with addresses, disks, uptime), in the file browser **disk usage, copying and moving on the server, packing
+  and unpacking** (`.tar.gz` and ZIP, with Windows' `tar`) and **sync by content**. Following, "as root", logs and
+  attaching to tmux exist only on Linux and the BSDs – they are hidden there. If an account without admin rights
+  creates a link, the message says that Windows usually allows this only for administrators. For an account without
+  commands, everything that needs them is hidden; copying and duplicating then go via the file connection
+- **FTP/FTPS**: a profile can point to an FTP server instead of SSH – files only, no terminal. Encrypted with TLS,
+  including the data connections; a certificate Windows does not know is confirmed by fingerprint, remembered and
+  reported if it changes. Unencrypted FTP is only available on explicit request in the profile, with a warning on
+  every connect. File browser, transfers including folders, resuming and editing work as over SFTP. Tested against
+  vsftpd, ProFTPD, Pure-FTPd and FileZilla Server, with and without TLS; if a server does not keep the resume
+  position, the app notices and takes a safe detour. A folder
+  transfers two files at once over FTP (servers limit the number of connections). What needs commands on the server
+  (packing, copying on the server, disk usage, following, as root) is not offered by the file browser
+  there. Also **implicit FTPS** (TLS from the first byte, usually port 990) as an option in the profile. If the
+  server allows no further connection, this is shown with its text under "Problems". For servers without passive
+  mode there is, on request, **active mode** (the server opens the data connections to this computer).
+  For old servers that do not write file names as UTF-8, the profile names the **file name encoding**
+  (ISO-8859-1 or Windows-1252) – then umlauts appear correctly in the list and arrive correctly at the server
+- Upload and download of files and whole folders (**"Upload folder…"** or by dragging from Explorer); the folder
+  dialog starts at the destination of the last download
+- **Into Explorer**: drag files and whole folders from the list into an Explorer window, or **copy** them (Ctrl+C,
+  context menu) and paste them there – any size, even mixed selections. Loading only starts once dropped or pasted:
+  Explorer shows its copy dialog, the app the transfer; "Cancel" on either side ends both. A browser accepts the
+  files too. While dragging, Windows shows an image (file or folder icon) and below it what happens on release
+  ("Copy to Downloads")
+- **Many small files**: up to eight files of a folder are in flight at once – 3,000 small files take about 45 s over
+  a line with 23 ms latency (`scp -r`: 300 s)
+- **Many folders**: scanning a tree before the download (and before dragging into Explorer) also runs in parallel,
+  16 directories at once – 421 directories are scanned over the same line in 2.7 s instead of
+  40 s
+- Transfer queue: two at once, progress by amount (for nothing but empty files, by files: "12 of 30 files"), cancel,
+  **retry**, remove finished;
+  a transfer keeps running when its tab closes, as long as another tab uses the same connection.
+  "Retry" uses a connection that is open to the same server – even after "Reconnect" or from another
+  tab
+- If the server's file system stops responding, the file browser gets a **new channel** on the existing connection,
+  without logging in again
+- Downloads and uploads of new files go through a partial file – never half a file under the right name; a canceled
+  upload cleans up its partial file on the server
+- **A canceled upload continues where it stopped**: "Retry" sends only the rest for a single file – after a manual
+  cancel as well as after a dropped connection, for an existing file as well as for a new one (whose partial file is
+  then still on the server). Beforehand it checks that the file here is unchanged and that its beginning really is on
+  the server; otherwise the upload starts over
+- **A folder is not transferred in full again**: in both directions, "Retry" skips the files the previous attempt
+  transferred completely and continues those that were in flight – in each case only if the source is the same since
+  then (size and modification time) and what arrived at the destination is still there
+- **A canceled download continues** – whether the connection dropped or you canceled it yourself: its partial file
+  stays, and "Retry" loads only the rest, as long as the file on the server is the same. If you remove it from the
+  list ("Remove finished"), the partial file goes with it
+- The row in the Transfer Center says how much was already there from the previous attempt ("… – 142 MB from the
+  previous attempt")
+- **This survives a restart**: failed and canceled transfers are back in the list after the next start, and "Retry"
+  continues as before. Whatever was still running when the app was closed is paused and afterwards shown as
+  interrupted – it continues where it stood. Downloads for editing and for dragging into other programs are left out
+- **Even after a crash** (of the app or of Windows) a download continues: its partial file is regularly flushed to
+  disk along the way, and "Retry" resumes at the last safe point; folders skip what was already complete. If you
+  remove the row, the partial file goes away. An upload continues after a crash as well – at the point the server has
+  and the core recorded along the way, after the same comparison as otherwise
+- If the connection drops during a transfer, it is shown as failed (with the reason), not as canceled; if you close
+  the tab instead, it is canceled
+- Protection against server file names that would leave the destination folder; files from the server are never run
+- **Names Windows does not allow** (`backup-12:00.tar`, Maildir, `CON`) arrive under a substitute name
+  (`backup-12_00.tar`, `_CON`) instead of not at all; if two names in a folder collide here (`Makefile` and
+  `makefile`), the second gets a number. An edited file goes back under its real name
+- Names with line breaks, tabs or reversed writing direction are shown defused (␊, ␉)
+- **Pipes, devices and sockets** are recognizable as such and are never opened – opening a named pipe would stall the
+  session's file browser
+- If a transfer fails, the reason is shown as a sentence ("Permission denied.") instead of an error code
 
-## Auslastung und Server-Details
+## Server load and server details
 
-- **Auslastung in der Zeile unten** (wie „Remote monitoring“ bei MobaXterm, von Haus aus an): CPU und RAM mit
-  Balken, Netz, Datenträger, Benutzer und Laufzeit des Servers im aktiven Tab. Das Kästchen „Überwachung“ davor
-  schaltet die Messung ab (auch in den Einstellungen und per Palette); nur für SSH, nicht in „Nur das Terminal“
-- **Seite „Server-Details“** („Details“ in der Zeile unten oder Palette): alles Weitere über den Server der
-  aktiven Sitzung, als Seite über den Bereichen; sie schließt mit Esc, dem ×, oder wenn ein anderer Tab oder die
-  Startseite vorn ist. Dazu Adresse, Gruppe, Notizen, die Tunnel dieser Verbindung mit Schalter, die
-  Antwortzeit (nur auf Klick), Traceroute, „Verlauf anzeigen“ und der Weg zu den Protokollen
-- Gemessen wird für Linux-, FreeBSD- und OpenBSD-Server, nur solange die Zeile unten mit eingeschalteter
-  Überwachung oder die Seite „Server-Details“ den aktiven Tab zeigt. Verstummt die Messung (etwa ein hängendes
-  Laufwerk auf dem Server), sagt die App das und versucht es nach wachsenden Pausen von selbst neu
-- **Jeder Kern einzeln** als Balken (Linux, FreeBSD) und **woraus die Auslastung besteht**: Benutzer, System,
-  Warten auf E/A, gestohlen
-- **Netz je Schnittstelle**: jede Netzwerkkarte mit ihrem Durchsatz und ihren Adressen (IPv4
-  und IPv6, zum Markieren und Kopieren); Enden virtueller Leitungen ohne eigene Adresse bleiben aus
-- **Durchsatz der Datenträger** (Linux, FreeBSD, OpenBSD): gelesene und geschriebene Bytes je Sekunde
-  über alle Platten zusammen, wie beschäftigt die meistbeschäftigte ist, der Verlauf als Kurve – und bei mehreren
-  Platten jede einzeln. OpenBSD nennt Lesen und Schreiben nur zusammen; so steht es dann auch da
-- **Alle Dateisysteme** mit Einhängepunkt, Belegung und Inodes; der Balken wird gelb ab 90 % und rot ab 95 % –
-  auch, wenn nur die Inodes ausgehen. Dateisysteme im Speicher, snap-Abbilder und Docker-Schichten bleiben aus
-- **Protokolle ansehen** (Palette: „Protokolle des Servers ansehen“): eine Seite mit dem Journal von systemd –
-  nach Zeitraum, Schwere und Einheit – oder den letzten Zeilen einer Datei unter `/var/log` (auch rotierte
-  `.gz`). Ein Feld filtert das Gelesene nach Text; Fehler stehen rot, Warnungen gelb; die gezeigten oder
-  markierten Zeilen lassen sich kopieren. Ohne Journal (BusyBox, BSD) bleiben die Dateien
-- **Mehr über das System**: Modell des Rechners, Prozessor und Zahl der Kerne, Art der Virtualisierung, Uhrzeit
-  und Zeitzone des Servers – und wie weit seine Uhr von der eigenen abweicht
-- **Übersicht aller offenen Sitzungen** (Startseite → „Übersicht“ oder Palette): je Sitzung eine Zeile mit CPU,
-  Arbeitsspeicher, Datenträger und Last; ein Klick öffnet die Sitzung. Für alle gemessen wird nur, solange die
-  Seite zu sehen ist
-- **Hinweise zu Schwellen** (auf Wunsch, in den Einstellungen): meldet für offene Sitzungen, wenn ein
-  Dateisystem, der Arbeitsspeicher oder die Last je Kern über dem eingestellten Wert liegen – einmal je
-  Überschreitung, unter „Probleme“ und als Hinweis von Windows
-- **Nur das Terminal** (F11 oder Palette): Titelleiste, Dateibrowser, Snippets, unterer Bereich und die Zeile
-  unten weichen, das Fenster füllt den Bildschirm; dieselbe Taste holt alles zurück
-- Server ohne `/proc` und ohne diese Zähler oder ohne erlaubte Befehle: Hinweis statt Werten
+- **Server load in the bottom row** (like "Remote monitoring" in MobaXterm, on by default): CPU and RAM with bars,
+  network, disks, users and uptime of the server in the active tab. The "Monitoring" checkbox in front of it turns
+  measuring off (also in the settings and via the command palette); SSH only, not in "Terminal only"
+- **"Server details" page** ("Details" in the bottom row or command palette): everything else about the server of the
+  active session, as a page above the panels; it closes with Esc, the ×, or when another tab or the home page is in
+  front. Plus address, group, notes, this connection's tunnels with a switch, the response time (only on click),
+  traceroute, "Show history" and the way to the logs
+- Measured for Linux, FreeBSD and OpenBSD servers, only while the bottom row with monitoring switched on or the
+  "Server details" page is showing the active tab. If measuring goes silent (say, a hanging drive on the server), the
+  app says so and retries on its own after growing pauses
+- **Each core separately** as a bar (Linux, FreeBSD) and **what the load consists of**: user, system, I/O wait, stolen
+- **Network per interface**: each network card with its throughput and its addresses (IPv4
+  and IPv6, to select and copy); ends of virtual links without their own address are left out
+- **Disk throughput** (Linux, FreeBSD, OpenBSD): bytes read and written per second
+  across all disks together, how busy the busiest one is, the history as a curve – and with several
+  disks, each one separately. OpenBSD reports reading and writing only combined; that is how it is shown then
+- **All file systems** with mount point, usage and inodes; the bar turns yellow from 90 % and red from 95 % – also
+  when only the inodes run out. In-memory file systems, snap images and Docker layers are left out
+- **View logs** (command palette: "View the server's logs"): a page with the systemd journal – by time range,
+  severity and unit – or the last lines of a file under `/var/log` (including rotated `.gz`). A field filters what was
+  read by text; errors are red, warnings yellow; the shown or selected lines can be copied. Without a journal
+  (BusyBox, BSD) the files remain
+- **More about the system**: computer model, processor and number of cores, kind of virtualization, time and time zone
+  of the server – and how far its clock deviates from your own
+- **Overview of all open sessions** (home page → "Overview" or command palette): one row per session with CPU,
+  memory, disks and load; a click opens the session. All of them are measured only while the page is
+  visible
+- **Threshold alerts** (on request, in the settings): reports for open sessions when a file system, memory or the
+  load per core is above the configured value – once per crossing, under "Problems" and as a Windows
+  notification
+- **Terminal only** (F11 or command palette): title bar, file browser, snippets, bottom panel and the bottom row give
+  way, the window fills the screen; the same key brings everything back
+- Servers without `/proc` and without these counters, or without permitted commands: a notice instead of values
 
-## Unterer Bereich
+## Bottom panel
 
-- Bei einer neuen Installation zu; „Transfers n“ und „Probleme n“ in der Zeile unten blenden ihn mit dem
-  passenden Reiter ein und wieder aus, die Palette mit „Unteren Bereich ein-/ausblenden“
-- **Ausgabe**: Protokoll der App
-- **Transfers**: alle Up- und Downloads
-- **Probleme**: Warnungen und Fehler (gescheiterte Verbindungen und Transfers, Hinweise des Kerns), mit Zähler im Reiter
-- **Suche**: Treffer aus dem Verlauf aller Terminals
+- Closed on a new installation; "Transfers n" and "Problems n" in the bottom row show and hide it with the matching
+  tab, the command palette with "Toggle bottom panel"
+- **Output**: the app's log
+- **Transfers**: all uploads and downloads
+- **Problems**: warnings and errors (failed connections and transfers, notices from the core), with a counter in the
+  tab
+- **Search**: hits from the history of all terminals
 
-## KI-Zugriff (MCP)
+## AI access (MCP)
 
-Programme wie Claude Code können über MCP die Verbindungen der App benutzen, etwa um einen Fehler auf einem Server zu
-suchen. Schlüssel und Passwörter bekommen sie nie.
+Programs like Claude Code can use the app's connections via MCP, for example to track down an error on a server. They
+never get keys or passwords.
 
-- **Von Haus aus aus**: Einschalten und Server freigeben unter Einstellungen → KI-Zugriff. Dort steht auch die Zeile
-  zum Einrichten in Claude Code. Beides gilt nur auf diesem Rechner und steht nicht im Export
-- **Nur freigegebene Server**: Andere sieht ein KI-Programm gar nicht, auch nicht unter „Ausgabe“. Zeigt ein Profil
-  später auf ein anderes Ziel, endet seine Freigabe. Lokale Terminals, Telnet und serielle Verbindungen sind nie
-  erreichbar
-- **Lesen**: Liste der Server, „Ausgabe“ und „Probleme“ der App, Verzeichnisse, Textdateien, das Journal und
-  Protokolldateien, die Auslastung
-- **Verbinden**: Ein KI-Programm kann zu einem freigegebenen Server verbinden. Das geschieht in einem Tab im
-  Hintergrund; Rückfragen nach Passwort oder Host-Schlüssel kommen wie immer zu dir
-- **Befehle nur nach Rückfrage**: Jeder Befehl steht vollständig im Dialog, „Ablehnen“ ist vorbelegt. Ohne Antwort
-  binnen zwei Minuten gilt er als abgelehnt
-- **Sichtbar im Terminal**: Der Befehl wird in die Shell der Sitzung getippt, du siehst ihn samt Ausgabe, und `cd` und
-  Variablen bleiben erhalten. Eine angefangene Zeile geht dabei verloren. Fragt `sudo` nach dem Passwort, tippst du es
-  selbst, das KI-Programm sieht es nicht. Belegt ein Programm den ganzen Bildschirm (vim, htop, less, tmux), wird nichts
-  getippt und der Befehl abgelehnt. Enter drückt die App erst, wenn die Shell genau die freigegebene Zeile zeigt: Liest
-  sie die Tasten anders, etwa im vi-Befehlsmodus oder an einer Passwortfrage, läuft nichts. Andere laufende Programme,
-  etwa `tail -f`, erkennt die App nicht: Der Text landete dort, deshalb die Rückfrage. Überschreitet ein Befehl seine
-  Frist, läuft er im Terminal weiter
-- **Eigener Kanal, wo Tippen nicht geht**: bei fish und csh, Windows-Servern (Befehle sind dort PowerShell), Mosh,
-  einem anderen Zeichensatz als UTF-8, dem Steuermodus von tmux und Befehlen mit Steuerzeichen. Die Rückfrage sagt, welcher
-  Weg es ist
-- **Sichtbar**: Jeder Aufruf steht unter „Ausgabe“, und der Reiter trägt eine Marke, solange dort gearbeitet wird
-- **Grenzen**: Was ein KI-Programm liest, geht an dessen Anbieter. Text von Servern kann eine KI zu etwas verleiten,
-  deshalb die Rückfragen. Jedes Programm unter deinem Windows-Konto erreicht den Zugang, solange er eingeschaltet ist
+- **Off by default**: switch it on and release servers under Settings → AI access. The line for setting it up in
+  Claude Code is there too. Both apply only on this computer and are not in the export
+- **Released servers only**: an AI program does not see others at all, not even under "Output". If a profile later
+  points to a different target, its release ends. Local terminals, Telnet and serial connections are never
+  reachable
+- **Read**: list of servers, the app's "Output" and "Problems", directories, text files, the journal and
+  log files, the server load
+- **Connect**: an AI program can connect to a released server. This happens in a tab in the
+  background; prompts for a password or host key come to you as always
+- **Commands only after a confirmation prompt**: every command is shown in full in the dialog, "Decline" is the
+  default. Without an answer within two minutes it counts as declined
+- **Visible in the terminal**: the command is typed into the session's shell, you see it along with its output, and
+  `cd` and variables are kept. A partly typed line is lost in the process. If `sudo` asks for the password, you type
+  it yourself; the AI program does not see it. If a program occupies the whole screen (vim, htop, less, tmux), nothing
+  is typed and the command is declined. The app presses Enter only once the shell shows exactly the approved line: if
+  it reads the keys differently, say in vi command mode or at a password prompt, nothing runs. The app does not
+  recognize other running programs, such as `tail -f`: the text would land there, hence the confirmation prompt. If a
+  command exceeds its time limit, it keeps running in the terminal
+- **Separate channel where typing does not work**: with fish and csh, Windows servers (commands there are
+  PowerShell), Mosh, a character set other than UTF-8, tmux control mode and commands with control characters. The
+  confirmation prompt says which way it is
+- **Visible**: every call is listed under "Output", and the tab carries a badge while work is going on there
+- **Limits**: what an AI program reads goes to its provider. Text from servers can lead an AI astray,
+  hence the confirmation prompts. Any program under your Windows account can reach the access while it is switched on
 
-## Unter der Haube
+## Under the hood
 
-- Rust-Kern als DLL, C#-Oberfläche in WinUI 3; alles Plattformfreie liegt außerhalb des WinUI-Projekts, damit eine
-  Linux-Version möglich bleibt
-- C#- und Rust-Tests (viele gegen den Testserver im selben Prozess, auch über Sprung-Server und mit einem
-  SSH-Agenten); dazu lässt sich die veröffentlichte AOT-Fassung im Selbsttest starten
-- Zufallstests der Eingänge von außen (ssh-config, Telnet, Antwort von `mosh-server`, Auslastung, Listen von `ls` und FTP, Import-Formate,
-  Nachrichten der Terminal-Seite) bei jedem Testlauf, dazu Ziele für `cargo fuzz`
-- Diagnosepaket für einen Fehlerbericht: Versionen, Protokoll, Ausgabe und Einstellungen als ZIP – Namen von
-  Servern, Benutzern und Gruppen, Adressen und Pfade sind darin ersetzt oder weggelassen
-- Auswahl mit Formatierung kopieren (Text, HTML und RTF mit Farben und Schrift) oder als eine Zeile, beides aus
-  der Befehlspalette
-- Hilfe-Seite mit den wichtigsten Handgriffen, allen Tastenkürzeln und dem, was die Version neu kann – nach einem
-  Update öffnet sie sich einmal von selbst
-- Rückfrage vor dem Beenden, solange Sitzungen verbunden sind oder Transfers laufen (abstellbar)
-- Ausführliches Protokoll für eine Verbindung auf Wunsch: was ausgehandelt und welche Anmeldung versucht wurde –
-  ohne Geheimnisse
-- Server-Details: Auslagerung und Aufteilung des Speichers; Verlauf von CPU und Arbeitsspeicher über die ganze
-  Sitzung mit wählbarem Zeitraum und Export als CSV
-- Beim Start prüft die App, ob im Datenordner außer dem Benutzer und den Verwaltern des Rechners noch andere
-  schreiben dürfen, und nennt sie unter „Probleme“
-- Ein Verzeichnis, das über eine Million Einträge nennt, wird nicht weiter gelesen
-- Feste Läufe gegen die veröffentlichte Fassung: Selbsttest mit echter Verbindung samt Transfer und Tempo des
-  Terminals (`tools/self-test.ps1 -TestServer …`), Startzeit und Speicher gegen Obergrenzen
-  (`tools/measure-start.ps1`, `tools/budgets.json`), Bedienung über UI Automation (`tools/ui-test.ps1`)
-- `nexus-testserver`: SSH-Server mit nachgespielter Shell, SFTP, Weiterleitung, Banner und vorgespielter Auslastung
-- Mosh über die eingecheckte Bibliothek `backend/mosh-client` ([`mosh-client-rs`](https://github.com/wandcs/mosh-client-rs),
-  MIT oder Apache-2.0); was gegenüber dem Original geändert ist, steht mit Begründung und Test in
-  `backend/mosh-client/PATCHES.md`
-- `NexusSSH.exe --demo`: Beispieldaten ohne Netz – drei Server-Tabs und sechs Snippets, wie auf den Bildern der
-  Oberfläche; `--demo-full`: die ausführlicheren Beispieldaten, mit denen die Prüfläufe arbeiten
-- CI: Linux (Rust und die plattformfreien C#-Tests) und Windows (ganze Solution)
+- Rust core as a DLL, C# UI in WinUI 3; everything platform-independent lives outside the WinUI project, so that a
+  Linux version remains possible
+- C# and Rust tests (many against the test server in the same process, also via jump hosts and with an
+  SSH agent); in addition, the published AOT build can be started in a self-test
+- Fuzz tests of the inputs from outside (ssh-config, Telnet, the reply of `mosh-server`, server load, `ls` and FTP
+  listings, import formats, messages from the terminal page) on every test run, plus targets for `cargo fuzz`
+- Diagnostic package for a bug report: versions, log, output and settings as a ZIP – names of
+  servers, users and groups, addresses and paths are replaced or left out
+- Copy the selection with formatting (text, HTML and RTF with colors and font) or as a single line, both from
+  the command palette
+- Help page with the most important moves, all keyboard shortcuts and what is new in the version – after an
+  update it opens once by itself
+- Confirmation prompt before quitting while sessions are connected or transfers are running (can be turned off)
+- Verbose log for a connection on request: what was negotiated and which login was tried –
+  without secrets
+- Server details: swap and memory breakdown; history of CPU and memory over the whole
+  session with a selectable time range and export as CSV
+- At startup the app checks whether anyone besides the user and the computer's administrators may write to the data
+  folder, and names them under "Problems"
+- A directory that reports more than a million entries is not read any further
+- Fixed runs against the published build: self-test with a real connection including a transfer and the terminal's
+  speed (`tools/self-test.ps1 -TestServer …`), startup time and memory against upper limits
+  (`tools/measure-start.ps1`, `tools/budgets.json`), operation via UI Automation (`tools/ui-test.ps1`)
+- `nexus-testserver`: SSH server with a simulated shell, SFTP, forwarding, banner and simulated server load
+- Mosh via the checked-in library `backend/mosh-client`
+  ([`mosh-client-rs`](https://github.com/wandcs/mosh-client-rs), MIT or Apache-2.0); what was changed compared to the
+  original is listed with reasons and tests in `backend/mosh-client/PATCHES.md`
+- `NexusSSH.exe --demo`: sample data without a network – three server tabs and six snippets, as in the screenshots of
+  the UI; `--demo-full`: the more detailed sample data the test runs work with
+- CI: Linux (Rust and the platform-independent C# tests) and Windows (whole solution)
 
-## Noch nicht
+## Not yet
 
-Docker, Kubernetes, Plugins, AI-Assistent (Phase 4); ein Befehlsverlauf der App
-(bewusst nicht, siehe `docs/architecture.md` §6 – dafür gibt es die gespeicherten Befehle);
-automatische Synchronisierung zwischen Installationen (von Hand geht es über Export und Import).
+Docker, Kubernetes, plugins, AI assistant (Phase 4); a command history in the app
+(deliberately not, see `docs/architecture.md` §6 – that is what the saved commands are for);
+automatic synchronization between installations (manually it works via export and import).

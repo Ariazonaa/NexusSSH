@@ -145,7 +145,7 @@ jobs:
             ''
             '- **NexusSSH-Setup**: installer per user, no admin rights needed'
             ''
-            "What the app can do: [FEATURES.md](https://github.com/$env:GITHUB_REPOSITORY/blob/$tag/FEATURES.md) (German). NexusSSH needs the WebView2 runtime (part of Windows 11)."
+            "What the app can do: [FEATURES.md](https://github.com/$env:GITHUB_REPOSITORY/blob/$tag/FEATURES.md). NexusSSH needs the WebView2 runtime (part of Windows 11)."
             ''
             'SHA-256:'
             $fence

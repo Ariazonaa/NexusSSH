@@ -1,6 +1,6 @@
 # Changelog
 
-Newest version first. For everything NexusSSH can do, see [FEATURES.md](FEATURES.md) (German).
+Newest version first. For everything NexusSSH can do, see [FEATURES.md](FEATURES.md).
 
 ## 0.1.1 – 2026-11-08
 

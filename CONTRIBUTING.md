@@ -13,7 +13,7 @@ dotnet format NexusSSH.slnx --verify-no-changes
 If you touched the Rust core, also run `cargo test`, `cargo clippy -- -D warnings` and `cargo fmt --check` for
 `backend/Cargo.toml` (see the README for the full commands).
 
-Code comments and the documentation in `docs/` and `FEATURES.md` are German, identifiers and commit messages are
+Code comments and the documentation in `docs/` are German; `FEATURES.md`, `CHANGELOG.md`, identifiers and commit messages are
 English ([Conventional Commits](https://www.conventionalcommits.org/)). A pull request in English is fine.
 
 ## Translations
