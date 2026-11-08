@@ -17,7 +17,7 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <Deterministic>true</Deterministic>
     <Product>NexusSSH</Product>
-    <Version>0.1.1</Version>
+    <Version>0.2.0</Version>
 
     <!-- Gemeinsame Windows-Zielplattform für alle Projekte, die WinRT-APIs nutzen -->
     <NexusWindowsTargetFramework>net10.0-windows10.0.26100.0</NexusWindowsTargetFramework>

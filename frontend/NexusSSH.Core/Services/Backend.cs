@@ -368,11 +368,26 @@ public interface IUserPrompts
     Task<bool> ConfirmAsync(string title, string text, string confirm) => Task.FromResult(false);
 
     /// <summary>
-    /// Fragt, ob ein Befehl eines KI-Programms laufen darf, und zeigt ihn vollständig; <paramref name="inTerminal"/> sagt,
-    /// ob er in ein Terminal getippt wird. Wer nicht fragen kann, antwortet mit „nein“; fällt
-    /// <paramref name="cancellation"/>, schließt die Frage.
+    /// Fragt, ob ein Befehl eines KI-Programms laufen darf, und zeigt ihn vollständig samt der Zeit, die bleibt. Wer nicht
+    /// fragen kann, antwortet mit „nein“; fällt <paramref name="cancellation"/>, schließt die Frage.
     /// </summary>
-    Task<bool> ConfirmCommandAsync(string server, string command, bool inTerminal, CancellationToken cancellation) => Task.FromResult(false);
+    Task<CommandAnswer> ConfirmCommandAsync(CommandQuestion question, CancellationToken cancellation) => Task.FromResult(CommandAnswer.Decline);
+}
+
+/// <summary>
+/// Die Frage nach einem Befehl eines KI-Programms. <see cref="InTerminal"/> sagt, ob er in ein Terminal getippt wird;
+/// bis <see cref="Until"/> steht die Frage, danach gilt sie als abgelehnt.
+/// </summary>
+public sealed record CommandQuestion(string Server, string Command, bool InTerminal, DateTimeOffset Until);
+
+/// <summary>Die Antwort auf <see cref="CommandQuestion"/>. Vorgabe und jedes „nicht geantwortet“ ist <see cref="Decline"/>.</summary>
+public enum CommandAnswer
+{
+    Decline,
+    Run,
+
+    /// <summary>Läuft jetzt und künftig ohne Rückfrage – genau dieser Text auf genau diesem Server.</summary>
+    Always,
 }
 
 /// <summary>

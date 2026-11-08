@@ -43,16 +43,23 @@ internal sealed class FakePrompts : IUserPrompts
     /// <summary>Ob die letzte Frage sagte, dass in ein Terminal getippt wird.</summary>
     public bool InTerminal { get; private set; }
 
+    /// <summary>Mit <see cref="AnswerCommand"/>: „Immer erlauben“ statt „Ausführen“.</summary>
+    public bool AlwaysAllow { get; set; }
+
+    /// <summary>Bis wann die letzte Frage stand.</summary>
+    public DateTimeOffset Until { get; private set; }
+
     /// <summary>Läuft, während nach einem Befehl gefragt wird.</summary>
     public Action? Asking { get; set; }
 
-    public async Task<bool> ConfirmCommandAsync(string server, string command, bool inTerminal, CancellationToken cancellation)
+    public async Task<CommandAnswer> ConfirmCommandAsync(CommandQuestion question, CancellationToken cancellation)
     {
-        Commands.Add((server, command));
-        InTerminal = inTerminal;
+        Commands.Add((question.Server, question.Command));
+        InTerminal = question.InTerminal;
+        Until = question.Until;
         Asking?.Invoke();
         await WaitAsync(cancellation);
-        return AnswerCommand;
+        return !AnswerCommand ? CommandAnswer.Decline : AlwaysAllow ? CommandAnswer.Always : CommandAnswer.Run;
     }
 
     public Task<bool> ConfirmAsync(string title, string text, string confirm)

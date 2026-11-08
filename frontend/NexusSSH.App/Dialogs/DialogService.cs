@@ -424,9 +424,10 @@ public sealed partial class DialogService(Func<XamlRoot?> xamlRoot) : IUserPromp
     /// <summary>
     /// Fragt, ob ein Befehl eines KI-Programms laufen darf. Der Befehl steht ganz da, jedes Zeichen sichtbar – auch
     /// eines, das in einem Terminal etwas verbergen würde. Vorgabe ist „Ablehnen“; schließt die Frage ohne Antwort, heißt
-    /// das „nein“. Die Frist läuft außerhalb des Threads der Oberfläche, deshalb der Umweg über die Warteschlange.
+    /// das „nein“. Die Frist läuft außerhalb des Threads der Oberfläche, deshalb der Umweg über die Warteschlange. Was von
+    /// ihr bleibt, steht am Knopf „Ablehnen“ und als Balken; „Immer erlauben“ gibt genau diesen Text frei.
     /// </summary>
-    public async Task<bool> ConfirmCommandAsync(string server, string command, bool inTerminal, CancellationToken cancellation)
+    public async Task<CommandAnswer> ConfirmCommandAsync(CommandQuestion question, CancellationToken cancellation)
     {
         var queue = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
         using var closing = new CancellationTokenSource();
@@ -439,39 +440,70 @@ public sealed partial class DialogService(Func<XamlRoot?> xamlRoot) : IUserPromp
             }
         }));
 
+        var total = Math.Max(1, (question.Until - DateTimeOffset.UtcNow).TotalSeconds);
+        var left = new ProgressBar { Maximum = total, Value = total };
+        AutomationProperties.SetName(left, L.Get("McpCommandTimeLeft"));
         var dialog = new ContentDialog
         {
-            Title = L.Get("McpCommandTitle", server),
+            Title = L.Get("McpCommandTitle", question.Server),
             Content = new StackPanel
             {
                 Spacing = 8,
                 MaxWidth = 460,
                 Children =
                 {
-                    new TextBlock { Text = L.Get(inTerminal ? "McpCommandHintTerminal" : "McpCommandHint"), TextWrapping = TextWrapping.Wrap },
+                    new TextBlock { Text = L.Get(question.InTerminal ? "McpCommandHintTerminal" : "McpCommandHint"), TextWrapping = TextWrapping.Wrap },
                     new TextBlock
                     {
-                        Text = string.Join('\n', command.Split('\n').Select(Format.Visible)),
+                        Text = string.Join('\n', question.Command.Split('\n').Select(Format.Visible)),
                         TextWrapping = TextWrapping.Wrap,
                         IsTextSelectionEnabled = true,
                         FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Cascadia Mono, Consolas"),
                     },
+                    new TextBlock
+                    {
+                        Text = L.Get("McpCommandAlwaysHint"),
+                        TextWrapping = TextWrapping.Wrap,
+                        Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+                    },
+                    left,
                 },
             },
             PrimaryButtonText = L.Get("McpCommandRun"),
-            CloseButtonText = L.Get("McpCommandDecline"),
+            SecondaryButtonText = L.Get("McpCommandAlways"),
             DefaultButton = ContentDialogButton.Close,
         };
+
+        // Die Frist selbst hält der Aufrufer; hier wird nur gezeigt, was von ihr bleibt.
+        void Tick()
+        {
+            var remaining = question.Until - DateTimeOffset.UtcNow;
+            remaining = remaining < TimeSpan.Zero ? TimeSpan.Zero : remaining;
+            dialog.CloseButtonText = L.Get("McpCommandDeclineIn", remaining.ToString(@"m\:ss", System.Globalization.CultureInfo.InvariantCulture));
+            left.Value = Math.Min(total, remaining.TotalSeconds);
+        }
+
+        Tick();
+        var timer = queue.CreateTimer();
+        timer.Interval = TimeSpan.FromMilliseconds(250);
+        timer.Tick += (_, _) => Tick();
+        timer.Start();
         try
         {
-            return await ShowAsync(dialog, closing.Token) == ContentDialogResult.Primary;
+            return await ShowAsync(dialog, closing.Token) switch
+            {
+                ContentDialogResult.Primary => CommandAnswer.Run,
+                ContentDialogResult.Secondary => CommandAnswer.Always,
+                _ => CommandAnswer.Decline,
+            };
         }
         catch (OperationCanceledException)
         {
-            return false;
+            return CommandAnswer.Decline;
         }
         finally
         {
+            timer.Stop();
             open = false;
         }
     }

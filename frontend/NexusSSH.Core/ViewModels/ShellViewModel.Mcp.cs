@@ -6,6 +6,7 @@ using NexusSSH.Core.Localization;
 using NexusSSH.Core.Mcp;
 using NexusSSH.Core.Models;
 using NexusSSH.Core.Services;
+using NexusSSH.Core.Settings;
 using NexusSSH.Core.Terminals;
 
 namespace NexusSSH.Core.ViewModels;
@@ -29,8 +30,29 @@ public sealed partial class ShellViewModel
     private CancellationTokenSource? _mcpStop;
     private Task _mcpListening = Task.CompletedTask;
 
-    /// <summary>So lange steht die Rückfrage zu einem Befehl; danach gilt er als abgelehnt.</summary>
-    internal TimeSpan McpPromptLimit { get; set; } = TimeSpan.FromMinutes(2);
+    private TimeSpan? _mcpPromptLimit;
+
+    /// <summary>So lange steht die Rückfrage zu einem Befehl; danach gilt er als abgelehnt. Tests setzen es kürzer.</summary>
+    internal TimeSpan McpPromptLimit
+    {
+        get => _mcpPromptLimit ?? TimeSpan.FromSeconds(Settings.McpPromptSeconds);
+        set => _mcpPromptLimit = value;
+    }
+
+    /// <summary>Die Frist der Rückfrage in Sekunden, eine aus <see cref="AppSettings.McpPromptChoices"/>.</summary>
+    public int McpPromptSeconds
+    {
+        get => Settings.McpPromptSeconds;
+        set
+        {
+            var seconds = AppSettings.McpPromptChoices.Contains(value) ? value : AppSettings.DefaultMcpPromptSeconds;
+            if (seconds != Settings.McpPromptSeconds)
+            {
+                Settings.McpPromptSeconds = seconds;
+                OnPropertyChanged();
+            }
+        }
+    }
 
     /// <summary>Ob der MCP-Server läuft. Die App lauscht nur dann; rechnereigen, nicht im Export.</summary>
     public bool McpEnabled
@@ -109,9 +131,63 @@ public sealed partial class ShellViewModel
         }
         else
         {
+            // Mit der Freigabe gehen die Befehle, die ohne Rückfrage laufen durften: Wer sie erneut erteilt, beginnt leer.
             Settings.McpServers.RemoveAll(entry => entry == target);
+            Settings.McpAllowedCommands.RemoveAll(entry => entry.Target == target);
         }
+    }
 
+    /// <summary>Ob genau dieser Befehl auf diesem Server ohne Rückfrage laufen darf. Kein Muster: Ein Zeichen mehr fragt wieder.</summary>
+    public bool IsMcpCommandAllowed(ServerProfile profile, string command)
+        => IsMcpServer(profile) && Settings.McpAllowedCommands.Contains(new McpAllowedCommand(McpTarget(profile), command));
+
+    // Nur aus der Antwort des Benutzers auf die Rückfrage, nie aus etwas, das die KI schickt.
+    private void AllowMcpCommand(ServerProfile profile, string command)
+    {
+        var entry = new McpAllowedCommand(McpTarget(profile), command);
+        if (!Settings.McpAllowedCommands.Contains(entry))
+        {
+            if (Settings.McpAllowedCommands.Count >= AppSettings.MaxMcpAllowedCommands)
+            {
+                Settings.McpAllowedCommands.RemoveAt(0);
+            }
+
+            Settings.McpAllowedCommands.Add(entry);
+            OnPropertyChanged(nameof(McpAllowedCommandList));
+        }
+    }
+
+    /// <summary>Die Befehle, die ohne Rückfrage laufen dürfen, je freigegebenem Server – für die Einstellungen.</summary>
+    public IReadOnlyList<(ServerProfile Server, McpAllowedCommand Entry)> McpAllowedCommandList
+    {
+        get
+        {
+            var servers = _profiles.Where(IsMcpServer).ToDictionary(McpTarget, StringComparer.Ordinal);
+            return
+            [
+                .. Settings.McpAllowedCommands
+                    .Where(entry => servers.ContainsKey(entry.Target))
+                    .Select(entry => (Server: servers[entry.Target], Entry: entry))
+                    .OrderBy(pair => pair.Server.Name, StringComparer.CurrentCultureIgnoreCase)
+                    .ThenBy(pair => pair.Entry.Command, StringComparer.Ordinal),
+            ];
+        }
+    }
+
+    /// <summary>Nimmt einen Befehl zurück: Er fragt wieder.</summary>
+    public void ForgetMcpCommand(McpAllowedCommand entry)
+    {
+        if (Settings.McpAllowedCommands.Remove(entry))
+        {
+            OnPropertyChanged(nameof(McpAllowedCommandList));
+        }
+    }
+
+    /// <summary>Nimmt alle Befehle zurück, auch die von Servern, die gerade nicht freigegeben sind.</summary>
+    public void ForgetMcpCommands()
+    {
+        Settings.McpAllowedCommands.Clear();
+        OnPropertyChanged(nameof(McpAllowedCommandList));
     }
 
     private static bool IsMcpCandidate(ServerProfile profile)
@@ -467,8 +543,12 @@ public sealed partial class ShellViewModel
         }
 
         var seconds = arguments.Integer("timeout_seconds", McpTools.DefaultCommandSeconds, 1, McpTools.MaxCommandSeconds);
-        var typed = await TypesInTerminalAsync(session, monitor, command, cancellation);
-        if (_mcpAsking || session.HasTypedCommand)
+
+        // Dauerhaft erlaubt läuft im eigenen Kanal: Ohne Dialog leerte das Tippen eine Zeile, die der Benutzer gerade
+        // schreibt, und der Befehl liefe in dem Verzeichnis, in dem das Terminal gerade steht – nicht vorhersehbar.
+        var always = IsMcpCommandAllowed(profile, command);
+        var typed = !always && await TypesInTerminalAsync(session, monitor, command, cancellation);
+        if (!always && (_mcpAsking || session.HasTypedCommand))
         {
             throw new McpRefusedException("busy: the user still has another command to answer, or it still runs in this terminal");
         }
@@ -479,21 +559,31 @@ public sealed partial class ShellViewModel
         }
 
         var name = Format.Visible(profile.Name);
-        Log(L.Get("LogMcpCommand", name, Format.Visible(command)));
+        Log(L.Get(always ? "LogMcpCommandAllowed" : "LogMcpCommand", name, Format.Visible(command)));
         session.BeginMcpCall();
         try
         {
-            if (!await AskForCommandAsync(name, command, typed, cancellation))
+            if (!always)
             {
-                Log(L.Get("LogMcpDeclined", name), LogSeverity.Warning);
-                return Refused("the user declined this command");
-            }
+                var answer = await AskForCommandAsync(name, command, typed, cancellation);
+                if (answer == CommandAnswer.Decline)
+                {
+                    Log(L.Get("LogMcpDeclined", name), LogSeverity.Warning);
+                    return Refused("the user declined this command");
+                }
 
-            // Während der Frage kann sich alles geändert haben. Der Befehl geht an genau die Verbindung, für die er
-            // freigegeben wurde – steht sie nicht mehr, scheitert er, statt auf einer neuen zu laufen.
-            if (!McpEnabled || !IsMcpServer(profile))
-            {
-                return Refused("the release of this server ended while the user was asked");
+                // Während der Frage kann sich alles geändert haben. Der Befehl geht an genau die Verbindung, für die er
+                // freigegeben wurde – steht sie nicht mehr, scheitert er, statt auf einer neuen zu laufen.
+                if (!McpEnabled || !IsMcpServer(profile))
+                {
+                    return Refused("the release of this server ended while the user was asked");
+                }
+
+                if (answer == CommandAnswer.Always)
+                {
+                    AllowMcpCommand(profile, command);
+                    Log(L.Get("LogMcpAlwaysAllowed", name, Format.Visible(command)));
+                }
             }
 
             CommandRun run;
@@ -524,6 +614,7 @@ public sealed partial class ShellViewModel
                 writer.WriteBoolean("cut", run.Cut);
                 writer.WriteBoolean("timed_out", run.TimedOut);
                 writer.WriteBoolean("terminal", typed);
+                writer.WriteString("approved", always ? "always" : "asked");
             });
         }
         finally
@@ -549,18 +640,23 @@ public sealed partial class ShellViewModel
     }
 
     // Nur eine Frage zugleich: Ein Programm in einer Schleife soll keine Warteschlange von Dialogen aufbauen.
-    private async Task<bool> AskForCommandAsync(string server, string command, bool inTerminal, CancellationToken cancellation)
+    // Die Frist steht im Dialog als Zeitpunkt: Wartet er hinter einem anderen Dialog, zeigt er trotzdem, was bleibt.
+    private async Task<CommandAnswer> AskForCommandAsync(string server, string command, bool inTerminal, CancellationToken cancellation)
     {
         _mcpAsking = true;
         try
         {
+            var span = McpPromptLimit;
             using var limit = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
-            limit.CancelAfter(McpPromptLimit);
-            return await _prompts.ConfirmCommandAsync(server, command, inTerminal, limit.Token);
+            limit.CancelAfter(span);
+            var answer = await _prompts.ConfirmCommandAsync(new CommandQuestion(server, command, inTerminal, DateTimeOffset.UtcNow + span), limit.Token);
+
+            // Eine Antwort, die mit dem Ende der Frist zusammenfällt, gilt nicht.
+            return limit.IsCancellationRequested || !Enum.IsDefined(answer) ? CommandAnswer.Decline : answer;
         }
         catch (OperationCanceledException)
         {
-            return false;
+            return CommandAnswer.Decline;
         }
         finally
         {

@@ -49,6 +49,23 @@ public sealed partial class ShellViewModel
         ShowHome();
     }
 
+    /// <summary>
+    /// „Start“ in der Titelleiste: die Startseite, wie sie zuletzt war. Was über den Bereichen liegt (Einstellungen,
+    /// Hilfe, Protokolle), geht zu – sonst stünde es weiter davor, und der Klick bewirkte nichts Sichtbares.
+    /// </summary>
+    public void GoHome() => ShowHome(HomePage);
+
+    /// <summary>
+    /// Ein Klick auf einen Reiter: Er wird aktiv, und Einstellungen und Hilfe gehen zu – auch beim Reiter, der schon
+    /// aktiv war. Nur für Klicks des Benutzers; wechselt der Tab von selbst (einer schließt), bleiben sie stehen.
+    /// </summary>
+    public void ShowSession(SessionViewModel session)
+    {
+        IsSettingsOpen = false;
+        IsHelpOpen = false;
+        ActiveSession = session;
+    }
+
     // Die bekannten Server werden gelesen, wenn ihre Seite aufgeht – nicht bei jedem Start der App.
     /// <summary>
     /// Ob die Übersicht aller Sitzungen gerade zu sehen ist: die Startseite mit dieser Seite. Nur dann messen alle

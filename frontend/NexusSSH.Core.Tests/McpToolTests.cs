@@ -691,6 +691,174 @@ public sealed class McpToolTests
     }
 
     [Fact]
+    public async Task An_always_allowed_command_runs_without_a_question_in_its_own_channel()
+    {
+        var setup = WithShell();
+        setup.Prompts.AlwaysAllow = true;
+        var cancellation = TestContext.Current.CancellationToken;
+        const string Arguments = """{"server":"web","command":"df -h"}""";
+
+        // Beim ersten Mal so, wie der Dialog es sagte: getippt ins Terminal.
+        var first = setup.Shell.CallMcpAsync(new McpCall(McpTools.RunCommand, Arguments), cancellation);
+        await EchoAsync(setup);
+        setup.Backend.Last.Emit($"\r\n\u001b]7777;nexus;{NumberIn(setup.Backend.Last.Input[0])};0\u0007");
+        var asked = Json(await first);
+        Assert.Equal("asked", asked.GetProperty("approved").GetString());
+        Assert.True(asked.GetProperty("terminal").GetBoolean());
+        var typed = setup.Backend.Last.Input.Count;
+
+        // Danach ohne Frage und im eigenen Kanal: Getippt würde es eine Zeile leeren, die der Benutzer gerade schreibt.
+        var again = Json(await setup.Shell.CallMcpAsync(new McpCall(McpTools.RunCommand, Arguments), cancellation));
+
+        Assert.Single(setup.Prompts.Commands);
+        Assert.Equal("always", again.GetProperty("approved").GetString());
+        Assert.False(again.GetProperty("terminal").GetBoolean());
+        Assert.Equal([("df -h", McpTools.DefaultCommandSeconds)], setup.Monitor.Commands);
+        Assert.Equal(typed, setup.Backend.Last.Input.Count);
+        Assert.Contains(setup.Shell.Output, entry => entry.Text.Contains("always allowed", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("id; rm -rf ~")]
+    [InlineData("id ")]
+    [InlineData(" id")]
+    [InlineData("ID")]
+    [InlineData("id\n")]
+    [InlineData("i")]
+    public async Task Only_exactly_the_allowed_text_runs_without_a_question(string other)
+    {
+        var setup = Released();
+        setup.Prompts.AnswerCommand = true;
+        setup.Prompts.AlwaysAllow = true;
+        await CallAsync(setup.Shell, McpTools.RunCommand, """{"server":"web01","command":"id"}""");
+        setup.Prompts.AnswerCommand = false;
+
+        var result = await CallAsync(setup.Shell, McpTools.RunCommand, JsonSerializer.Serialize(new Dictionary<string, string> { ["server"] = "web01", ["command"] = other }));
+
+        Assert.True(result.IsError);
+        Assert.Equal(["id", other], setup.Prompts.Commands.Select(asked => asked.Command));
+        Assert.Equal(["id"], setup.Monitor.Commands.Select(run => run.Item1));
+        Assert.False((await CallAsync(setup.Shell, McpTools.RunCommand, """{"server":"web01","command":"id"}""")).IsError);
+        Assert.Equal(2, setup.Prompts.Commands.Count);
+    }
+
+    [Fact]
+    public async Task Run_once_allows_nothing_for_later()
+    {
+        var setup = Released();
+        setup.Prompts.AnswerCommand = true;
+
+        await CallAsync(setup.Shell, McpTools.RunCommand, """{"server":"web01","command":"id"}""");
+        await CallAsync(setup.Shell, McpTools.RunCommand, """{"server":"web01","command":"id"}""");
+
+        Assert.Equal(2, setup.Prompts.Commands.Count);
+        Assert.Empty(setup.Shell.Settings.McpAllowedCommands);
+    }
+
+    [Fact]
+    public async Task An_allowed_command_belongs_to_its_server_and_its_target()
+    {
+        var setup = Released();
+        setup.Prompts.AnswerCommand = true;
+        setup.Prompts.AlwaysAllow = true;
+        await CallAsync(setup.Shell, McpTools.RunCommand, """{"server":"web01","command":"id"}""");
+        var web = setup.Shell.Profiles.Single(candidate => candidate.Name == "web01");
+        var other = setup.Shell.Profiles.First(candidate => candidate.Name != "web01" && !candidate.IsLocal);
+        setup.Shell.SetMcpServer(other.Id, true);
+
+        Assert.True(setup.Shell.IsMcpCommandAllowed(web, "id"));
+        Assert.False(setup.Shell.IsMcpCommandAllowed(other, "id"));
+
+        setup.Shell.SaveProfile(web with { Host = "10.9.9.9" });
+        var moved = setup.Shell.Profiles.Single(candidate => candidate.Name == "web01");
+        setup.Shell.SetMcpServer(moved.Id, true);
+        Assert.False(setup.Shell.IsMcpCommandAllowed(moved, "id"));
+    }
+
+    [Fact]
+    public async Task Ending_the_release_forgets_the_allowed_commands()
+    {
+        var setup = Released();
+        setup.Prompts.AnswerCommand = true;
+        setup.Prompts.AlwaysAllow = true;
+        await CallAsync(setup.Shell, McpTools.RunCommand, """{"server":"web01","command":"id"}""");
+        var web = setup.Shell.Profiles.Single(candidate => candidate.Name == "web01");
+        Assert.Single(setup.Shell.McpAllowedCommandList);
+
+        setup.Shell.SetMcpServer(web.Id, false);
+        setup.Shell.SetMcpServer(web.Id, true);
+
+        Assert.False(setup.Shell.IsMcpCommandAllowed(web, "id"));
+        Assert.Empty(setup.Shell.McpAllowedCommandList);
+    }
+
+    [Fact]
+    public async Task Allowed_commands_can_be_taken_back()
+    {
+        var setup = Released();
+        setup.Prompts.AnswerCommand = true;
+        setup.Prompts.AlwaysAllow = true;
+        await CallAsync(setup.Shell, McpTools.RunCommand, """{"server":"web01","command":"id"}""");
+        await CallAsync(setup.Shell, McpTools.RunCommand, """{"server":"web01","command":"uptime"}""");
+        var web = setup.Shell.Profiles.Single(candidate => candidate.Name == "web01");
+
+        var listed = setup.Shell.McpAllowedCommandList;
+        Assert.Equal(["id", "uptime"], listed.Select(pair => pair.Entry.Command));
+        setup.Shell.ForgetMcpCommand(listed[0].Entry);
+        Assert.False(setup.Shell.IsMcpCommandAllowed(web, "id"));
+        Assert.True(setup.Shell.IsMcpCommandAllowed(web, "uptime"));
+
+        setup.Shell.ForgetMcpCommands();
+        Assert.False(setup.Shell.IsMcpCommandAllowed(web, "uptime"));
+    }
+
+    [Fact]
+    public async Task A_question_that_runs_out_allows_nothing()
+    {
+        var setup = Released();
+        setup.Shell.McpPromptLimit = TimeSpan.FromMilliseconds(20);
+        setup.Prompts.NeverAnswer = true;
+        setup.Prompts.AnswerCommand = true;
+        setup.Prompts.AlwaysAllow = true;
+
+        var result = await CallAsync(setup.Shell, McpTools.RunCommand, """{"server":"web01","command":"id"}""");
+
+        Assert.True(result.IsError);
+        Assert.Empty(setup.Monitor.Commands);
+        Assert.Empty(setup.Shell.Settings.McpAllowedCommands);
+    }
+
+    [Fact]
+    public async Task The_question_knows_until_when_it_stands()
+    {
+        var setup = Released();
+        setup.Shell.McpPromptSeconds = 30;
+        var before = DateTimeOffset.UtcNow;
+
+        await CallAsync(setup.Shell, McpTools.RunCommand, """{"server":"web01","command":"id"}""");
+
+        Assert.InRange(setup.Prompts.Until, before.AddSeconds(29), DateTimeOffset.UtcNow.AddSeconds(31));
+        Assert.Equal(30, setup.Shell.Settings.McpPromptSeconds);
+    }
+
+    [Fact]
+    public void Odd_values_in_the_settings_file_are_put_right()
+    {
+        var settings = new AppSettings
+        {
+            McpPromptSeconds = 7,
+            McpAllowedCommands =
+            [
+                new("t", "id"), new("t", "id"), new(string.Empty, "id"), new("t", string.Empty), new("t", "a\0b"),
+                new("t", new string('x', McpTools.MaxCommandLength + 1)), new(null!, "id"), new("t", null!),
+            ],
+        }.Sanitize();
+
+        Assert.Equal(AppSettings.DefaultMcpPromptSeconds, settings.McpPromptSeconds);
+        Assert.Equal([new McpAllowedCommand("t", "id")], settings.McpAllowedCommands);
+    }
+
+    [Fact]
     public void The_release_stays_on_this_computer()
     {
         var setup = Released();

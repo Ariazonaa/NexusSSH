@@ -502,6 +502,22 @@ public sealed class AppSettings
     /// </summary>
     public List<string> McpServers { get; set; } = [];
 
+    /// <summary>So lange steht die Rückfrage zu einem Befehl, in Sekunden (<see cref="McpPromptChoices"/>); danach gilt er als abgelehnt.</summary>
+    public int McpPromptSeconds { get; set; } = DefaultMcpPromptSeconds;
+
+    public const int DefaultMcpPromptSeconds = 120;
+
+    /// <summary>Die wählbaren Fristen. Mehr als zwei Minuten verträgt nicht jedes MCP-Programm (Claude Code schiebt den Aufruf dann in den Hintergrund).</summary>
+    public static IReadOnlyList<int> McpPromptChoices { get; } = [30, 60, DefaultMcpPromptSeconds, 300];
+
+    /// <summary>
+    /// Befehle, die der Benutzer mit „Immer erlauben“ freigab: genau dieser Text auf genau diesem Ziel (wie bei
+    /// <see cref="McpServers"/>), kein Muster. Rechnereigen, nie aus einer Datei.
+    /// </summary>
+    public List<McpAllowedCommand> McpAllowedCommands { get; set; } = [];
+
+    public const int MaxMcpAllowedCommands = 500;
+
     /// <summary>Holt von Hand bearbeitete oder beschädigte Werte in den erlaubten Bereich zurück.</summary>
     public AppSettings Sanitize()
     {
@@ -590,6 +606,14 @@ public sealed class AppSettings
         CollapsedGroups = [.. (CollapsedGroups ?? []).Where(key => key is { Length: > 0 and <= 512 }).Distinct().Take(2000)];
         Identities = [.. (Identities ?? []).Where(identity => identity is { Id.Length: > 0, Name.Length: > 0 } && Identity.IsValidUser(identity.User)).DistinctBy(identity => identity.Id)];
         McpServers = [.. (McpServers ?? []).Where(target => target is { Length: > 0 }).Distinct(StringComparer.Ordinal)];
+        McpPromptSeconds = McpPromptChoices.Contains(McpPromptSeconds) ? McpPromptSeconds : DefaultMcpPromptSeconds;
+        McpAllowedCommands =
+        [
+            .. (McpAllowedCommands ?? [])
+                .Where(entry => entry is { Target.Length: > 0, Command.Length: > 0 and <= Mcp.McpTools.MaxCommandLength } && !entry.Command.Contains('\0', StringComparison.Ordinal))
+                .Distinct()
+                .TakeLast(MaxMcpAllowedCommands),
+        ];
         OpenTabs = [.. (OpenTabs ?? []).Where(id => !string.IsNullOrEmpty(id))];
         PinnedTabs = [.. (PinnedTabs ?? []).Where(index => index >= 0 && index < OpenTabs.Count).Distinct().Order()];
         OpenSplits = [.. (OpenSplits ?? []).Where(split => split is { Tabs.Count: >= 2 }).Select(split => split.Cleaned())];
@@ -621,6 +645,12 @@ public sealed class AppSettings
     private static double Pane(double value, double fallback)
         => double.IsFinite(value) ? Math.Clamp(value, MinPaneSize, MaxPaneSize) : fallback;
 }
+
+/// <summary>
+/// Ein Befehl, der für KI-Programme ohne Rückfrage laufen darf: <paramref name="Target"/> ist das Ziel wie in
+/// <see cref="AppSettings.McpServers"/>, <paramref name="Command"/> der Text, Zeichen für Zeichen.
+/// </summary>
+public sealed record McpAllowedCommand(string Target, string Command);
 
 /// <summary>
 /// Eine beendete Verbindung im Verlauf: Server, Adresse, Beginn, Dauer und wie sie endete (ein Satz wie in der

@@ -36,6 +36,7 @@ public sealed partial class SettingsView
         AccentBox.SelectedItem = accents.FirstOrDefault(accent => accent.Id == Settings.Accent) ?? accents[0];
         CursorBox.SelectedIndex = Math.Max(0, TerminalLook.CursorStyles.ToList().IndexOf(Shell.TerminalCursor));
         MoshPredictBox.SelectedIndex = Math.Max(0, NexusSSH.Core.Settings.AppSettings.MoshPredictions.ToList().IndexOf(Shell.MoshPredict));
+        McpPromptBox.SelectedIndex = Math.Max(0, NexusSSH.Core.Settings.AppSettings.McpPromptChoices.ToList().IndexOf(Shell.McpPromptSeconds));
         EditorBox.Text = Settings.EditorPath;
         CompareBox.Text = Settings.ComparePath;
     }

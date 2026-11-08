@@ -23,6 +23,7 @@ public sealed partial class SessionTabsView : UserControl
         Strip = new TabStrip(App.Shell, action => DispatcherQueue.TryEnqueue(() => action()));
         InitializeComponent();
         Shell.PropertyChanged += OnShellPropertyChanged;
+        Tabs.AddHandler(TappedEvent, new TappedEventHandler(OnTabsTapped), handledEventsToo: true);
 
         // Wird ein Reiter verschoben – per Befehl oder mit der Maus –, baut die TabView ihn neu ein und verliert
         // dabei die Auswahl. Sie wird erst gelöscht und dann gesetzt: Nach dem Ziehen nennt die TabView oft noch
@@ -102,7 +103,31 @@ public sealed partial class SessionTabsView : UserControl
         ShowHomeState();
     }
 
-    private void OnHomeClicked(object sender, RoutedEventArgs e) => Shell.ShowHome();
+    private void OnHomeClicked(object sender, RoutedEventArgs e) => Shell.GoHome();
+
+    // Ein Klick auf einen Reiter schließt Einstellungen und Hilfe – auch auf den, der schon aktiv ist (dann meldet die
+    // TabView keinen Wechsel). Angemeldet auch für behandelte Klicks (der Reiter wählt sich selbst); ein Knopf darin –
+    // der zum Schließen – zählt nicht.
+    private void OnTabsTapped(object sender, TappedRoutedEventArgs e)
+    {
+        for (var element = e.OriginalSource as DependencyObject; element is not null && !ReferenceEquals(element, Tabs); element = VisualTreeHelper.GetParent(element))
+        {
+            if (element is ButtonBase)
+            {
+                return;
+            }
+
+            if (element is TabViewItem item)
+            {
+                if (item.DataContext is SessionViewModel session && Shell.Sessions.Contains(session))
+                {
+                    Shell.ShowSession(session);
+                }
+
+                return;
+            }
+        }
+    }
 
     // „Start“ ist eingeschaltet, solange kein Tab aktiv ist: Symbol in der Akzentfarbe auf hellerer Fläche, wie die
     // Knöpfe rechts in der Titelleiste.
@@ -116,9 +141,12 @@ public sealed partial class SessionTabsView : UserControl
     private void OnTabSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         // Beim Umsetzen eines Reiters wählt die TabView kurz seinen Nachbarn; das ist kein Wechsel des Tabs.
-        if (!Strip.IsReordering && Tabs.SelectedItem is SessionViewModel session && Shell.Sessions.Contains(session))
+        // Steht der Tab schon in der Shell, kam der Wechsel von dort (ein Tab schloss, ein Befehl); sonst wählte der
+        // Benutzer – mit Maus, Tastatur oder Sprachausgabe –, und Einstellungen und Hilfe gehen zu.
+        if (!Strip.IsReordering && Tabs.SelectedItem is SessionViewModel session && Shell.Sessions.Contains(session)
+            && !ReferenceEquals(session, Shell.ActiveSession))
         {
-            Shell.ActiveSession = session;
+            Shell.ShowSession(session);
         }
     }
 

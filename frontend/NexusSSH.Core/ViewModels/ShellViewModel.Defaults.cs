@@ -117,6 +117,7 @@ public sealed partial class ShellViewModel
         ["Highlights"] = (() => Highlights == Defaults.Highlights, () => Highlights = Defaults.Highlights),
         ["MouseCopyPaste"] = (() => MouseCopyPaste == Defaults.MouseCopyPaste, () => MouseCopyPaste = Defaults.MouseCopyPaste),
         ["McpEnabled"] = (() => McpEnabled == Defaults.McpEnabled, () => McpEnabled = Defaults.McpEnabled),
+        ["McpPromptSeconds"] = (() => McpPromptSeconds == Defaults.McpPromptSeconds, () => McpPromptSeconds = Defaults.McpPromptSeconds),
         ["PasteClean"] = (
             () => PasteClean == Defaults.PasteClean && PasteTabs == Defaults.PasteTabs,
             () =>

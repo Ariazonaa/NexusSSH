@@ -1,6 +1,6 @@
 # Features
 
-What NexusSSH can do today – by area, not by date. As of version 0.1.1 (phase 3 including its remaining items,
+What NexusSSH can do today – by area, not by date. As of version 0.2.0 (phase 3 including its remaining items,
 packaging).
 
 Everything is tested against the built-in test server and most of it against real OpenSSH servers: Debian as root,
@@ -18,7 +18,8 @@ the server load then comes from other sources (without paging and disk throughpu
   Windows, its own icon
 - **Settings as a page of their own** (at the bottom of the home page sidebar or via the command palette): the
   sections on the left, the selected one on the right – "General", "Appearance", "Connections", "Notifications and
-  sounds", "Terminal", "Files and transfers", "Keyboard shortcuts", "Data", "About"
+  sounds", "Terminal", "Files and transfers", "Keyboard shortcuts", "Data", "About". A click on "Home" or on a tab
+  closes them (and the help page) – also on the tab that is already active
 - **Search the settings:** a search box at the top shows, from all sections, only what matches what you type (every
   word must appear; case and umlauts do not matter). Anything no longer at its default carries a marker on the
   right – a click on it resets exactly that setting
@@ -639,7 +640,13 @@ never get keys or passwords.
 - **Connect**: an AI program can connect to a released server. This happens in a tab in the
   background; prompts for a password or host key come to you as always
 - **Commands only after a confirmation prompt**: every command is shown in full in the dialog, "Decline" is the
-  default. Without an answer within two minutes it counts as declined
+  default. The button counts down the time that is left, and a bar shows it too; without an answer it counts as
+  declined. How long the prompt stays (30 seconds to 5 minutes, two by default) is set under Settings → AI access
+- **Always allow**: a third button in the prompt allows exactly this text on this server from then on. It is not a
+  pattern: one character more, and the prompt comes back. Such a command runs without a prompt in a channel of its
+  own (in the home directory, never typed into your terminal), is listed under "Output" and in the settings, where
+  you remove it again. Ending the release of a server removes its commands too; they stay on this computer and are
+  not in the export
 - **Visible in the terminal**: the command is typed into the session's shell, you see it along with its output, and
   `cd` and variables are kept. A partly typed line is lost in the process. If `sudo` asks for the password, you type
   it yourself; the AI program does not see it. If a program occupies the whole screen (vim, htop, less, tmux), nothing

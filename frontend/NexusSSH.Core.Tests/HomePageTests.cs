@@ -240,6 +240,47 @@ public sealed class HomePageTests
     }
 
     [Fact]
+    public void Start_closes_the_settings_and_the_help_even_when_the_start_page_is_already_behind_them()
+    {
+        var shell = TestShell.Create(out _);
+        shell.HomePage = ViewModels.HomePage.Snippets;
+
+        shell.IsSettingsOpen = true;
+        shell.GoHome();
+        Assert.False(shell.IsSettingsOpen);
+        Assert.Null(shell.ActiveSession);
+        Assert.Equal(ViewModels.HomePage.Snippets, shell.HomePage);
+
+        shell.IsHelpOpen = true;
+        shell.GoHome();
+        Assert.False(shell.IsHelpOpen);
+    }
+
+    [Fact]
+    public void A_click_on_a_tab_closes_the_settings_even_on_the_active_one_but_a_tab_that_closes_does_not()
+    {
+        var shell = TestShell.Create(out _);
+        var first = shell.OpenSession(shell.Profiles[0]);
+        var second = shell.OpenSession(shell.Profiles[1]);
+        shell.ActiveSession = first;
+
+        shell.IsSettingsOpen = true;
+        shell.ShowSession(first);
+        Assert.False(shell.IsSettingsOpen);
+        Assert.Same(first, shell.ActiveSession);
+
+        shell.IsSettingsOpen = true;
+        shell.ShowSession(second);
+        Assert.False(shell.IsSettingsOpen);
+        Assert.Same(second, shell.ActiveSession);
+
+        // Wechselt der Tab von selbst, bleibt die Seite, auf der der Benutzer gerade ist.
+        shell.IsSettingsOpen = true;
+        shell.ActiveSession = first;
+        Assert.True(shell.IsSettingsOpen);
+    }
+
+    [Fact]
     public void A_profile_can_carry_one_of_the_known_colors_through_editor_core_and_export()
     {
         L.Init(AppLanguage.English);

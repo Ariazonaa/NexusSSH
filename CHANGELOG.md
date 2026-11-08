@@ -2,6 +2,17 @@
 
 Newest version first. For everything NexusSSH can do, see [FEATURES.md](FEATURES.md).
 
+## 0.2.0 – 2026-11-08
+
+- **AI access: the prompt for a command shows its time limit.** The "Decline" button counts down, a bar below the
+  command shows the same, and the limit (30 seconds to 5 minutes, two by default) is set under Settings → AI access
+- **AI access: "Always allow".** A command can be allowed permanently from the prompt – exactly that text on that
+  server, no patterns. It then runs without asking in a channel of its own, never typed into your terminal. The
+  allowed commands are listed under Settings → AI access, where they can be removed; ending a server's release removes
+  them as well
+- **Settings and help close on "Home" or a tab.** Before, a click there changed what lay behind the page, and the page
+  stayed in front
+
 ## 0.1.1 – 2026-11-08
 
 - **Fixed:** after a reconnect, a terminal kept the modes of a program that was running when the connection dropped

@@ -922,6 +922,33 @@
                                 <TextBlock x:Name="McpServersNone" Style="{StaticResource HintStyle}" Text="{loc:Loc Key=McpServersNone}" />
                                 <StackPanel x:Name="McpServerList" Spacing="2" />
                             </StackPanel>
+                            <!--  So lange steht die Rückfrage zu einem Befehl; danach gilt er als abgelehnt  -->
+                            <StackPanel Tag="set:McpPromptSeconds" Spacing="4">
+                                <ComboBox
+                                    x:Name="McpPromptBox"
+                                    MinWidth="260"
+                                    HorizontalAlignment="Left"
+                                    AutomationProperties.Name="{loc:Loc Key=SettingMcpPromptSeconds}"
+                                    Header="{loc:Loc Key=SettingMcpPromptSeconds}"
+                                    SelectionChanged="OnMcpPromptChanged">
+                                    <ComboBoxItem Content="{loc:Loc Key=McpPrompt30}" Tag="30" />
+                                    <ComboBoxItem Content="{loc:Loc Key=McpPrompt60}" Tag="60" />
+                                    <ComboBoxItem Content="{loc:Loc Key=McpPrompt120}" Tag="120" />
+                                    <ComboBoxItem Content="{loc:Loc Key=McpPrompt300}" Tag="300" />
+                                </ComboBox>
+                                <TextBlock Style="{StaticResource HintStyle}" Text="{loc:Loc Key=SettingMcpPromptHint}" TextWrapping="Wrap" />
+                            </StackPanel>
+                            <!--  Befehle, die ohne Rückfrage laufen dürfen: genau dieser Text auf genau diesem Server  -->
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="{loc:Loc Key=McpAllowedLabel}" />
+                                <TextBlock Style="{StaticResource HintStyle}" Text="{loc:Loc Key=McpAllowedHint}" TextWrapping="Wrap" />
+                                <TextBlock x:Name="McpAllowedNone" Style="{StaticResource HintStyle}" Text="{loc:Loc Key=McpAllowedNone}" />
+                                <StackPanel x:Name="McpAllowedList" Spacing="2" />
+                                <Button
+                                    x:Name="McpAllowedClear"
+                                    Click="OnMcpAllowedClearClicked"
+                                    Content="{loc:Loc Key=McpAllowedClear}" />
+                            </StackPanel>
                         </StackPanel>
                     </StackPanel>
 

@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.Windows.Storage.Pickers;
@@ -109,6 +110,65 @@ public sealed partial class SettingsView : UserControl
 
         McpServersNone.Visibility = Ui.VisibleIf(McpServerList.Children.Count == 0);
         _fillingMcp = false;
+        ShowMcpAllowed();
+    }
+
+    // Je erlaubtem Befehl eine Zeile: Server, der Text genau so, wie er läuft, und ein Knopf zum Entfernen.
+    private void ShowMcpAllowed()
+    {
+        McpAllowedList.Children.Clear();
+        foreach (var (server, entry) in Shell.McpAllowedCommandList)
+        {
+            var command = string.Join(" ⏎ ", entry.Command.Split('\n').Select(Core.Format.Visible));
+            var row = new Grid { ColumnSpacing = 8 };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.Children.Add(new TextBlock
+            {
+                Text = $"{Core.Format.Visible(server.Name)}: {command}",
+                FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Cascadia Mono, Consolas"),
+                TextWrapping = TextWrapping.Wrap,
+                IsTextSelectionEnabled = true,
+                VerticalAlignment = VerticalAlignment.Center,
+            });
+            var remove = new Button { Content = new FontIcon { Glyph = "", FontSize = 12 }, Tag = entry };
+            var name = L.Get("McpAllowedRemove", command);
+            AutomationProperties.SetName(remove, name);
+            ToolTipService.SetToolTip(remove, name);
+            remove.Click += OnMcpAllowedRemoveClicked;
+            Grid.SetColumn(remove, 1);
+            row.Children.Add(remove);
+            McpAllowedList.Children.Add(row);
+        }
+
+        McpAllowedNone.Visibility = Ui.VisibleIf(McpAllowedList.Children.Count == 0);
+        McpAllowedClear.Visibility = Ui.VisibleIf(McpAllowedList.Children.Count > 0);
+    }
+
+    private void OnMcpAllowedRemoveClicked(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: McpAllowedCommand entry })
+        {
+            // Der Knopf verschwindet mit seiner Zeile; der Fokus geht zur nächsten, sonst zur Frist darüber.
+            Shell.ForgetMcpCommand(entry);
+            ShowMcpAllowed();
+            Control next = McpAllowedList.Children is [Grid { Children: [_, Button first] }, ..] ? first : McpPromptBox;
+            next.Focus(FocusState.Programmatic);
+        }
+    }
+
+    private void OnMcpAllowedClearClicked(object sender, RoutedEventArgs e)
+    {
+        Shell.ForgetMcpCommands();
+        ShowMcpAllowed();
+    }
+
+    private void OnMcpPromptChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (McpPromptBox.SelectedItem is ComboBoxItem { Tag: string tag } && int.TryParse(tag, System.Globalization.CultureInfo.InvariantCulture, out var seconds))
+        {
+            Shell.McpPromptSeconds = seconds;
+        }
     }
 
     private void OnMcpServerToggled(object sender, RoutedEventArgs e)
@@ -116,6 +176,7 @@ public sealed partial class SettingsView : UserControl
         if (!_fillingMcp && sender is CheckBox { Tag: string id } box)
         {
             Shell.SetMcpServer(id, box.IsChecked == true);
+            ShowMcpAllowed();
         }
     }
 
@@ -150,6 +211,16 @@ public sealed partial class SettingsView : UserControl
             // Zurück zur Vorgabe oder ein Import: Das Feld zeigt, was jetzt gilt.
             case nameof(ShellViewModel.ExcludePatternsText):
                 ShowExcludePatterns();
+                break;
+
+            // „Immer erlauben“ kommt aus einem Dialog, während die Seite steht; und wer sie wieder öffnet, landet auf
+            // dem Bereich von vorhin, ohne dass die Auswahl wechselt.
+            case nameof(ShellViewModel.McpAllowedCommandList):
+                ShowMcpAllowed();
+                break;
+
+            case nameof(ShellViewModel.IsSettingsOpen) when Shell.IsSettingsOpen && ReferenceEquals(NavList.SelectedItem, NavMcp):
+                ShowMcpServers();
                 break;
 
             case nameof(ShellViewModel.Themes):

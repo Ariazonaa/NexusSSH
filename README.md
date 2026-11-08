@@ -5,7 +5,7 @@ WinUI 3 front end (C# / .NET 10), Rust core.
 
 ![NexusSSH main window](docs/images/main.png)
 
-> **Status:** version 0.1.1 (the first public release was 0.1.0). SSH sessions with a terminal (including jump hosts), server profiles with
+> **Status:** version 0.2.0 (the first public release was 0.1.0). SSH sessions with a terminal (including jump hosts), server profiles with
 > `~/.ssh/config` import, an SFTP browser with up-/download and edit-in-place, server monitoring, split terminals,
 > search, color schemes, a command palette, saved commands, local terminals, Mosh and AI access through MCP. Full
 > list: [`FEATURES.md`](FEATURES.md).
