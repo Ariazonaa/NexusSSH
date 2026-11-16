@@ -2,6 +2,12 @@
 
 Newest version first. For everything NexusSSH can do, see [FEATURES.md](FEATURES.md).
 
+## 0.3.0 – 2026-11-16
+
+- **Select files by drawing a frame**, like in Explorer: in the server list and the local one, press next to a name or
+  below the last row and drag. Ctrl adds to the selection, Shift extends it, Esc cancels, and the list scrolls along at
+  its edges. Dragging on an icon or name still moves the files
+
 ## 0.2.0 – 2026-11-08
 
 - **AI access: the prompt for a command shows its time limit.** The "Decline" button counts down, a bar below the

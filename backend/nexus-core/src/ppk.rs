@@ -450,8 +450,10 @@ mod tests {
         ] {
             let key = random(algorithm.clone(), "me@pc");
 
+            // Gelesen wie bei der Anmeldung: Die Bibliothek allein scheitert an etwa einem von 500 zufälligen
+            // Ed25519-Schlüsseln (an_ed25519_key_keeps_its_32_bytes_whatever_they_start_with) – der Test wäre Zufall.
             let plain = write(&key, None).unwrap();
-            let read = PrivateKey::from_ppk(&plain, None).unwrap();
+            let read = crate::keyfiles::decode(&plain, None).unwrap();
             assert!(same(&read, &key), "{algorithm:?}");
             assert_eq!(read.comment().to_string(), "me@pc");
 
@@ -527,12 +529,13 @@ mod tests {
 
         assert!(text.contains("Encryption: aes256-cbc\n"));
         assert!(text.contains("Key-Derivation: Argon2id\n"));
+        // Gelesen wie bei der Anmeldung (siehe oben): Mit der Bibliothek allein scheiterte das in der CI ab und zu.
         assert!(same(
-            &PrivateKey::from_ppk(&text, Some("correct horse".to_owned())).unwrap(),
+            &crate::keyfiles::decode(&text, Some("correct horse")).unwrap(),
             &key
         ));
-        assert!(PrivateKey::from_ppk(&text, Some("wrong".to_owned())).is_err());
-        assert!(PrivateKey::from_ppk(&text, None).is_err());
+        assert!(crate::keyfiles::decode(&text, Some("wrong")).is_err());
+        assert!(crate::keyfiles::decode(&text, None).is_err());
 
         // Der Kopf verrät Art und öffentlichen Teil auch so – und dass eine Passphrase nötig ist.
         let head = header(&text).unwrap();

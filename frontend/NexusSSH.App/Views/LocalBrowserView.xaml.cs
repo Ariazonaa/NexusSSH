@@ -1,6 +1,7 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using NexusSSH.App.Controls;
 using NexusSSH.App.Interop;
 using NexusSSH.Core;
 using NexusSSH.Core.Localization;
@@ -15,6 +16,9 @@ namespace NexusSSH.App.Views;
 
 public sealed partial class LocalBrowserView : UserControl
 {
+    // Der Rahmen mit der Maus: Drückt man neben Symbol und Name, gehört das Ziehen ihm.
+    private readonly ListMarquee _marquee;
+
     public LocalBrowserView()
     {
         InitializeComponent();
@@ -23,6 +27,7 @@ public sealed partial class LocalBrowserView : UserControl
         ColumnHeaders.Columns = Shell.LocalColumns;
         EntryList.ContainerContentChanging += OnRowChanging;
         ListFocusKeeper.Attach(EntryList);
+        _marquee = ListMarquee.Attach(EntryList, MarqueeLayer);
         Loaded += (_, _) =>
         {
             SftpBrowserView.ReleasedUntaken += OnReleasedUntaken;
@@ -318,7 +323,7 @@ public sealed partial class LocalBrowserView : UserControl
     private void OnDragItemsStarting(object sender, DragItemsStartingEventArgs e)
     {
         var paths = e.Items.OfType<LocalEntry>().Where(entry => !entry.IsDrive).Select(entry => (entry.FullPath, entry.IsDirectory)).ToList();
-        if (paths.Count == 0)
+        if (_marquee.ClaimsPress || paths.Count == 0)
         {
             e.Cancel = true;
             return;

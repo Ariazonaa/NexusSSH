@@ -128,8 +128,7 @@ jobs:
           elseif ($env:INPUT_VERSION -match '^\d+\.\d+\.\d+$') { $tag = "v$env:INPUT_VERSION" }
           else { Write-Output '::error::Für ein Release von Hand braucht es die Version (1.2.3).'; exit 1 }
           $files = Get-ChildItem "$env:GITHUB_WORKSPACE\dist" -File
-          $sums = $files | ForEach-Object { "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)" }
-          $fence = '```'
+          # Keine Prüfsummen im Text (Wunsch des Users, 2026-11-08) – nicht wieder einbauen.
           # Die Änderungen dieser Version aus CHANGELOG.md: der Abschnitt "## <version> – …" bis zum nächsten "## ".
           $version = $tag.Substring(1)
           $changes = @()
@@ -146,11 +145,6 @@ jobs:
             '- **NexusSSH-Setup**: installer per user, no admin rights needed'
             ''
             "What the app can do: [FEATURES.md](https://github.com/$env:GITHUB_REPOSITORY/blob/$tag/FEATURES.md). NexusSSH needs the WebView2 runtime (part of Windows 11)."
-            ''
-            'SHA-256:'
-            $fence
-            $sums
-            $fence
           ) -join "`n"
           # Ohne BOM schreiben: Windows PowerShell setzt bei "-Encoding utf8" eins davor.
           $notesFile = Join-Path $env:RUNNER_TEMP 'release-notes.md'

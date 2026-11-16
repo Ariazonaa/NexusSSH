@@ -1,6 +1,6 @@
 # Features
 
-What NexusSSH can do today – by area, not by date. As of version 0.2.0 (phase 3 including its remaining items,
+What NexusSSH can do today – by area, not by date. As of version 0.3.0 (phase 3 including its remaining items,
 packaging).
 
 Everything is tested against the built-in test server and most of it against real OpenSSH servers: Debian as root,
@@ -459,6 +459,11 @@ the server load then comes from other sources (without paging and disk throughpu
 - **Keyboard like in Explorer**, in the server list and the local one: typing jumps to the name, Ctrl+A,
   Shift+Arrows, F2 (rename), F5 (refresh), Del and Shift+Del, Ctrl+L, Alt+D or F4 (type a path), Backspace and
   Alt+Up (one folder up), Alt+Left/Right (back, forward), in the server list Alt+Enter (properties)
+- **Selecting with the mouse like in Explorer**, in both lists: Ctrl+click, Shift+click, and **drawing a frame** –
+  pressing next to a name (size, date, empty space) or below the last row and dragging selects every row the frame
+  touches, already while dragging; with Ctrl the rows are added, with Shift the selection grows from the last
+  clicked entry; Esc cancels. At the top or bottom edge the list scrolls along. Pressing on the icon or name still
+  drags the entries, a click into the empty space clears the selection
 - **Copy path as…**: the path as `sftp://benutzer@host/pfad`, as a target for `scp` (`benutzer@host:/pfad`, with a
   different port including `-P`) or, for FTP, as an `ftp://` or `ftps://` link – to tell someone where the file is.
   Control characters in the path never get through; anything suspicious is put in single quotes. In the local list it

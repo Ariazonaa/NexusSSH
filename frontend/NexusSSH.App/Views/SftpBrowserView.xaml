@@ -588,6 +588,12 @@
                     </ListView.ItemTemplate>
                 </ListView>
 
+                <!--  Der Rahmen mit der Maus (Controls/ListMarquee) – nur gezeichnet, er fängt nichts ab  -->
+                <Canvas
+                    x:Name="MarqueeLayer"
+                    Grid.Row="6"
+                    IsHitTestVisible="False" />
+
                 <TextBlock
                     Grid.Row="6"
                     Margin="24"

@@ -76,9 +76,7 @@ public static class HelpContent
     public static IReadOnlyList<string> WhatsNew()
         => BindableList.Of<string>(
         [
-            L.Get("NewsMcpAlways"),
-            L.Get("NewsMcpTimeLimit"),
-            L.Get("NewsSettingsClose"),
+            L.Get("NewsMarquee"),
         ]);
 
     /// <summary>

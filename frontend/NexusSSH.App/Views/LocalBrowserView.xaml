@@ -312,6 +312,12 @@
             </ListView.ItemTemplate>
         </ListView>
 
+        <!--  Der Rahmen mit der Maus (Controls/ListMarquee) – nur gezeichnet, er fängt nichts ab  -->
+        <Canvas
+            x:Name="MarqueeLayer"
+            Grid.Row="5"
+            IsHitTestVisible="False" />
+
         <!--  Mit deckendem Hintergrund, wie die Fußzeile der Serverliste: Eine sehr lange Liste liefe sonst hinein.  -->
         <Border Grid.Row="6" Background="{ThemeResource CardBackgroundBrush}">
             <TextBlock

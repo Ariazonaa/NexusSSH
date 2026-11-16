@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.Windows.Storage.Pickers;
+using NexusSSH.App.Controls;
 using NexusSSH.App.Interop;
 using NexusSSH.Core;
 using NexusSSH.Core.Localization;
@@ -24,6 +25,9 @@ public sealed partial class SftpBrowserView : UserControl
     // Das Dateisystem, dessen Baum gerade zu sehen ist – sein markierter Knoten wird hier nachgezogen.
     private SftpBrowserViewModel? _watched;
 
+    // Der Rahmen mit der Maus: Drückt man neben Symbol und Name, gehört das Ziehen ihm.
+    private readonly ListMarquee _marquee;
+
     public SftpBrowserView()
     {
         InitializeComponent();
@@ -42,6 +46,7 @@ public sealed partial class SftpBrowserView : UserControl
         BuildContextMenu();
         EntryList.ContainerContentChanging += OnRowChanging;
         ListFocusKeeper.Attach(EntryList);
+        _marquee = ListMarquee.Attach(EntryList, MarqueeLayer);
         Loaded += (_, _) =>
         {
             Shell.RemoteColumns.Changed += OnColumnsChanged;
@@ -1505,7 +1510,7 @@ public sealed partial class SftpBrowserView : UserControl
     private void OnDragItemsStarting(object sender, DragItemsStartingEventArgs e)
     {
         e.Cancel = true;
-        if (_draggingOut || Shell.ActiveSession is not { } session || Shell.VirtualFilesForDrop(session, e.Items.OfType<RemoteEntry>()) is not { } drop)
+        if (_marquee.ClaimsPress || _draggingOut || Shell.ActiveSession is not { } session || Shell.VirtualFilesForDrop(session, e.Items.OfType<RemoteEntry>()) is not { } drop)
         {
             return;
         }
