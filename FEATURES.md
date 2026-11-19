@@ -1,6 +1,6 @@
 # Features
 
-What NexusSSH can do today – by area, not by date. As of version 0.5.0 (phase 3 including its remaining items,
+What NexusSSH can do today – by area, not by date. As of version 0.6.0 (phase 3 including its remaining items,
 packaging).
 
 Everything is tested against the built-in test server and most of it against real OpenSSH servers: Debian as root,
@@ -544,11 +544,14 @@ the server load then comes from other sources (without paging and disk throughpu
   (ISO-8859-1 or Windows-1252) – then umlauts appear correctly in the list and arrive correctly at the server
 - Upload and download of files and whole folders (**"Upload folder…"** or by dragging from Explorer); the folder
   dialog starts at the destination of the last download
-- **Into Explorer**: drag files and whole folders from the list into an Explorer window, or **copy** them (Ctrl+C,
-  context menu) and paste them there – any size, even mixed selections. Loading only starts once dropped or pasted:
-  Explorer shows its copy dialog, the app the transfer; "Cancel" on either side ends both. A browser accepts the
-  files too. While dragging, Windows shows an image (file or folder icon) and below it what happens on release
-  ("Copy to Downloads")
+- **Into Explorer**: drag files and whole folders from the list into an Explorer window or onto the desktop – also
+  onto a folder in it or in the navigation pane. The app finds out where they were dropped and downloads them there
+  itself, like any download: progress and "Cancel" in its transfers, the usual question before overwriting, no copy
+  dialog of Explorer and no limit on the number of files or the length of paths. Dropped where nothing can be
+  downloaded to (into a ZIP file, onto a phone), the app says so. Other programs (a mail, a browser) get the files
+  as before, loaded only once dropped. **Copy** (Ctrl+C, context menu) and paste works too – there Explorer shows
+  its copy dialog and the app the transfer; "Cancel" on either side ends both. While dragging, Windows shows an image
+  (file or folder icon) and below it what happens on release ("Copy to Downloads")
 - **Many small files**: up to eight files of a folder are in flight at once – 3,000 small files take about 45 s over
   a line with 23 ms latency (`scp -r`: 300 s)
 - **Many folders**: scanning a tree before the download (and before dragging into Explorer) also runs in parallel,

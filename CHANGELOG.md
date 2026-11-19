@@ -2,6 +2,13 @@
 
 Newest version first. For everything NexusSSH can do, see [FEATURES.md](FEATURES.md).
 
+## 0.6.0 – 2026-11-20
+
+- **Dragging into Explorer downloads directly.** Files and folders dragged from the server list into an Explorer
+  window or onto the desktop are now downloaded by the app itself into the folder they were dropped on – with its
+  progress, cancel and overwrite question, without Explorer's copy dialog that sat at "Calculating time" until
+  everything was loaded. Folders with very long paths or many files no longer fail
+
 ## 0.5.0 – 2026-11-19
 
 - **Deleting shows in the bottom bar like a transfer.** Deleting on the server – and "Delete permanently" in the

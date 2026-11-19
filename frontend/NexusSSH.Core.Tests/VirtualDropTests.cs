@@ -329,6 +329,20 @@ public sealed class VirtualDropTests : IDisposable
     }
 
     [Fact]
+    public async Task A_problem_is_only_reported_when_a_receiver_asks_for_the_list()
+    {
+        // Ermittelt wird beim Beginn des Ziehens; der Explorer fragt aber nie nach der Liste (er bekommt einen Merker).
+        _files.File("/srv/deep/" + new string('x', 200) + "/" + new string('y', 80) + ".txt", 1, hoursAgo: 1);
+        var drop = Drop(new DropItem("/srv/deep", "deep", IsDirectory: true));
+        drop.Prepare();
+        await Task.Delay(200, TestContext.Current.CancellationToken);
+        Assert.Empty(_notices);
+
+        Assert.Null(await drop.EntriesAsync());
+        Assert.Equal([(DropNotice.TooLong, null)], _notices);
+    }
+
+    [Fact]
     public async Task The_shell_offers_the_selection_with_sizes_and_reports_what_goes_wrong()
     {
         var backend = new MockBackend();

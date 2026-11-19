@@ -43,6 +43,7 @@ public sealed class VirtualDrop : IVirtualFiles
     private readonly Dictionary<int, Download> _downloads = [];
     private readonly HashSet<DropNotice> _told = [];
     private Task<Plan?>? _plan;
+    private volatile Problem? _problem;
 
     /// <param name="files">Das Dateisystem der Sitzung, gefragt erst beim Holen: Bis dahin kann die Verbindung ersetzt oder weg sein.</param>
     /// <param name="notify">Bekommt jede Meldung höchstens einmal, dazu die Einzelheit des Servers, wenn es eine gibt.</param>
@@ -64,11 +65,11 @@ public sealed class VirtualDrop : IVirtualFiles
     /// <summary>Beginnt, den Inhalt der Ordner zu ermitteln – ehe jemand danach fragt: Der Empfänger wartet darauf.</summary>
     public void Prepare() => _ = PlanAsync();
 
-    public async Task<IReadOnlyList<VirtualEntry>?> EntriesAsync() => (await PlanAsync().ConfigureAwait(false))?.Entries;
+    public async Task<IReadOnlyList<VirtualEntry>?> EntriesAsync() => (await AskedPlanAsync().ConfigureAwait(false))?.Entries;
 
     public async Task<Stream?> OpenAsync(int index)
     {
-        if (await PlanAsync().ConfigureAwait(false) is not { } plan || index < 0 || index >= plan.Entries.Count || plan.Entries[index].IsDirectory)
+        if (await AskedPlanAsync().ConfigureAwait(false) is not { } plan || index < 0 || index >= plan.Entries.Count || plan.Entries[index].IsDirectory)
         {
             return null;
         }
@@ -156,12 +157,31 @@ public sealed class VirtualDrop : IVirtualFiles
         }
     }
 
+    // Die Liste, weil ein Empfänger danach fragt. Erst jetzt wird gemeldet, warum es keine gibt: Ermittelt wird
+    // schon beim Beginn des Ziehens, und der Explorer fragt gar nicht danach (er bekommt einen Merker).
+    private async Task<Plan?> AskedPlanAsync()
+    {
+        var plan = await PlanAsync().ConfigureAwait(false);
+        if (plan is null && _problem is { } problem)
+        {
+            Notify(problem.Notice, problem.Detail);
+        }
+
+        return plan;
+    }
+
+    private Plan? Fail(DropNotice notice, string? detail = null)
+    {
+        _problem = new Problem(notice, detail);
+        return null;
+    }
+
     private async Task<Plan?> BuildAsync()
     {
+        _problem = null;
         if (_files() is not { } files)
         {
-            Notify(DropNotice.NotConnected);
-            return null;
+            return Fail(DropNotice.NotConnected);
         }
 
         var entries = new List<VirtualEntry>();
@@ -186,21 +206,18 @@ public sealed class VirtualDrop : IVirtualFiles
 
                 if (entries.Count > MaxEntries)
                 {
-                    Notify(DropNotice.TooMany);
-                    return null;
+                    return Fail(DropNotice.TooMany);
                 }
             }
         }
         catch (RemoteFileException exception)
         {
-            Notify(exception.Code == "too_many" ? DropNotice.TooMany : DropNotice.ListFailed, exception.Code == "too_many" ? null : exception.Message);
-            return null;
+            return Fail(exception.Code == "too_many" ? DropNotice.TooMany : DropNotice.ListFailed, exception.Code == "too_many" ? null : exception.Message);
         }
 
         if (entries.Exists(entry => entry.Path.Length > MaxPathLength))
         {
-            Notify(DropNotice.TooLong);
-            return null;
+            return Fail(DropNotice.TooLong);
         }
 
         return entries.Count == 0 ? null : new Plan(entries, tops);
@@ -249,6 +266,9 @@ public sealed class VirtualDrop : IVirtualFiles
 
         _notify?.Invoke(notice, detail);
     }
+
+    /// <summary>Warum es keine Liste gibt – gemeldet wird es erst, wenn jemand danach fragt.</summary>
+    private sealed record Problem(DropNotice Notice, string? Detail);
 
     /// <param name="Tops">Zu jedem Eintrag: der wievielte ausgewählte Eintrag ihn mitbringt.</param>
     private sealed record Plan(List<VirtualEntry> Entries, List<int> Tops);

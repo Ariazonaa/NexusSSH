@@ -1519,13 +1519,18 @@ public sealed partial class SftpBrowserView : UserControl
         List<RemoteEntry> dragged = [.. e.Items.OfType<RemoteEntry>().Where(entry => entry.IsTransferable)];
         DraggedOut = dragged;
 
+        // Der Explorer bekommt einen Merker statt der Einträge; wo er landet, dorthin lädt die App selbst.
+        var landing = Shell.NewDropLanding();
+
         // Erst nach diesem Ereignis: Das Ziehen kehrt erst zurück, wenn losgelassen ist.
         if (!DispatcherQueue.TryEnqueue(() =>
             {
+                var outcome = default(OleDrag.Outcome);
                 try
                 {
                     // Losgelassen, und niemand hat es genommen: vielleicht über der lokalen Spalte.
-                    if (!OleDrag.Run(drop, out var released) && released && dragged.Count > 0)
+                    outcome = OleDrag.Run(drop, landing?.Marker);
+                    if (!outcome.Taken && outcome.Released && dragged.Count > 0)
                     {
                         _ = Ole.GetCursorPos(out var point);
                         ReleasedUntaken?.Invoke(dragged, point);
@@ -1536,12 +1541,63 @@ public sealed partial class SftpBrowserView : UserControl
                     _draggingOut = false;
                     DraggedOut = null;
                 }
+
+                if (landing is not null)
+                {
+                    if (outcome.ToExplorer)
+                    {
+                        _ = LandAsync(session, dragged, landing, outcome.Finished);
+                    }
+                    else
+                    {
+                        landing.Dispose();
+                    }
+                }
             }))
         {
             _draggingOut = false;
             DraggedOut = null;
+            landing?.Dispose();
             drop.Completed(succeeded: false);
         }
+    }
+
+    /// <summary>Wie lange auf die Kopie des Merkers gewartet wird – der Explorer legt sie gleich nach dem Loslassen an.</summary>
+    private static readonly TimeSpan LandingPatience = TimeSpan.FromSeconds(20);
+
+    // Im Explorer abgelegt: Wo die Kopie des Merkers auftaucht, dorthin wird geladen – wie jeder andere Download,
+    // mit der Frage nach Überschreiben und Ausschlüssen und mit dem Fortschritt unter „Transfers“.
+    private static async Task LandAsync(SessionViewModel session, IReadOnlyList<RemoteEntry> entries, DropLanding landing, Task explorerDone)
+    {
+        try
+        {
+            using (landing)
+            {
+                if (await landing.TargetAsync(LandingPatience) is not { } folder)
+                {
+                    App.Shell.NoteDropNotLanded(session);
+                    return;
+                }
+
+                // Die Kopie des Merkers verschwindet, wenn der Explorer fertig ist – unabhängig von den Fragen hier.
+                var removal = RemoveCopyAsync(landing, explorerDone);
+                _ = await FolderDownload.AskAndStartAsync(session, entries, folder);
+                await removal;
+            }
+        }
+        catch (Exception exception)
+        {
+            App.WriteCrashLog(exception);
+        }
+    }
+
+    // Der Explorer greift nach dem Anlegen noch auf die Kopie zu; fehlt sie dann, hält er mit „Der Pfad ist nicht
+    // verfügbar“ an. Deshalb erst nach dem Ende seines Ablegens und einem Augenblick Ruhe.
+    private static async Task RemoveCopyAsync(DropLanding landing, Task explorerDone)
+    {
+        _ = await Task.WhenAny(explorerDone, Task.Delay(TimeSpan.FromMinutes(1))).ConfigureAwait(false);
+        await Task.Delay(TimeSpan.FromSeconds(2)).ConfigureAwait(false);
+        await landing.RemoveCopyAsync().ConfigureAwait(false);
     }
 
     /// <summary>

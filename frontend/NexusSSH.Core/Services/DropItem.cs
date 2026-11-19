@@ -25,4 +25,7 @@ public enum DropNotice
 
     /// <summary>Ein Pfad ist samt Unterordnern zu lang für den Empfänger (<see cref="VirtualDrop.MaxPathLength"/>).</summary>
     TooLong,
+
+    /// <summary>Über dem Explorer abgelegt, aber der Merker kam in keinem Ordner an (<see cref="DropLanding"/>).</summary>
+    NotLanded,
 }

@@ -15,22 +15,24 @@ internal static partial class OleDrag
     private const uint WM_LBUTTONUP = 0x0202;
     private const int VK_LBUTTON = 1;
 
-    /// <summary>
-    /// Zieht, bis die Maus losgelassen oder Esc gedrückt wird; kehrt erst dann zurück. Im Thread der Oberfläche
-    /// rufen, solange die linke Maustaste gedrückt ist. Liefert, ob ein Empfänger die Einträge genommen hat.
-    /// </summary>
-    public static bool Run(IVirtualFiles files) => Run(files, out _);
+    /// <summary>Wie ein Ziehen ausging.</summary>
+    /// <param name="Taken">Ein Empfänger hat die Einträge genommen.</param>
+    /// <param name="Released">Die Maus wurde losgelassen (nicht Esc gedrückt) – auch wenn dort niemand etwas nahm.</param>
+    /// <param name="ToExplorer">Losgelassen über dem Explorer: Er hat den Merker bekommen, nicht die Einträge.</param>
+    /// <param name="Finished">Erfüllt, wenn der Empfänger fertig ist – holt er im Hintergrund ab, erst danach.</param>
+    public readonly record struct Outcome(bool Taken, bool Released, bool ToExplorer, Task Finished);
 
     /// <summary>
-    /// Wie <see cref="Run(IVirtualFiles)"/>; <paramref name="released"/> sagt dazu, ob die Maus losgelassen wurde
-    /// (und nicht Esc gedrückt) – auch wenn dort niemand die Einträge genommen hat.
+    /// Zieht, bis die Maus losgelassen oder Esc gedrückt wird; kehrt erst dann zurück. Im Thread der Oberfläche
+    /// rufen, solange die linke Maustaste gedrückt ist. Mit <paramref name="marker"/> bekommt der Explorer statt der
+    /// Einträge diesen leeren Ordner (<see cref="VirtualFileDataObject"/>).
     /// </summary>
-    public static bool Run(IVirtualFiles files, out bool released)
+    public static Outcome Run(IVirtualFiles files, string? marker = null)
     {
-        released = false;
+        var released = false;
         Ole.Prepare();
         // Das Ziehen beginnt über dem eigenen Fenster.
-        var data = new VirtualFileDataObject(files, Ole.TopWindowUnderCursor()) { IsDragging = true };
+        var data = new VirtualFileDataObject(files, Ole.TopWindowUnderCursor(), marker) { IsDragging = true };
         nint proxy = 0;
         nint source = 0;
         var taken = false;
@@ -74,7 +76,8 @@ internal static partial class OleDrag
             data.Complete(taken);
         }
 
-        return taken;
+        // Der Explorer hat den Merker bekommen, wenn er zuletzt gefragt hat und die Maus über ihm losgelassen wurde.
+        return new Outcome(taken, released, taken && data.ToExplorerAtLast && Ole.IsExplorerWindow(Ole.TopWindowUnderCursor()), data.Ended);
     }
 
     // Ein Bild unter dem Mauszeiger (DragImage) und daneben der Hinweis des Empfängers („Nach Downloads kopieren“).

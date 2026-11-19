@@ -1973,6 +1973,30 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
         return drop;
     }
 
+    /// <summary>
+    /// Ein Merker für das Ziehen in den Explorer (<see cref="DropLanding"/>): Die Wächter laufen ab jetzt.
+    /// <c>null</c>, wenn es keinen Zwischenordner gibt – dann bekommt auch der Explorer die virtuellen Dateien.
+    /// </summary>
+    public DropLanding? NewDropLanding()
+    {
+        if (_drops is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return new DropLanding(_drops.NewFolder());
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Über dem Explorer abgelegt, aber kein Ordner gefunden, in den sich laden ließe.</summary>
+    public void NoteDropNotLanded(SessionViewModel session) => Note(DropNotice.NotLanded, session);
+
     /// <summary>Vermerkt im Protokoll, dass Einträge in der Zwischenablage liegen.</summary>
     public void NoteCopied(SessionViewModel session, int count) => Log(L.Get("LogCopiedFiles", count, session.Profile.Name));
 
@@ -1994,6 +2018,9 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
                 break;
             case DropNotice.NotConnected:
                 Log(L.Get("LogDropNotConnected", session.Profile.Name), LogSeverity.Warning);
+                break;
+            case DropNotice.NotLanded:
+                Log(L.Get("LogDropNotLanded"), LogSeverity.Warning);
                 break;
         }
     }

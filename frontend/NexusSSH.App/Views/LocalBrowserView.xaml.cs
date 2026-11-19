@@ -296,24 +296,7 @@ public sealed partial class LocalBrowserView : UserControl
             return;
         }
 
-        var rule = ExistingRule.Overwrite;
-        var existing = session.Files.ExistingLocally(wanted, Local.CurrentPath);
-        if (existing.Count > 0)
-        {
-            if (await App.Dialogs.AskExistingAsync(L.Get("OverwriteLocalText", string.Join(", ", existing.Select(Format.Visible))), App.Shell.Settings) is not { } chosen)
-            {
-                return;
-            }
-
-            rule = chosen;
-        }
-
-        if (await App.Dialogs.AskExcludesAsync(Shell.ExcludeRules, rules => session.Files.FindExcludedAsync(rules, wanted)) is not { } exclude)
-        {
-            return;
-        }
-
-        Shell.DownloadToLocal(wanted, rule, exclude);
+        _ = await FolderDownload.AskAndStartAsync(session, wanted, Local.CurrentPath, (rule, exclude) => Shell.DownloadToLocal(wanted, rule, exclude));
     }
 
     // --- Ziehen ---

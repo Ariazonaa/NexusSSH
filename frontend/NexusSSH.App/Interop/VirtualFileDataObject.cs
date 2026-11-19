@@ -22,10 +22,18 @@ namespace NexusSSH.App.Interop;
 /// Dasselbe Objekt dient dem Ziehen (<see cref="OleDrag"/>) und der Zwischenablage (<see cref="OleClipboard"/>).
 /// Dort kann es mehrmals abgeholt werden – jedes Einfügen ist ein eigener Durchgang.
 /// </para>
+/// <para>
+/// Beim Ziehen bekommt der Explorer etwas anderes als alle übrigen Programme: nur einen leeren Merker-Ordner
+/// (<paramref name="marker"/>, als <c>CF_HDROP</c>), keine virtuellen Dateien. Wo er dessen Kopie anlegt, dorthin
+/// lädt die App selbst (<see cref="DropLanding"/>) – ohne den Kopierdialog des Explorers, der sonst so lange bei
+/// „Zeitberechnung“ steht, bis die Dateien geladen sind, und ohne die Grenzen einer Liste virtueller Dateien.
+/// </para>
 /// </summary>
 [GeneratedComClass]
-internal sealed unsafe partial class VirtualFileDataObject(IVirtualFiles files, nint ownWindow) : IOleDataObject, IDataObjectAsyncCapability
+internal sealed unsafe partial class VirtualFileDataObject(IVirtualFiles files, nint ownWindow, string? marker = null) : IOleDataObject, IDataObjectAsyncCapability
 {
+    private const ushort CF_HDROP = 15;
+
     private const uint FD_ATTRIBUTES = 0x0004;
     private const uint FD_WRITESTIME = 0x0020;
     private const uint FD_FILESIZE = 0x0040;
@@ -63,6 +71,7 @@ internal sealed unsafe partial class VirtualFileDataObject(IVirtualFiles files, 
     private int _async = 1;
     private int _inOperation;
     private volatile bool _dragging;
+    private volatile bool _toExplorer;
 
     // Was andere hineingeschrieben haben (SetData): das Bild des Bild-Helfers, der Hinweis des Empfängers („Nach …
     // kopieren“), „Performed DropEffect“. Wer es abfragt, bekommt eine Kopie.
@@ -94,6 +103,22 @@ internal sealed unsafe partial class VirtualFileDataObject(IVirtualFiles files, 
 
         try
         {
+            // Der Explorer bekommt nur den Merker, alle anderen nur die virtuellen Dateien.
+            if (format->Format == CF_HDROP && (format->Tymed & Ole.TYMED_HGLOBAL) != 0)
+            {
+                return marker is not null && ToExplorer() ? Global(DropFiles(marker), medium) : Ole.DV_E_FORMATETC;
+            }
+
+            // Fragt der Explorer nach der Liste (sie steht in der gemerkten Aufzählung vorn), beschreibt auch sie nur
+            // den Merker: einen leeren Ordner gleichen Namens. Welches Format er auch nimmt – es entsteht derselbe
+            // Ordner, und Inhalt gibt es keinen.
+            if ((format->Format == Descriptor || format->Format == Contents) && ToExplorer())
+            {
+                return format->Format == Descriptor && (format->Tymed & Ole.TYMED_HGLOBAL) != 0
+                    ? Global(DescriptorOf([new VirtualEntry(Path.GetFileName(marker!), true, 0, DateTimeOffset.MinValue)]), medium)
+                    : Ole.DV_E_FORMATETC;
+            }
+
             if (format->Format == Descriptor && (format->Tymed & Ole.TYMED_HGLOBAL) != 0)
             {
                 if (Entries() is not { Count: > 0 } entries)
@@ -151,8 +176,10 @@ internal sealed unsafe partial class VirtualFileDataObject(IVirtualFiles files, 
             return Ole.DV_E_FORMATETC;
         }
 
-        var offered = (format->Format == Descriptor || IsFlag(format->Format)) && (format->Tymed & Ole.TYMED_HGLOBAL) != 0
-            || format->Format == Contents && (format->Tymed & Ole.TYMED_ISTREAM) != 0;
+        var explorer = ToExplorer();
+        var offered = (IsFlag(format->Format) || format->Format == Descriptor) && (format->Tymed & Ole.TYMED_HGLOBAL) != 0
+            || !explorer && format->Format == Contents && (format->Tymed & Ole.TYMED_ISTREAM) != 0
+            || explorer && format->Format == CF_HDROP && (format->Tymed & Ole.TYMED_HGLOBAL) != 0;
         return offered ? Ole.S_OK : Ole.DV_E_FORMATETC;
     }
 
@@ -220,7 +247,7 @@ internal sealed unsafe partial class VirtualFileDataObject(IVirtualFiles files, 
     /// <summary>Ob das Ziehbild gerade als eigenes Fenster zu sehen ist – dann zeigt es auch den Hinweis des Empfängers.</summary>
     public bool ShowsDragImage => Stored(IsShowingLayered) is { Data.Length: >= 4 } kept && BinaryPrimitives.ReadInt32LittleEndian(kept.Data) != 0;
 
-    private static bool IsOwn(ushort format) => format == Descriptor || format == Contents || IsFlag(format);
+    private static bool IsOwn(ushort format) => format == Descriptor || format == Contents || format == CF_HDROP || IsFlag(format);
 
     private static byte[]? FromGlobal(nint memory)
     {
@@ -318,6 +345,14 @@ internal sealed unsafe partial class VirtualFileDataObject(IVirtualFiles files, 
                 (Descriptor, Ole.TYMED_HGLOBAL), (Contents, Ole.TYMED_ISTREAM), (PreferredEffect, Ole.TYMED_HGLOBAL),
                 (ExcludeFromMonitors, Ole.TYMED_HGLOBAL), (InHistory, Ole.TYMED_HGLOBAL), (InCloud, Ole.TYMED_HGLOBAL),
             ]);
+
+            // Den Merker in der Aufzählung immer, nicht nur über dem Explorer: Windows merkt sich die erste Aufzählung
+            // für das ganze Ziehen. Wer ihn bekommt, entscheidet GetData; die übrigen fragen ohnehin zuerst nach der
+            // Liste (sie steht vorn).
+            if (marker is not null)
+            {
+                offered.Add((CF_HDROP, Ole.TYMED_HGLOBAL));
+            }
             lock (_storedGate)
             {
                 offered.AddRange(_stored.Select(stored => (stored.Key, stored.Value.Tymed)));
@@ -393,7 +428,48 @@ internal sealed unsafe partial class VirtualFileDataObject(IVirtualFiles files, 
     // sie herkommen. Gefragt wird dabei nicht aus diesem Prozess, sondern über den Vermittler von Windows –
     // deshalb entscheidet die Stelle der Maus, nicht der Aufrufer. Hat ein Empfänger übernommen, gilt das nicht
     // mehr: Er holt ab, wo immer die Maus inzwischen ist.
-    private bool OverOwnWindow() => _dragging && _inOperation == 0 && Ole.TopWindowUnderCursor() == ownWindow;
+    private bool OverOwnWindow()
+    {
+        if (!_dragging || _inOperation != 0 || Ole.TopWindowUnderCursor() != ownWindow)
+        {
+            return false;
+        }
+
+        // Über dem eigenen Fenster ist das Ziel nicht der Explorer, auch wenn die Maus eben noch dort war.
+        _toExplorer = false;
+        return true;
+    }
+
+    // Ob das Ziel der Explorer ist (ein Ordnerfenster, der Desktop). Entschieden wird an der Stelle der Maus, solange
+    // gezogen wird; danach gilt, was zuletzt galt – dort wurde losgelassen. Nur beim Ziehen mit Merker.
+    private bool ToExplorer()
+    {
+        if (marker is null)
+        {
+            return false;
+        }
+
+        if (_dragging && _inOperation == 0)
+        {
+            _toExplorer = Ole.IsExplorerWindow(Ole.TopWindowUnderCursor());
+        }
+
+        return _toExplorer;
+    }
+
+    /// <summary>Ob zuletzt der Explorer gefragt hat – nach dem Loslassen: ob dort abgelegt wurde.</summary>
+    public bool ToExplorerAtLast => marker is not null && _toExplorer;
+
+    // DROPFILES: Abstand der Namen (20), Punkt, zwei Schalter (der zweite: Unicode), dann die Namen, mit zwei Nullen am Ende.
+    private static byte[] DropFiles(string path)
+    {
+        var name = Encoding.Unicode.GetBytes(path + "\0\0");
+        var data = new byte[20 + name.Length];
+        BinaryPrimitives.WriteUInt32LittleEndian(data, 20);
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(16), 1);
+        name.CopyTo(data, 20);
+        return data;
+    }
 
     /// <summary>Ob der Empfänger die Daten gerade im Hintergrund abholt; dann meldet er sich selbst, wenn er fertig ist.</summary>
     public bool IsInOperation => _inOperation != 0;
@@ -401,9 +477,15 @@ internal sealed unsafe partial class VirtualFileDataObject(IVirtualFiles files, 
     private static bool IsFlag(ushort format)
         => format == PreferredEffect || format == ExcludeFromMonitors || format == InHistory || format == InCloud;
 
+    private readonly TaskCompletionSource _ended = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    /// <summary>Erfüllt, sobald der erste Durchgang zu Ende ist (<see cref="Complete"/>) – beim Ziehen: das Ablegen.</summary>
+    public Task Ended => _ended.Task;
+
     /// <summary>Ein Durchgang ist zu Ende: Der Empfänger hat alles, hat aufgegeben, oder es gab keinen.</summary>
     public void Complete(bool succeeded)
     {
+        _ = _ended.TrySetResult();
         try
         {
             files.Completed(succeeded);

@@ -323,6 +323,37 @@ internal static unsafe partial class Ole
         return window == 0 ? 0 : GetAncestor(window, 2 /* GA_ROOT */);
     }
 
+    [LibraryImport("user32.dll")]
+    private static partial uint GetWindowThreadProcessId(nint window, out uint process);
+
+    // Welche Prozesse der Explorer sind: Ein Fenster nach dem anderen wird gefragt, der Name des Prozesses nur einmal.
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<uint, bool> Explorers = new();
+
+    /// <summary>
+    /// Ob das Fenster dem Explorer gehört – einem Ordnerfenster, dem Desktop oder der Taskleiste. Dateidialoge
+    /// anderer Programme gehören deren Prozess.
+    /// </summary>
+    public static bool IsExplorerWindow(nint window)
+    {
+        if (window == 0 || GetWindowThreadProcessId(window, out var process) == 0 || process == 0)
+        {
+            return false;
+        }
+
+        return Explorers.GetOrAdd(process, static id =>
+        {
+            try
+            {
+                using var owner = System.Diagnostics.Process.GetProcessById((int)id);
+                return string.Equals(owner.ProcessName, "explorer", StringComparison.OrdinalIgnoreCase);
+            }
+            catch (Exception e) when (e is ArgumentException or InvalidOperationException or System.ComponentModel.Win32Exception)
+            {
+                return false;
+            }
+        });
+    }
+
     [LibraryImport("ole32.dll")]
     public static partial int CoMarshalInterThreadInterfaceInStream(in Guid iid, nint unknown, out nint stream);
 
