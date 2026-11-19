@@ -27,6 +27,13 @@ public static class McpTools
     /// <summary>So viel einer Datei liefert <see cref="ReadFile"/> je Aufruf höchstens.</summary>
     public const int MaxReadLength = 48 * 1024;
 
+    /// <summary>
+    /// So viele Bytes hat die Antwort eines Werkzeugs höchstens – gezählt, wie sie geschrieben ist (UTF-8, nach dem
+    /// Maskieren für JSON), nicht am Text davor: Ein Zeilenumbruch wird dort zu zwei Zeichen. Claude Code nimmt nicht
+    /// viel mehr als 50 KB; was wachsen kann, kürzt das Werkzeug selbst (<see cref="McpJson"/>).
+    /// </summary>
+    public const int MaxAnswerLength = 48 * 1024;
+
     /// <summary>So lang darf ein Befehl sein, wie im Kern (<c>exec::RUN_COMMAND</c>).</summary>
     public const int MaxCommandLength = 16 * 1024;
 

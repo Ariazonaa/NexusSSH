@@ -464,8 +464,19 @@ public static class Ui
     /// <summary>Eine Zahl als Text, für eine Bindung an eine Zahl.</summary>
     public static string Number(int value) => value.ToString(L.Culture);
 
-    /// <summary>Name von „Transfers n“ für eine Sprachausgabe.</summary>
-    public static string TransfersName(int count) => $"{L.Get("Transfers")} {count.ToString(L.Culture)}";
+    /// <summary>Das Symbol der Pille „Transfers“: Richtung, solange etwas läuft, sonst wie es ausging.</summary>
+    public static Controls.LineIconKind TransferBadgeIcon(TransferBadgeKind kind, TransferBadgeDirection direction) => kind switch
+    {
+        TransferBadgeKind.Done => Controls.LineIconKind.Check,
+        TransferBadgeKind.Failed => Controls.LineIconKind.Cross,
+        TransferBadgeKind.Paused => Controls.LineIconKind.Pause,
+        _ => direction switch
+        {
+            TransferBadgeDirection.Up => Controls.LineIconKind.Up,
+            TransferBadgeDirection.Down => Controls.LineIconKind.ArrowDown,
+            _ => Controls.LineIconKind.UpDown,
+        },
+    };
 
     /// <summary>Überschrift der Seite „Server-Details“.</summary>
     public static string DetailsTitle(string server) => L.Get("ServerDetailsTitle", server);

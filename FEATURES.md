@@ -1,6 +1,6 @@
 # Features
 
-What NexusSSH can do today – by area, not by date. As of version 0.3.0 (phase 3 including its remaining items,
+What NexusSSH can do today – by area, not by date. As of version 0.4.0 (phase 3 including its remaining items,
 packaging).
 
 Everything is tested against the built-in test server and most of it against real OpenSSH servers: Debian as root,
@@ -68,8 +68,11 @@ the server load then comes from other sources (without paging and disk throughpu
   tabs) leads back there at any time without closing a session – the tabs keep running (also via the command palette:
   "Home"); the home page then takes the whole space between the title bar and the bottom bar
 - **Bottom bar** for the whole window: on the left the server load of the server in the active tab (see "Server
-  details"), on the right **Details** (opens the "Server details" page), **Transfers n** (the number of what is
-  running or waiting; a click shows and hides the bottom pane with the transfers) and **Problems n** (only when there
+  details"), on the right **Details** (opens the "Server details" page), **Transfers** (while something runs it
+  turns blue and shows the direction, the file name or how many, the percentage and a thin progress bar, with
+  server, speed and remaining time in its tooltip; afterwards "index.php uploaded" stays green for five seconds, a
+  failure stays red until clicked, paused transfers show amber; a click shows and hides the bottom pane with the
+  transfers) and **Problems n** (only when there
   are any; likewise with the problems). Without an active session, and with one that cannot be measured (local
   terminal, Telnet, serial), only the buttons on the right are there
 - Layout: file browser on the left, terminal in the middle, **snippets** on the right, below (closed by default)

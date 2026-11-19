@@ -290,16 +290,21 @@ public partial class App : Application
             // Die Fenster abgelöster Terminals gehen mit – erst jetzt, damit oben noch steht, welche es gab.
             Interop.TerminalWindows.CloseAll();
 
+            // Ebenso das Terminal dieses Fensters: Seine Seite ist schon abgebaut. Hörte es weiter zu, schickte es beim
+            // Beenden der Sitzungen noch an sie (Namen zum Ergänzen, Zustand) – das warf 0x8007139F, und der Rest
+            // dieses Aufräumens fiel aus (gefunden 2026-11-01: ein mosh-server lief danach weiter).
+            Controls.TerminalHost.Current?.Release();
+
             // Was aus dem Dateibrowser kopiert wurde, ließe sich ohne die App nicht mehr einfügen.
             Interop.OleClipboard.Clear();
 
             // Laufende Transfers anhalten, sodass sie sich nach dem nächsten Start fortsetzen lassen – schlösse
-            // zuerst ihre Sitzung, wären sie abgebrochen. Dann die Sitzungen ordentlich beenden, dann den Kern:
-            // danach ruft er nicht mehr zurück.
+            // zuerst ihre Sitzung, wären sie abgebrochen. Dann die Sitzungen ordentlich beenden (jede, auch wenn eine
+            // scheitert), dann den Kern: danach ruft er nicht mehr zurück.
             backend.Transfers.Suspend();
-            foreach (var session in Shell.Sessions.ToList())
+            foreach (var failure in Shell.EndSessions())
             {
-                session.Dispose();
+                WriteCrashLog(failure);
             }
 
             (backend as IDisposable)?.Dispose();

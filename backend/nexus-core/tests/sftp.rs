@@ -3323,6 +3323,44 @@ fn the_pages_of_a_server_work_on_a_real_server() {
     }
 }
 
+/// Ein Server, der nur drei Kanäle je Verbindung zulässt ([`real_server`] mit `NEXUS_REAL_MAX_SESSIONS`, etwa der
+/// Container mit fish und `MaxSessions 3`): Shell und Dateien belegen zwei, ein Befehl den dritten. Die Frage nach der
+/// Anmelde-Shell wartet auf ihn, statt zu scheitern – sonst tippte die App in eine fish-Shell (2026-11).
+#[test]
+fn with_three_channels_a_command_waits_for_the_last_one_on_a_real_server() {
+    if variable("NEXUS_REAL_MAX_SESSIONS").is_none() {
+        return;
+    }
+    let Some((files, _)) = real_server() else {
+        return;
+    };
+    let probe = files.sftp(json!({ "op": "commands.probe" }));
+    assert_eq!(probe["ok"], true, "{probe}");
+
+    let result = |request: u64| {
+        files.fixture.recorder.find("the answer", |event| {
+            event["event"] == "sftp.result" && event["request"] == request
+        })
+    };
+    files
+        .fixture
+        .ok(json!({ "op": "exec.run", "session": 1, "request": 9001, "command": "sleep 4", "seconds": 30 }));
+    std::thread::sleep(std::time::Duration::from_secs(1));
+    files
+        .fixture
+        .ok(json!({ "op": "commands.shell", "session": 1, "request": 9002 }));
+
+    let shell = result(9002);
+    println!("login shell: {shell}");
+    assert_eq!(shell["ok"], true, "{shell}");
+    let held = result(9001);
+    assert_eq!(
+        (&held["run"]["status"], &held["run"]["timed_out"]),
+        (&json!(0), &json!(false)),
+        "{held}"
+    );
+}
+
 /// Ein Windows-Server ([`real_server`] mit `NEXUS_REAL_WINDOWS`): Der Kern erkennt ihn, misst die Auslastung mit
 /// PowerShell und führt dort aus, was es unter Windows gibt – Prüfsumme, Belegung, Kopieren und Verschieben. Mit
 /// Namen, die in `cmd.exe` ein Befehl wären.
@@ -3349,6 +3387,14 @@ fn a_windows_server_measures_and_runs_its_commands() {
         (&run["run"]["status"], run["run"]["stdout"].as_str().map(str::trim)),
         (&json!(3), Some("über")),
         "{run}"
+    );
+
+    // Ein Fehler kommt als Text, nicht als CLIXML (so schreibt ihn PowerShell über SSH).
+    let failed = files.sftp(json!({ "op": "exec.run", "command": r"Get-Item C:\nexus-gibt-es-nicht", "seconds": 60 }));
+    let stderr = failed["run"]["stderr"].as_str().unwrap_or_default();
+    assert!(
+        stderr.contains(r"C:\nexus-gibt-es-nicht") && !stderr.contains("CLIXML") && !stderr.contains("<Objs"),
+        "{failed}"
     );
 
     // Die Auslastung kommt in derselben Form wie von Linux.

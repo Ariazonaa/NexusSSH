@@ -47,6 +47,8 @@ public sealed partial class ShellViewModel
     /// </summary>
     public void ToggleTransfers()
     {
+        // Ein „fertig“ oder „fehlgeschlagen“ an der Pille ist damit gesehen.
+        Transfers.Badge.Acknowledge();
         if (ShowsBottom && BottomTab == BottomTab.Transfers)
         {
             IsBottomPanelVisible = false;

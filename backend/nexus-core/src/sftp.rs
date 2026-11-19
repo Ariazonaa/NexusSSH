@@ -151,25 +151,40 @@ impl From<std::io::Error> for Failure {
 
 /// Öffnet auf der bestehenden Verbindung einen SFTP-Kanal. `None`, wenn der Server kein SFTP anbietet –
 /// die Sitzung läuft dann ohne Dateibrowser weiter.
+///
+/// **Lehnt der Server das Subsystem ab (oder antwortet nicht in der Frist), wird der Kanal geschlossen.** Fiele er
+/// nur weg, bliebe er für den Server belegt (russh schickt dann nichts, wie bei [`crate::exec`]): An einem Server
+/// ohne SFTP mit `MaxSessions 2` belegten Shell und der abgelehnte Kanal alles, und der Zugriff über Befehle
+/// ([`crate::shellfs`]) bekam für seine Probe keinen Kanal mehr (gefunden 2026-11-18). Ab
+/// [`russh::Channel::into_stream`] schließt der Strom ihn selbst, wenn er wegfällt.
 pub(crate) async fn open<H: russh::client::Handler>(handle: &Handle<H>) -> Option<(Arc<SftpSession>, String)> {
     if NO_SFTP.load(std::sync::atomic::Ordering::Relaxed) {
         return None;
     }
 
-    let attempt = async {
-        let mut channel = handle.channel_open_session().await.ok()?;
+    let started = std::time::Instant::now();
+    let mut channel = timeout(OPEN_TIMEOUT, handle.channel_open_session()).await.ok()?.ok()?;
+    let accepted = timeout(OPEN_TIMEOUT.saturating_sub(started.elapsed()), async {
         channel.request_subsystem(true, "sftp").await.ok()?;
-
         // Erst die Zusage des Servers abwarten: Auf einem abgelehnten Kanal hinge die SFTP-Begrüßung, bis ihre
         // Frist abläuft.
         loop {
             match channel.wait().await? {
-                ChannelMsg::Success => break,
+                ChannelMsg::Success => return Some(()),
                 ChannelMsg::Failure | ChannelMsg::Close | ChannelMsg::Eof => return None,
                 _ => {}
             }
         }
+    })
+    .await
+    .ok()
+    .flatten();
+    if accepted.is_none() {
+        let _ = channel.close().await;
+        return None;
+    }
 
+    let attempt = async {
         let (stream, meter) = crate::metered::counted(channel.into_stream());
         let sftp = Arc::new(SftpSession::new(stream).await.ok()?);
         crate::metered::attach(&sftp, &meter);
@@ -177,7 +192,10 @@ pub(crate) async fn open<H: russh::client::Handler>(handle: &Handle<H>) -> Optio
         Some((sftp, home))
     };
 
-    timeout(OPEN_TIMEOUT, attempt).await.ok().flatten()
+    timeout(OPEN_TIMEOUT.saturating_sub(started.elapsed()), attempt)
+        .await
+        .ok()
+        .flatten()
 }
 
 /// Die Bits von `st_mode`, die die Art der Datei nennen (`S_IFMT`).

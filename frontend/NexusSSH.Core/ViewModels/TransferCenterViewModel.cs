@@ -190,6 +190,7 @@ public sealed class TransferCenterViewModel : IDisposable
         _queue = queue;
         _dispatcher = dispatcher;
         _time = time;
+        Badge = new TransferBadge(dispatcher, time);
 
         // Was beim Start schon fertig ist, gilt nicht als „gerade fertig geworden“.
         _finishedUploads.UnionWith(queue.Items.Where(IsFinishedUpload).Select(item => item.Id));
@@ -220,6 +221,9 @@ public sealed class TransferCenterViewModel : IDisposable
     /// </summary>
     public OverallTransfer Overall { get; private set; } = OverallTransfer.Idle;
 
+    /// <summary>Was die Pille „Transfers“ in der Zeile unten zeigt – nach jedem Abgleich neu.</summary>
+    public TransferBadge Badge { get; }
+
     /// <summary>So viele Transfers laufen oder warten noch.</summary>
     public int ActiveCount => Items.Count(item => item.CanCancel);
 
@@ -248,7 +252,11 @@ public sealed class TransferCenterViewModel : IDisposable
     /// <summary>Setzt fort, was angehalten wurde; liefert, wie viele das waren.</summary>
     public int ResumeAll() => Items.Where(item => item.IsPaused).Select(item => item.Id).ToList().Count(_queue.Retry);
 
-    public void Dispose() => _queue.Changed -= OnChanged;
+    public void Dispose()
+    {
+        _queue.Changed -= OnChanged;
+        Badge.Dispose();
+    }
 
     private static bool IsFinishedUpload(TransferItem item)
         => item is { Direction: TransferDirection.Upload, State: TransferState.Completed };
@@ -321,6 +329,7 @@ public sealed class TransferCenterViewModel : IDisposable
         _failed.IntersectWith(current.Select(item => item.Id));
         _completed.IntersectWith(current.Select(item => item.Id));
         Overall = Sum(current);
+        Badge.Update(current, Items, Overall);
         Synced?.Invoke();
     }
 

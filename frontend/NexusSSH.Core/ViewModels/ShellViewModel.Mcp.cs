@@ -1,6 +1,5 @@
 using System.Buffers;
 using System.Globalization;
-using System.Text;
 using System.Text.Json;
 using NexusSSH.Core.Localization;
 using NexusSSH.Core.Mcp;
@@ -295,27 +294,33 @@ public sealed partial class ShellViewModel
             .ToList();
         var mask = DiagnosticBundle.Redactor(new DiagnosticInput(
             string.Empty, string.Empty, false, hidden, [], null, null, [], 0, Environment.UserName, Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)));
-        void Entries(Utf8JsonWriter writer, string name, IEnumerable<LogEntry> entries)
+        void Entry(Utf8JsonWriter writer, LogEntry entry)
         {
-            writer.WriteStartArray(name);
-            foreach (var entry in entries.TakeLast(limit))
-            {
-                writer.WriteStartObject();
-                writer.WriteString("time", entry.Time);
-                writer.WriteString("severity", entry.Severity.ToString().ToLowerInvariant());
-                writer.WriteString("text", Format.VisibleText(mask(entry.Text)));
-                writer.WriteEndObject();
-            }
-
-            writer.WriteEndArray();
+            writer.WriteStartObject();
+            writer.WriteString("time", entry.Time);
+            writer.WriteString("severity", entry.Severity.ToString().ToLowerInvariant());
+            writer.WriteString("text", Format.VisibleText(mask(entry.Text)));
+            writer.WriteEndObject();
         }
 
-        return McpJson.Write(writer =>
+        void Answer(Utf8JsonWriter writer, List<byte[]> output, List<byte[]> problems, bool cut)
         {
-            Entries(writer, "output", Output);
-            Entries(writer, "problems", Problems);
-        });
+            McpJson.WriteArray(writer, "output", output);
+            McpJson.WriteArray(writer, "problems", problems);
+            writer.WriteBoolean("cut", cut);
+        }
+
+        // Die neuesten Einträge, so viele in die Antwort passen: Probleme bekommen bis zur Hälfte, die Ausgabe den Rest.
+        var output = Output.TakeLast(limit).ToList();
+        var problems = Problems.TakeLast(limit).ToList();
+        var room = McpTools.MaxAnswerLength - McpJson.Measure(writer => Answer(writer, [], [], cut: false));
+        var keptProblems = McpJson.Fitting(problems, Entry, room / 2, newest: true);
+        var keptOutput = McpJson.Fitting(output, Entry, room - Used(keptProblems), newest: true);
+        return McpJson.Write(writer => Answer(writer, keptOutput, keptProblems, keptOutput.Count < output.Count || keptProblems.Count < problems.Count));
     }
+
+    // Was ausgewählte Einträge geschrieben samt Kommas brauchen.
+    private static int Used(List<byte[]> values) => values.Sum(value => value.Length) + Math.Max(values.Count - 1, 0);
 
     private async Task<McpResult> McpConnectAsync(McpArguments arguments, CancellationToken cancellation)
     {
@@ -384,33 +389,37 @@ public sealed partial class ShellViewModel
         var files = McpFiles(session);
         var path = arguments.Path();
         var entries = await files.ListAsync(path, cancellation).WaitAsync(cancellation);
-        return McpJson.Write(writer =>
+        static void Entry(Utf8JsonWriter writer, RemoteEntry entry)
         {
-            writer.WriteString("path", Format.Visible(path));
-            writer.WriteBoolean("cut", entries.Count > MaxListedEntries);
-            writer.WriteStartArray("entries");
-            foreach (var entry in entries.Take(MaxListedEntries))
+            writer.WriteStartObject();
+            writer.WriteString("name", entry.DisplayName);
+            writer.WriteString("type", entry.IsLink ? "link" : entry.IsDirectory ? "directory" : entry.IsSpecial ? "special" : "file");
+            writer.WriteNumber("size", entry.Size);
+            writer.WriteString("modified", entry.Modified);
+            if (entry.Permissions is { } permissions)
             {
-                writer.WriteStartObject();
-                writer.WriteString("name", entry.DisplayName);
-                writer.WriteString("type", entry.IsLink ? "link" : entry.IsDirectory ? "directory" : entry.IsSpecial ? "special" : "file");
-                writer.WriteNumber("size", entry.Size);
-                writer.WriteString("modified", entry.Modified);
-                if (entry.Permissions is { } permissions)
-                {
-                    writer.WriteString("permissions", Convert.ToString(permissions, 8));
-                }
-
-                if (entry.LinkTarget is { } target)
-                {
-                    writer.WriteString("link_target", Format.Visible(target));
-                }
-
-                writer.WriteEndObject();
+                writer.WriteString("permissions", Convert.ToString(permissions, 8));
             }
 
-            writer.WriteEndArray();
-        });
+            if (entry.LinkTarget is { } target)
+            {
+                writer.WriteString("link_target", Format.Visible(target));
+            }
+
+            writer.WriteEndObject();
+        }
+
+        void Answer(Utf8JsonWriter writer, List<byte[]> kept, bool cut)
+        {
+            writer.WriteString("path", Format.Visible(path));
+            writer.WriteBoolean("cut", cut);
+            McpJson.WriteArray(writer, "entries", kept);
+        }
+
+        // Höchstens MaxListedEntries, und nur so viele, wie geschrieben in die Antwort passen (lange Namen).
+        var room = McpTools.MaxAnswerLength - McpJson.Measure(writer => Answer(writer, [], cut: false));
+        var kept = McpJson.Fitting(entries.Take(MaxListedEntries), Entry, room);
+        return McpJson.Write(writer => Answer(writer, kept, kept.Count < entries.Count));
     }
 
     private static async Task<McpResult> McpReadFileAsync(SessionViewModel session, McpArguments arguments, CancellationToken cancellation)
@@ -423,18 +432,29 @@ public sealed partial class ShellViewModel
         var length = Math.Min(arguments.Long("length", McpTools.MaxReadLength, 1, long.MaxValue), McpTools.MaxReadLength);
         var part = await files.ReadAsync(path, offset, (int)length).WaitAsync(cancellation);
         var binary = part.Data.AsSpan().Contains((byte)0);
-        return McpJson.Write(writer =>
+        void Answer(Utf8JsonWriter writer, int length, string? text)
         {
             writer.WriteString("path", Format.Visible(path));
             writer.WriteNumber("size", part.TotalSize);
             writer.WriteNumber("offset", offset);
-            writer.WriteNumber("length", part.Data.Length);
+            writer.WriteNumber("length", length);
             writer.WriteBoolean("binary", binary);
-            if (!binary)
+            if (text is not null)
             {
-                writer.WriteString("text", Format.VisibleText(Encoding.UTF8.GetString(part.Data)));
+                writer.WriteString("text", text);
             }
-        });
+        }
+
+        if (binary)
+        {
+            return McpJson.Write(writer => Answer(writer, part.Data.Length, null));
+        }
+
+        // Geschrieben braucht Text mehr als gelesen (ein Zeilenumbruch zwei Bytes, ein Steuerzeichen als Bild drei): Es
+        // geht nur so viel hinaus, wie in die Antwort passt, und length sagt, wie viel der Datei das war.
+        var room = McpTools.MaxAnswerLength - McpJson.Measure(writer => Answer(writer, part.Data.Length, string.Empty));
+        var (shown, text) = McpJson.Start(part.Data, room);
+        return McpJson.Write(writer => Answer(writer, shown, text));
     }
 
     private static async Task<McpResult> McpLogsAsync(SessionViewModel session, McpArguments arguments, CancellationToken cancellation)
@@ -459,34 +479,35 @@ public sealed partial class ShellViewModel
         var priority = arguments.Has("priority") ? arguments.Integer("priority", 0, 0, 7) : (int?)null;
         var query = new LogQuery(arguments.Text("path"), since, priority, unit, arguments.Integer("lines", DefaultLogLines, 1, LogQuery.MaxLines));
         var log = await monitor.LogsAsync(query).WaitAsync(cancellation);
-        return McpJson.Write(writer =>
+        static void Line(Utf8JsonWriter writer, ServerLogLine line)
         {
-            // Die neuesten Zeilen, so viele in eine Antwort passen.
-            var room = McpTools.MaxReadLength;
-            var lines = log.Lines.Reverse().TakeWhile(line => (room -= line.Message.Length + line.Source.Length + 64) > 0).Reverse().ToList();
-            writer.WriteBoolean("limited", log.Limited);
-            writer.WriteBoolean("cut", lines.Count < log.Lines.Count);
-            writer.WriteStartArray("lines");
-            foreach (var line in lines)
+            writer.WriteStartObject();
+            if (line.Time is { } time)
             {
-                writer.WriteStartObject();
-                if (line.Time is { } time)
-                {
-                    writer.WriteString("time", time);
-                }
-
-                if (line.Priority is { } severity)
-                {
-                    writer.WriteNumber("priority", severity);
-                }
-
-                writer.WriteString("source", line.Source);
-                writer.WriteString("message", line.Message);
-                writer.WriteEndObject();
+                writer.WriteString("time", time);
             }
 
-            writer.WriteEndArray();
-        });
+            if (line.Priority is { } severity)
+            {
+                writer.WriteNumber("priority", severity);
+            }
+
+            writer.WriteString("source", line.Source);
+            writer.WriteString("message", line.Message);
+            writer.WriteEndObject();
+        }
+
+        void Answer(Utf8JsonWriter writer, List<byte[]> kept, bool cut)
+        {
+            writer.WriteBoolean("limited", log.Limited);
+            writer.WriteBoolean("cut", cut);
+            McpJson.WriteArray(writer, "lines", kept);
+        }
+
+        // Die neuesten Zeilen, so viele geschrieben in eine Antwort passen.
+        var room = McpTools.MaxAnswerLength - McpJson.Measure(writer => Answer(writer, [], cut: false));
+        var lines = McpJson.Fitting(log.Lines, Line, room, newest: true);
+        return McpJson.Write(writer => Answer(writer, lines, lines.Count < log.Lines.Count));
     }
 
     private async Task<McpResult> McpStatsAsync(SessionViewModel session, CancellationToken cancellation)
@@ -598,7 +619,7 @@ public sealed partial class ShellViewModel
             }
 
             Log(L.Get("LogMcpFinished", name, run.Status?.ToString(CultureInfo.InvariantCulture) ?? "-"));
-            return McpJson.Write(writer =>
+            void Answer(Utf8JsonWriter writer, string stdout, string stderr, bool cut)
             {
                 if (run.Status is { } status)
                 {
@@ -609,13 +630,22 @@ public sealed partial class ShellViewModel
                     writer.WriteNull("status");
                 }
 
-                writer.WriteString("stdout", typed ? Format.VisibleText(run.Output).TrimStart('\n') : Format.VisibleText(run.Output));
-                writer.WriteString("stderr", Format.VisibleText(run.Errors));
-                writer.WriteBoolean("cut", run.Cut);
+                writer.WriteString("stdout", stdout);
+                writer.WriteString("stderr", stderr);
+                writer.WriteBoolean("cut", cut);
                 writer.WriteBoolean("timed_out", run.TimedOut);
                 writer.WriteBoolean("terminal", typed);
                 writer.WriteString("approved", always ? "always" : "asked");
-            });
+            }
+
+            // Anfang und Ende hat schon der Kern bzw. TerminalCommand behalten – gezählt in Bytes vor dem Schreiben. Was
+            // geschrieben nicht passt, fällt hier noch aus der Mitte; stderr bekommt mindestens die Hälfte des Platzes.
+            var output = typed ? Format.VisibleText(run.Output).TrimStart('\n') : Format.VisibleText(run.Output);
+            var errors = Format.VisibleText(run.Errors);
+            var room = McpTools.MaxAnswerLength - McpJson.Measure(writer => Answer(writer, string.Empty, string.Empty, cut: false));
+            var stderr = McpJson.Middle(errors, Math.Max(room / 2, room - McpJson.Size(output)), out var errorsCut);
+            var stdout = McpJson.Middle(output, room - McpJson.Size(stderr), out var outputCut);
+            return McpJson.Write(writer => Answer(writer, stdout, stderr, run.Cut || errorsCut || outputCut));
         }
         finally
         {

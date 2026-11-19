@@ -76,7 +76,7 @@ public static class HelpContent
     public static IReadOnlyList<string> WhatsNew()
         => BindableList.Of<string>(
         [
-            L.Get("NewsMarquee"),
+            L.Get("NewsTransfersPill"),
         ]);
 
     /// <summary>

@@ -346,8 +346,18 @@ public sealed partial class SessionViewModel : ObservableObject, ITerminalSessio
     internal bool IsSettling
         => _started && !_disposed && _waitingFor is null && State is not (ConnectionState.Connected or ConnectionState.Closed);
 
-    /// <summary>Die Sitzung steht, ist gescheitert oder wurde geschlossen – wer auf sie gewartet hat, kann weitermachen.</summary>
+    /// <summary>
+    /// Die Sitzung steht, ist gescheitert oder wurde geschlossen – wer auf sie gewartet hat, kann weitermachen. Auch beim
+    /// Beenden (<see cref="Dispose"/>) kommt es ein letztes Mal, damit niemand weiter wartet; dann gilt schon
+    /// <see cref="IsEnding"/>, und wer auf „steht“ hin Arbeit beginnt, lässt es.
+    /// </summary>
     internal event Action? Settled;
+
+    /// <summary>
+    /// Die Sitzung wird beendet oder ist es schon (<see cref="Dispose"/>): Für sie beginnt nichts Neues mehr. Beim
+    /// Beenden ist ihr Zustand oft noch „verbunden“ – daran allein lässt es sich nicht erkennen.
+    /// </summary>
+    internal bool IsEnding => _disposed;
 
     /// <summary>Baut die Verbindung auf. Das Terminal ruft das, sobald es seine Größe kennt.</summary>
     public void Start()
@@ -593,11 +603,20 @@ public sealed partial class SessionViewModel : ObservableObject, ITerminalSessio
             _waitingFor = null;
         }
 
-        Settled?.Invoke();
-        Detach();
-        _promptCancellation.Dispose();
-        Inspector.Dispose();
-        _connection.Dispose();
+        // Wer auf die Sitzung gewartet hat, erfährt es zuerst (IsEnding gilt da schon: Für sie beginnt dabei nichts
+        // mehr, gefunden 2026-11-18). Wirft dabei ein Hörer, endet die Verbindung trotzdem –
+        // sonst liefe sie (samt einem mosh-server) nach dem Schließen weiter; der Fehler geht danach weiter an den Aufrufer.
+        try
+        {
+            Settled?.Invoke();
+        }
+        finally
+        {
+            Detach();
+            _promptCancellation.Dispose();
+            Inspector.Dispose();
+            _connection.Dispose();
+        }
     }
 
     private IServerConnection Open()
@@ -708,7 +727,9 @@ public sealed partial class SessionViewModel : ObservableObject, ITerminalSessio
 
     /// <summary>
     /// Ob sich in die Shell dieser Verbindung tippen lässt; einmal je Verbindung gefragt. Lässt sich das nicht sagen (der
-    /// Server gibt keinen Kanal her, gerade dort hilft das Terminal), gilt die Regel und nicht die Ausnahme: POSIX.
+    /// Server gibt gerade keinen Kanal her), wird nicht getippt: Der Befehl nimmt den eigenen Kanal, und der nächste fragt
+    /// neu. Vorher galt dann POSIX – und gleich nach dem Verbinden ging ein Befehl in eine fish-Shell, die die Zeile
+    /// ablehnte; die Antwort kam erst mit dem Ablauf der Frist (gefunden 2026-11, <c>mcpshells.ps1 -FishOnly</c>).
     /// </summary>
     internal async Task<bool> HasTypedShellAsync(IServerMonitor monitor, CancellationToken cancellation)
     {
@@ -726,7 +747,7 @@ public sealed partial class SessionViewModel : ObservableObject, ITerminalSessio
         }
         catch (RemoteFileException)
         {
-            return true;
+            return false;
         }
     }
 

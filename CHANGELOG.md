@@ -2,6 +2,19 @@
 
 Newest version first. For everything NexusSSH can do, see [FEATURES.md](FEATURES.md).
 
+## 0.4.0 – 2026-11-19
+
+- **Transfers show in the bottom bar.** While an up- or download runs, the Transfers pill turns blue and shows the
+  direction, the file name (or how many), the percentage and a thin progress bar; the tooltip adds server, speed and
+  time left. Afterwards it says how it went: done stays green for five seconds, a failure stays red until clicked,
+  paused shows amber. Screen readers hear the change of state, not every percent
+- **Fixed:** closing the window could leave sessions, the core and a `mosh-server` on the server running
+- **Fixed:** on servers with a low `MaxSessions`, closed tabs kept their channel taken, and right after connecting a
+  command could be typed into a non-POSIX shell such as fish. Commands now wait for a free channel instead
+- **Fixed:** errors from commands on Windows servers (Windows PowerShell 5.1) came back as CLIXML instead of text
+- **Fixed:** AI access (MCP) answers could exceed their size limit, for example for long command output
+- **Fixed:** the folder headings in the saved commands sat a few pixels too low
+
 ## 0.3.0 – 2026-11-16
 
 - **Select files by drawing a frame**, like in Explorer: in the server list and the local one, press next to a name or

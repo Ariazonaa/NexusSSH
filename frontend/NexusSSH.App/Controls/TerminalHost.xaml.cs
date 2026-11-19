@@ -29,6 +29,9 @@ public sealed partial class TerminalHost : UserControl
     private const string HostName = "terminal.nexusssh.example";
     private const string Origin = "https://" + HostName;
 
+    // HRESULT_FROM_WIN32(ERROR_INVALID_STATE): So antwortet WebView2, wenn die Seite schon abgebaut ist.
+    private const int PageClosed = unchecked((int)0x8007139F);
+
     private readonly Dictionary<string, Attachment> _attached = new(StringComparer.Ordinal);
     private readonly TerminalOutputPump _pump;
     private bool _initializing;
@@ -124,7 +127,8 @@ public sealed partial class TerminalHost : UserControl
     }
 
     /// <summary>
-    /// Das Fenster dieses Hosts schließt: Er hört auf nichts mehr. Was er noch zeigt, gibt er ohne Inhalt ab.
+    /// Das Fenster dieses Hosts schließt: Er hört auf nichts mehr und schickt nichts mehr an seine Seite – die ist mit
+    /// dem Fenster abgebaut. Was er noch zeigt, gibt er ohne Inhalt ab.
     /// </summary>
     internal void Release()
     {
@@ -134,6 +138,7 @@ public sealed partial class TerminalHost : UserControl
         }
 
         _released = true;
+        _ready = false;
         Shell.Sessions.CollectionChanged -= OnSessionsChanged;
         Shell.DetachedChanged -= OnDetachedChanged;
         Shell.PropertyChanged -= OnShellPropertyChanged;
@@ -866,11 +871,23 @@ public sealed partial class TerminalHost : UserControl
         }
     }
 
+    // Nur an eine Seite, die steht. Ist sie abgebaut (das Fenster schloss, Release kam noch nicht), meldet WebView2
+    // ERROR_INVALID_STATE: Dann ist die Seite fort, und es gibt niemanden mehr, dem etwas zu sagen wäre – das darf den,
+    // der gerade etwas ändert (etwa das Beenden einer Sitzung), nicht abbrechen. Lädt sie neu, meldet sie sich wieder.
     private void Post(string json)
     {
-        if (_ready)
+        if (!_ready)
+        {
+            return;
+        }
+
+        try
         {
             WebView.CoreWebView2.PostWebMessageAsJson(json);
+        }
+        catch (System.Runtime.InteropServices.COMException exception) when (exception.HResult == PageClosed)
+        {
+            _ready = false;
         }
     }
 

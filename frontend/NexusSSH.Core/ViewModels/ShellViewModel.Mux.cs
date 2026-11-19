@@ -54,7 +54,15 @@ public sealed partial class ShellViewModel
         }
     }
 
+    // Die Sitzungen, denen nach dem Verbinden schon angeboten (oder angehängt) wurde. Ein geschlossener Tab kommt
+    // heraus (ForgetMux) – vorher blieb jede geschlossene Sitzung darin, samt allem, woran sie hängt.
     private readonly HashSet<SessionViewModel> _muxDone = [];
+
+    /// <summary>Ob der Sitzung nach dem Verbinden schon angeboten wurde, was auf dem Server läuft.</summary>
+    internal bool IsMuxDone(SessionViewModel session) => _muxDone.Contains(session);
+
+    /// <summary>Der Tab ist zu: Die Sitzung kommt nie wieder, merken muss man sie sich nicht.</summary>
+    private void ForgetMux(SessionViewModel session) => _muxDone.Remove(session);
 
     private async Task OfferMuxAsync(SessionViewModel session, bool asked)
     {

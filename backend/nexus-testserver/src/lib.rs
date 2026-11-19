@@ -692,6 +692,25 @@ impl Handler for Connection {
             return Ok(());
         }
 
+        // Ein Befehl, der eine Weile seinen Kanal belegt (`sleep <sekunden>`, höchstens 60) – für Tests, in denen
+        // Befehle auf einen freien Kanal warten müssen (`max_sessions`).
+        if let Some(seconds) = line
+            .strip_prefix("sleep ")
+            .and_then(|seconds| seconds.trim().parse::<u64>().ok())
+        {
+            self.pending.remove(&channel);
+            session.channel_success(channel)?;
+            let (handle, open) = (session.handle(), self.open.clone());
+            tokio::spawn(async move {
+                tokio::time::sleep(Duration::from_secs(seconds.min(60))).await;
+                let _ = handle.exit_status_request(channel, 0).await;
+                let _ = handle.eof(channel).await;
+                open.remove(channel);
+                let _ = handle.close(channel).await;
+            });
+            return Ok(());
+        }
+
         // `sudo`, soweit der Kern es braucht: den SFTP-Server finden, das Recht prüfen, ihn als root starten.
         if line.starts_with("for s in /usr/lib/openssh/sftp-server") || line.contains("sudo -") {
             let Some(stream) = self.pending.remove(&channel) else {

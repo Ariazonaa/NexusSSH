@@ -228,7 +228,9 @@ public sealed class McpServer(Func<McpCall, CancellationToken, Task<McpResult>> 
     private static string Message(string? id, Action<Utf8JsonWriter> content)
     {
         var buffer = new ArrayBufferWriter<byte>();
-        using (var writer = new Utf8JsonWriter(buffer))
+        // Derselbe Encoder wie für die Antworten (McpJson.Options): Die Antwort steht hier als Text, und jedes " darin
+        // wäre sonst ". Zeilenumbrüche maskiert auch er – die Nachricht bleibt eine Zeile.
+        using (var writer = new Utf8JsonWriter(buffer, McpJson.Options))
         {
             writer.WriteStartObject();
             writer.WriteString("jsonrpc", "2.0");

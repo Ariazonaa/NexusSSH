@@ -42,6 +42,36 @@
         MinHeight="34"
         Padding="14,0"
         ColumnSpacing="18">
+        <VisualStateManager.VisualStateGroups>
+            <!--  Die Farben der Pille „Transfers“ nach TransferBadgeKind (Namen gleich), gesetzt im Code  -->
+            <VisualStateGroup x:Name="TransferStates">
+                <VisualState x:Name="Idle" />
+                <VisualState x:Name="Running">
+                    <VisualState.Setters>
+                        <Setter Target="TransfersPill.Background" Value="{ThemeResource TransferRunningBackgroundBrush}" />
+                        <Setter Target="TransfersPill.Foreground" Value="{ThemeResource TransferRunningTextBrush}" />
+                    </VisualState.Setters>
+                </VisualState>
+                <VisualState x:Name="Paused">
+                    <VisualState.Setters>
+                        <Setter Target="TransfersPill.Background" Value="{ThemeResource ProblemBackgroundBrush}" />
+                        <Setter Target="TransfersPill.Foreground" Value="{ThemeResource ProblemTextBrush}" />
+                    </VisualState.Setters>
+                </VisualState>
+                <VisualState x:Name="Done">
+                    <VisualState.Setters>
+                        <Setter Target="TransfersPill.Background" Value="{ThemeResource TransferDoneBackgroundBrush}" />
+                        <Setter Target="TransfersPill.Foreground" Value="{ThemeResource TransferDoneTextBrush}" />
+                    </VisualState.Setters>
+                </VisualState>
+                <VisualState x:Name="Failed">
+                    <VisualState.Setters>
+                        <Setter Target="TransfersPill.Background" Value="{ThemeResource TransferFailedBackgroundBrush}" />
+                        <Setter Target="TransfersPill.Foreground" Value="{ThemeResource TransferFailedTextBrush}" />
+                    </VisualState.Setters>
+                </VisualState>
+            </VisualStateGroup>
+        </VisualStateManager.VisualStateGroups>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="Auto" />
             <ColumnDefinition Width="*" />
@@ -171,20 +201,53 @@
                 Foreground="{ThemeResource DraftAccentBrush}"
                 ToolTipService.ToolTip="{loc:Loc Key=DetailsHint}"
                 Visibility="{x:Bind Shell.CanShowDetails, Mode=OneWay}" />
+            <!--
+                „Transfers“ zeigt, was läuft (TransferBadge, Core): Richtung, Name oder Anzahl, Prozent und unten ein
+                dünner Balken; danach kurz „fertig“ oder „fehlgeschlagen“, bis man draufklickt. Die Farben schaltet
+                der Zustand (VisualStateGroup unten). Eine Sprachausgabe hört Beginn und Ende (LiveSetting).
+            -->
             <Button
                 x:Name="TransfersPill"
                 AutomationProperties.AutomationId="TransfersPill"
-                AutomationProperties.Name="{x:Bind app:Ui.TransfersName(Shell.TransferCount), Mode=OneWay}"
+                AutomationProperties.LiveSetting="Polite"
+                AutomationProperties.Name="{x:Bind Shell.Transfers.Badge.Name, Mode=OneWay}"
                 Click="OnTransfersClicked"
                 Style="{StaticResource PillButtonStyle}"
-                ToolTipService.ToolTip="{loc:Loc Key=StatusShowTransfers}">
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                    <TextBlock Text="{loc:Loc Key=Transfers}" />
-                    <TextBlock
-                        FontWeight="Bold"
-                        Foreground="{ThemeResource TextFillColorPrimaryBrush}"
-                        Text="{x:Bind app:Ui.Number(Shell.TransferCount), Mode=OneWay}" />
-                </StackPanel>
+                ToolTipService.ToolTip="{x:Bind Shell.Transfers.Badge.ToolTip, Mode=OneWay}">
+                <Grid>
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <controls:LineIcon
+                            x:Name="TransfersIcon"
+                            VerticalAlignment="Center"
+                            Kind="{x:Bind app:Ui.TransferBadgeIcon(Shell.Transfers.Badge.Kind, Shell.Transfers.Badge.Direction), Mode=OneWay}"
+                            Size="12"
+                            Visibility="{x:Bind Shell.Transfers.Badge.HasIcon, Mode=OneWay}" />
+                        <TextBlock
+                            MaxWidth="200"
+                            Text="{x:Bind Shell.Transfers.Badge.Text, Mode=OneWay}"
+                            TextTrimming="CharacterEllipsis" />
+                        <TextBlock
+                            x:Name="TransfersNumber"
+                            FontWeight="Bold"
+                            Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                            Text="{x:Bind Shell.Transfers.Badge.Number, Mode=OneWay}"
+                            Visibility="{x:Bind Shell.Transfers.Badge.HasNumber, Mode=OneWay}" />
+                    </StackPanel>
+                    <!--  Unten in der Pille, im Innenabstand: Die Pille wird nicht höher, wenn er erscheint  -->
+                    <ProgressBar
+                        x:Name="TransfersProgress"
+                        Height="2"
+                        MinHeight="2"
+                        Margin="0,0,0,-2"
+                        VerticalAlignment="Bottom"
+                        AutomationProperties.AccessibilityView="Raw"
+                        Background="Transparent"
+                        Foreground="{ThemeResource TransferRunningTextBrush}"
+                        IsIndeterminate="{x:Bind Shell.Transfers.Badge.IsIndeterminate, Mode=OneWay}"
+                        Maximum="100"
+                        Visibility="{x:Bind Shell.Transfers.Badge.ShowsProgress, Mode=OneWay}"
+                        Value="{x:Bind Shell.Transfers.Badge.Percent, Mode=OneWay}" />
+                </Grid>
             </Button>
             <Button
                 x:Name="ProblemsPill"

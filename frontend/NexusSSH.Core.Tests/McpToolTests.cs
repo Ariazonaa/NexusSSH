@@ -203,10 +203,109 @@ public sealed class McpToolTests
         var setup = Released();
         await setup.Session.Connection.Files!.WriteAsync("/big.txt", Enumerable.Repeat((byte)'x', McpTools.MaxReadLength + 500).ToArray());
 
-        var read = Json(await CallAsync(setup.Shell, McpTools.ReadFile, """{"server":"web01","path":"/big.txt","offset":100,"length":100000000}"""));
+        var result = await CallAsync(setup.Shell, McpTools.ReadFile, """{"server":"web01","path":"/big.txt","offset":100,"length":100000000}""");
+        var read = Json(result);
 
+        // Gelesen werden höchstens MaxReadLength Bytes; hinaus geht davon, was mit dem Rest der Antwort in die Grenze passt.
         Assert.Equal(McpTools.MaxReadLength + 500, read.GetProperty("size").GetInt64());
-        Assert.Equal(McpTools.MaxReadLength, read.GetProperty("text").GetString()!.Length);
+        var length = read.GetProperty("length").GetInt32();
+        Assert.Equal(length, read.GetProperty("text").GetString()!.Length);
+        Assert.InRange(length, McpTools.MaxReadLength - 256, McpTools.MaxReadLength);
+        Assert.InRange(Bytes(result), McpTools.MaxAnswerLength - 16, McpTools.MaxAnswerLength);
+    }
+
+    // Was hinausgeht, in Bytes, wie es geschrieben ist.
+    private static int Bytes(McpResult result) => System.Text.Encoding.UTF8.GetByteCount(result.Text);
+
+    [Fact]
+    public async Task A_file_that_grows_when_written_is_cut_where_the_answer_ends_and_goes_on_from_there()
+    {
+        var setup = Released();
+        var data = System.Text.Encoding.UTF8.GetBytes(string.Concat(Enumerable.Repeat("\"ä\u0001\\\n", 20_000)));
+        await setup.Session.Connection.Files!.WriteAsync("/quotes.txt", data);
+
+        var first = await CallAsync(setup.Shell, McpTools.ReadFile, """{"server":"web01","path":"/quotes.txt"}""");
+        var length = Json(first).GetProperty("length").GetInt32();
+        var second = await CallAsync(setup.Shell, McpTools.ReadFile, $$"""{"server":"web01","path":"/quotes.txt","offset":{{length}}}""");
+        var next = Json(second).GetProperty("length").GetInt32();
+
+        Assert.InRange(Bytes(first), McpTools.MaxAnswerLength - 16, McpTools.MaxAnswerLength);
+        // Je sechs Bytes der Datei elf geschrieben: \" ä ␁ \\ \n.
+        Assert.InRange(length, (McpTools.MaxAnswerLength * 6 / 11) - 256, McpTools.MaxAnswerLength * 6 / 11);
+        Assert.Equal(Format.VisibleText(System.Text.Encoding.UTF8.GetString(data, 0, length)), Json(first).GetProperty("text").GetString());
+        Assert.Equal(Format.VisibleText(System.Text.Encoding.UTF8.GetString(data, length, next)), Json(second).GetProperty("text").GetString());
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("\"")]
+    public async Task Command_output_stays_within_the_limit_once_written(string quote)
+    {
+        var setup = Released();
+        setup.Prompts.AnswerCommand = true;
+
+        // Wie seq 1 20000 aus dem Kern: 16 KiB vom Anfang, 32 KiB vom Ende (exec::Kept) – geschrieben wird jede Zeile
+        // ein Byte länger. Dazu, wenn es sein soll, stderr voller Anführungszeichen und Steuerzeichen.
+        var all = System.Text.Encoding.UTF8.GetBytes(string.Join('\n', Enumerable.Range(1, 20_000)) + "\n");
+        var kept = System.Text.Encoding.UTF8.GetString(all, 0, 16 * 1024) + $"\n[... {all.Length - (48 * 1024)} bytes left out ...]\n"
+            + System.Text.Encoding.UTF8.GetString(all, all.Length - (32 * 1024), 32 * 1024);
+        var errors = quote.Length == 0 ? string.Empty : new string('"', 20_000) + "\u0001ä";
+        setup.Monitor.NextRun = new CommandRun(0, kept, errors, Cut: true, TimedOut: false);
+
+        var result = await CallAsync(setup.Shell, McpTools.RunCommand, """{"server":"web01","command":"seq 1 20000"}""");
+        var answer = Json(result);
+
+        Assert.InRange(Bytes(result), McpTools.MaxAnswerLength - 64, McpTools.MaxAnswerLength);
+        Assert.True(answer.GetProperty("cut").GetBoolean());
+        var stdout = answer.GetProperty("stdout").GetString()!;
+        Assert.StartsWith("1\n2\n3\n", stdout, StringComparison.Ordinal);
+        Assert.EndsWith("19999\n20000\n", stdout, StringComparison.Ordinal);
+        if (quote.Length > 0)
+        {
+            var stderr = answer.GetProperty("stderr").GetString()!;
+            Assert.StartsWith("\"\"\"", stderr, StringComparison.Ordinal);
+            Assert.EndsWith("\"␁ä", stderr, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public async Task Long_names_shorten_the_list_to_what_fits()
+    {
+        var setup = Released();
+        var files = setup.Session.Connection.Files!;
+        await files.CreateDirectoryAsync("/long");
+        foreach (var number in Enumerable.Range(0, 300))
+        {
+            await files.WriteAsync($"/long/{number:D3}{new string('"', 200)}ä.txt", "x"u8.ToArray());
+        }
+
+        var result = await CallAsync(setup.Shell, McpTools.ListFiles, """{"server":"web01","path":"/long"}""");
+        var listed = Json(result);
+
+        Assert.True(Bytes(result) <= McpTools.MaxAnswerLength);
+        Assert.True(listed.GetProperty("cut").GetBoolean());
+        Assert.InRange(listed.GetProperty("entries").GetArrayLength(), 50, 299);
+    }
+
+    [Fact]
+    public async Task The_app_log_keeps_its_newest_entries_within_the_limit()
+    {
+        var setup = Released();
+        foreach (var number in Enumerable.Range(0, 200))
+        {
+            setup.Shell.Log($"entry {number} {new string('"', 500)}");
+            setup.Shell.Log($"problem {number} {new string('"', 500)}", LogSeverity.Error);
+        }
+
+        var result = await CallAsync(setup.Shell, McpTools.AppLog, """{"limit":200}""");
+        var log = Json(result);
+
+        Assert.True(Bytes(result) <= McpTools.MaxAnswerLength);
+        Assert.True(log.GetProperty("cut").GetBoolean());
+        // Unter „Ausgabe“ steht alles, zuletzt der Aufruf selbst; unter „Probleme“ nur die Fehler.
+        var output = log.GetProperty("output").EnumerateArray().Select(entry => entry.GetProperty("text").GetString()!).ToList();
+        Assert.Contains(output.TakeLast(2), text => text.StartsWith("problem 199 ", StringComparison.Ordinal));
+        Assert.StartsWith("problem 199 ", log.GetProperty("problems").EnumerateArray().Last().GetProperty("text").GetString(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -473,18 +572,29 @@ public sealed class McpToolTests
         Assert.Empty(setup.Backend.Last.Input);
     }
 
+    // Gleich nach dem Verbinden gab der Server keinen Kanal für die Frage her, und der Befehl ging in eine fish-Shell,
+    // die ihn ablehnte. Unbekannt heißt deshalb: nicht tippen – und beim nächsten Befehl neu fragen.
     [Fact]
-    public async Task If_the_shell_cannot_be_asked_the_terminal_is_used()
+    public async Task If_the_shell_cannot_be_asked_nothing_is_typed_and_the_next_command_asks_again()
     {
         var setup = WithShell();
         setup.Monitor.LoginShellFailure = new RemoteFileException("connect failed", "no_channel");
 
+        var first = await setup.Shell.CallMcpAsync(new McpCall(McpTools.RunCommand, """{"server":"web","command":"ls"}"""), TestContext.Current.CancellationToken);
+
+        Assert.False(first.IsError);
+        Assert.False(setup.Prompts.InTerminal);
+        Assert.False(Json(first).GetProperty("terminal").GetBoolean());
+        Assert.Single(setup.Monitor.Commands);
+        Assert.Empty(setup.Backend.Last.Input);
+
+        setup.Monitor.LoginShellFailure = null;
         var call = setup.Shell.CallMcpAsync(new McpCall(McpTools.RunCommand, """{"server":"web","command":"ls"}"""), TestContext.Current.CancellationToken);
         Assert.Single(setup.Backend.Last.Input);
         await EchoAsync(setup);
         setup.Backend.Last.Emit($"\r\n\u001b]7777;nexus;{NumberIn(setup.Backend.Last.Input[0])};0\u0007");
 
-        Assert.False((await call).IsError);
+        Assert.True(Json(await call).GetProperty("terminal").GetBoolean());
     }
 
     [Fact]

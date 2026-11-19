@@ -159,6 +159,161 @@ pub(crate) fn user_command(text: &str) -> String {
     ))
 }
 
+/// Womit Windows PowerShell seine Fehlerausgabe als CLIXML beginnt.
+const CLIXML: &str = "#< CLIXML";
+
+/// Die Fehlerausgabe eines Skripts als Text. **Windows PowerShell (5.1) schreibt sie als CLIXML**, sobald der Befehl
+/// kodiert kam (`-EncodedCommand`), die Fehlerausgabe umgeleitet ist und niemand am Bildschirm sitzt – also bei
+/// jedem Befehl über SSH: `#< CLIXML` und `<Objs …><S S="Error">…_x000D__x000A_</S>…</Objs>`; `Get-Item` auf einen
+/// fehlenden Pfad ergab rund 1 KB XML. `-OutputFormat Text` ändert das nur bei PowerShell 7, nicht beim
+/// `powershell.exe` von Windows (an 5.1 nachgesehen 2026-11-18: dieselbe Ausgabe mit und ohne den Schalter). An der
+/// Quelle ginge es nur, wenn das Skript jeden Fehler selbst schriebe – dann wäre der Text der App nicht mehr der
+/// Befehl, der läuft (`$?`, `2>&1` an Programmen, Fehler beim Lesen). Deshalb wird es hier gelesen.
+///
+/// Der Text ist Ausgabe des Servers: Gelesen werden nur die Zeilen der Ströme (`<S S="Error">`, `warning`,
+/// `verbose`, `debug`), mit den Maskierungen von XML und `_xHHHH_`; alles andere im XML (Fortschritt) fällt weg.
+/// Was nicht CLIXML ist (die Fehlerausgabe eines Programms läuft daneben), bleibt, wie es kam. Abgeschnittenes XML
+/// (die Ausgabe ist begrenzt) wird gelesen, so weit es reicht. Gezeigt wird das Ergebnis nur gesäubert (App).
+pub(crate) fn plain_errors(text: &str) -> String {
+    if !text.contains(CLIXML) {
+        return text.to_owned();
+    }
+
+    let mut plain = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(start) = rest.find(CLIXML) {
+        plain.push_str(&rest[..start]);
+        rest = after_line_end(&rest[start + CLIXML.len()..]);
+        while let Some(objects) = rest.strip_prefix("<Objs") {
+            let (inside, after) = objects.split_once("</Objs>").unwrap_or((objects, ""));
+            read_objects(inside, &mut plain);
+            rest = after_line_end(after);
+        }
+    }
+    plain.push_str(rest);
+    plain
+}
+
+fn after_line_end(text: &str) -> &str {
+    text.strip_prefix("\r\n")
+        .or_else(|| text.strip_prefix('\n'))
+        .unwrap_or(text)
+}
+
+/// Die Zeilen der Ströme in einem `<Objs>`: `<S S="Art">Text</S>`. Die Art ist ein kurzes Wort; Warnungen und
+/// Verwandte bekommen ihren Vorsatz wie in der Konsole (englisch: der Server kann jede Sprache haben).
+fn read_objects(xml: &str, plain: &mut String) {
+    const OPEN: &str = "<S S=\"";
+    let mut rest = xml;
+    while let Some(at) = rest.find(OPEN) {
+        rest = &rest[at + OPEN.len()..];
+        // Nur in den nächsten Zeichen suchen: Sonst liefe jede kaputte Marke bis ans Ende des Textes.
+        let Some(quote) = rest.bytes().take(33).position(|byte| byte == b'"') else {
+            continue;
+        };
+        let kind = &rest[..quote];
+        let Some(after) = rest[quote + 1..].strip_prefix('>') else {
+            continue;
+        };
+        if kind.is_empty() || !kind.bytes().all(|byte| byte.is_ascii_alphabetic()) {
+            continue;
+        }
+
+        let (content, after) = after.split_once("</S>").unwrap_or((after, ""));
+        rest = after;
+        let prefix = match kind.to_ascii_lowercase().as_str() {
+            "warning" => "WARNING: ",
+            "verbose" => "VERBOSE: ",
+            "debug" => "DEBUG: ",
+            _ => "",
+        };
+        let line = unescape(content);
+        plain.push_str(prefix);
+        plain.push_str(&line);
+        if !line.ends_with('\n') {
+            plain.push('\n');
+        }
+    }
+}
+
+/// Der Inhalt eines Elements als Text: erst die Entitäten von XML, dann `_xHHHH_` (UTF-16, so schreibt PowerShell
+/// Steuerzeichen und `_` vor einem `x`). Was sich nicht lesen lässt, bleibt stehen; halbe Ersatzpaare werden zu
+/// U+FFFD.
+fn unescape(content: &str) -> String {
+    let mut text = String::with_capacity(content.len());
+    let mut rest = content;
+    while let Some(at) = rest.find('&') {
+        text.push_str(&rest[..at]);
+        rest = &rest[at..];
+        let entity = rest
+            .bytes()
+            .take(12)
+            .position(|byte| byte == b';')
+            .and_then(|end| entity(&rest[1..end]).map(|character| (character, end)));
+        match entity {
+            Some((character, end)) => {
+                text.push(character);
+                rest = &rest[end + 1..];
+            }
+            None => {
+                text.push('&');
+                rest = &rest[1..];
+            }
+        }
+    }
+    text.push_str(rest);
+
+    let mut plain = String::with_capacity(text.len());
+    let mut units = Vec::new();
+    let mut rest = text.as_str();
+    loop {
+        if let Some(unit) = escaped_unit(rest) {
+            units.push(unit);
+            rest = &rest[7..];
+            continue;
+        }
+        if !units.is_empty() {
+            plain.push_str(&String::from_utf16_lossy(&units));
+            units.clear();
+        }
+        let mut characters = rest.chars();
+        let Some(character) = characters.next() else {
+            break;
+        };
+        plain.push(character);
+        rest = characters.as_str();
+    }
+    plain
+}
+
+fn entity(name: &str) -> Option<char> {
+    match name {
+        "lt" => Some('<'),
+        "gt" => Some('>'),
+        "amp" => Some('&'),
+        "quot" => Some('"'),
+        "apos" => Some('\''),
+        _ => {
+            let number = name.strip_prefix('#')?;
+            let value = match number.strip_prefix(['x', 'X']) {
+                Some(hex) => u32::from_str_radix(hex, 16).ok()?,
+                None => number.parse().ok()?,
+            };
+            char::from_u32(value)
+        }
+    }
+}
+
+/// `_xHHHH_` am Anfang des Textes als UTF-16-Einheit.
+fn escaped_unit(text: &str) -> Option<u16> {
+    let bytes = text.as_bytes();
+    let escaped = bytes.len() >= 7
+        && bytes.starts_with(b"_x")
+        && bytes[6] == b'_'
+        && bytes[2..6].iter().all(u8::is_ascii_hexdigit);
+    escaped.then(|| u16::from_str_radix(&text[2..6], 16).ok()).flatten()
+}
+
 /// Ein Text als Literal für PowerShell: in einfachen Anführungszeichen. PowerShell nimmt dafür auch die
 /// typografischen (`‘ ’ ‚ ‛`) – jedes davon wird wie `'` verdoppelt, sonst endete das Literal dort. `None` für
 /// einen leeren Text oder einen mit Steuerzeichen.
@@ -360,6 +515,67 @@ mod tests {
                 .unwrap();
             assert_eq!(ran.status.code(), Some(status), "{text}");
         }
+    }
+
+    /// Das echte PowerShell schreibt Fehler eines kodierten Befehls als CLIXML, sobald die Fehlerausgabe umgeleitet
+    /// ist (wie bei SSH) – gelesen bleibt der Text, den die Konsole zeigte.
+    #[cfg(windows)]
+    #[test]
+    fn errors_of_powershell_arrive_as_text() {
+        let ran = std::process::Command::new("cmd")
+            .args([
+                "/c",
+                &user_command("Get-Item 'C:\\nexus-gibt-es-nicht'; Write-Warning 'w_x1 & <b>'; Write-Output 'a'"),
+            ])
+            .output()
+            .unwrap();
+        let raw = String::from_utf8_lossy(&ran.stderr);
+        assert!(raw.contains(CLIXML), "PowerShell schreibt kein CLIXML mehr: {raw}");
+
+        let plain = plain_errors(&raw);
+        assert!(plain.contains("C:\\nexus-gibt-es-nicht"), "{plain}");
+        assert!(plain.contains("WARNING: w_x1 & <b>\n"), "{plain}");
+        assert!(plain.contains("\r\n"), "Zeilen bleiben Zeilen: {plain}");
+        assert!(
+            !plain.contains("<Objs") && !plain.contains("_x000D_") && !plain.contains(CLIXML),
+            "{plain}"
+        );
+    }
+
+    #[test]
+    fn clixml_becomes_the_text_of_its_streams_and_the_rest_stays() {
+        // So kam es von Windows PowerShell 5.1 (gekürzt), davor und danach Fehlerausgabe eines Programms.
+        let raw = "native vorher\r\n#< CLIXML\r\n<Objs Version=\"1.1.0.1\" xmlns=\"http://schemas.microsoft.com/powershell/2004/04\">\
+                   <Obj S=\"progress\" RefId=\"0\"><TN RefId=\"0\"><T>System.Management.Automation.PSCustomObject</T></TN>\
+                   <MS><I64 N=\"SourceId\">1</I64><PR N=\"Record\"><AV>Preparing modules for first use.</AV></PR></MS></Obj>\
+                   <S S=\"Error\">Get-Item : Der Pfad \"C:\\gibtsnicht\" &lt;x&gt; &amp; &#228;&#xFC;_x000D__x000A_</S>\
+                   <S S=\"Error\">+ Get-Item C:\\gibtsnicht_x000D__x000A_</S><S S=\"warning\">warnung</S>\
+                   <S S=\"verbose\">mehr</S><S S=\"Error\">_x005F_x0041_ und _xD83D__xDE00_ und _xD800_</S></Objs>\
+                   native danach";
+
+        assert_eq!(
+            plain_errors(raw),
+            "native vorher\r\nGet-Item : Der Pfad \"C:\\gibtsnicht\" <x> & äü\r\n+ Get-Item C:\\gibtsnicht\r\n\
+             WARNING: warnung\nVERBOSE: mehr\n_x0041_ und \u{1F600} und \u{FFFD}\nnative danach"
+        );
+    }
+
+    #[test]
+    fn broken_or_cut_clixml_is_read_as_far_as_it_goes() {
+        // Abgeschnitten mitten im Element (die Ausgabe ist begrenzt).
+        assert_eq!(
+            plain_errors("#< CLIXML\r\n<Objs><S S=\"Error\">erste_x000A_</S><S S=\"Error\">zwei"),
+            "erste\nzwei\n"
+        );
+        // Kaputte Marken, unbekannte Entitäten und halbe Maskierungen bleiben stehen oder fallen weg – nie ein Fehler.
+        assert_eq!(
+            plain_errors(
+                "#< CLIXML\n<Objs><S S=\"a b\">x</S><S S=\"Error\">&bogus; &#xZZ; &; _x00_ _x12G4_</S></Objs>"
+            ),
+            "&bogus; &#xZZ; &; _x00_ _x12G4_\n"
+        );
+        assert_eq!(plain_errors("kein XML"), "kein XML");
+        assert_eq!(plain_errors("#< CLIXML"), "");
     }
 
     #[test]

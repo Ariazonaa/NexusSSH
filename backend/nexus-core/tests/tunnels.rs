@@ -5,6 +5,7 @@ mod common;
 
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
+use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::time::{Duration, Instant};
 
 use common::{Fixture, with_password};
@@ -16,6 +17,15 @@ fn forwarding() -> Options {
         forwarding: true,
         ..with_password()
     }
+}
+
+/// Die Tests dieser Datei laufen nacheinander. [`free_port`] gibt den Port gleich wieder frei, und jeder Test öffnet
+/// selbst Ports (Testserver, Dienst, Tunnel): Liefen sie nebeneinander, bekam unter Windows ab und zu ein Nachbar
+/// genau den eben freigegebenen Port, und „hier lauscht noch nichts“ scheiterte (CI 2026-11-18, `is_closed`).
+static SERIAL: Mutex<()> = Mutex::new(());
+
+fn serial() -> MutexGuard<'static, ()> {
+    SERIAL.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 /// Ein Port, der gerade frei ist.
@@ -94,6 +104,7 @@ fn is_closed(port: u16) -> bool {
 
 #[test]
 fn a_local_tunnel_leads_to_a_service_behind_the_server_and_ends_with_the_session() {
+    let _serial = serial();
     let fixture = Fixture::new(forwarding());
     let (service, here) = (echo_service(), free_port());
     let profile = fixture.profile(json!({ "tunnels": [
@@ -142,6 +153,7 @@ fn a_local_tunnel_leads_to_a_service_behind_the_server_and_ends_with_the_session
 
 #[test]
 fn a_tunnel_is_switched_on_and_off_and_says_why_it_cannot_listen() {
+    let _serial = serial();
     let fixture = Fixture::new(forwarding());
     let (service, here) = (echo_service(), free_port());
     let taken = TcpListener::bind(("127.0.0.1", 0)).unwrap();
@@ -205,6 +217,7 @@ fn a_tunnel_is_switched_on_and_off_and_says_why_it_cannot_listen() {
 
 #[test]
 fn a_dynamic_tunnel_is_a_socks_proxy_through_the_server() {
+    let _serial = serial();
     let fixture = Fixture::new(forwarding());
     let (service, here) = (echo_service(), free_port());
     let profile = fixture
@@ -264,6 +277,7 @@ fn a_dynamic_tunnel_is_a_socks_proxy_through_the_server() {
 
 #[test]
 fn a_remote_tunnel_brings_connections_from_the_server_here_and_nothing_else() {
+    let _serial = serial();
     let fixture = Fixture::new(forwarding());
     let (service, there) = (echo_service(), free_port());
     let profile = fixture.profile(json!({ "tunnels": [
@@ -308,6 +322,7 @@ fn a_remote_tunnel_brings_connections_from_the_server_here_and_nothing_else() {
 
 #[test]
 fn a_profile_takes_only_tunnels_that_can_stand() {
+    let _serial = serial();
     let fixture = Fixture::new(with_password());
     let save = |tunnels: Value| {
         fixture.request(json!({ "op": "profiles.save", "profile": {

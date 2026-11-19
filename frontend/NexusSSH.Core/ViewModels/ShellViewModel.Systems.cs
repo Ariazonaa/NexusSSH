@@ -14,13 +14,13 @@ public sealed partial class ShellViewModel
 {
     private void WatchSystem(SessionViewModel session)
     {
-        session.Settled += () =>
+        WhenSettled(session, () =>
         {
             if (session.State == ConnectionState.Connected && session.System is null && session.Profile.IsSsh)
             {
                 _ = RecognizeSystemAsync(session);
             }
-        };
+        });
         session.Inspector.PropertyChanged += (_, e) => OnInspectorChanged(session, e);
     }
 

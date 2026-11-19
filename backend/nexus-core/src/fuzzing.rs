@@ -137,6 +137,10 @@ pub fn command_output(data: &[u8]) {
     let _ = crate::logs::parse_journal(&text);
     let _ = crate::logs::parse_file(&text);
 
+    // Die Fehlerausgabe von PowerShell (CLIXML): Was daraus wird, ist nie länger als das, was kam.
+    let plain = crate::winserver::plain_errors(&text);
+    assert!(plain.len() <= text.len(), "clixml: {} > {}", plain.len(), text.len());
+
     // Was hier durchkommt, wird später in eine Shell getippt: nie etwas außer dem schlichten Namen.
     for session in exec::parse_mux(&text) {
         assert!(

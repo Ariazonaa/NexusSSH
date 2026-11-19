@@ -30,6 +30,11 @@ public enum LineIconKind
     Settings,
     ChevronRight,
     ArrowRight,
+    ArrowDown,
+    UpDown,
+    Check,
+    Cross,
+    Pause,
 }
 
 /// <summary>
@@ -130,6 +135,11 @@ public sealed partial class LineIcon : UserControl
         LineIconKind.ChevronDown => "M6,9 L12,15 L18,9",
         LineIconKind.ChevronRight => "M9,6 L15,12 L9,18",
         LineIconKind.ArrowRight => "M5,12 L19,12 M12,5 L19,12 L12,19",
+        LineIconKind.ArrowDown => "M12,5 L12,19 M5,12 L12,19 L19,12",
+        LineIconKind.UpDown => "M8,19 L8,5 M4,9 L8,5 L12,9 M16,5 L16,19 M12,15 L16,19 L20,15",
+        LineIconKind.Check => "M5,12 L10,17 L19,7",
+        LineIconKind.Cross => "M6,6 L18,18 M18,6 L6,18",
+        LineIconKind.Pause => "M9,6 L9,18 M15,6 L15,18",
         LineIconKind.Settings => "M9,12 A3,3 0 1 1 15,12 A3,3 0 1 1 9,12 Z M12,2 L12,5 M12,19 L12,22 M2,12 L5,12 M19,12 L22,12 M5,5 L7,7 M17,17 L19,19 M5,19 L7,17 M17,7 L19,5",
         _ => "",
     };

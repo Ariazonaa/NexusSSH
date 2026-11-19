@@ -1,4 +1,3 @@
-using System.Buffers;
 using System.Buffers.Binary;
 using System.IO.Pipes;
 using System.Security.Cryptography;
@@ -222,18 +221,8 @@ public static class McpPipe
         writer.WriteBoolean("error", result.IsError);
     });
 
-    private static byte[] Encode(Action<Utf8JsonWriter> content)
-    {
-        var buffer = new ArrayBufferWriter<byte>();
-        using (var writer = new Utf8JsonWriter(buffer))
-        {
-            writer.WriteStartObject();
-            content(writer);
-            writer.WriteEndObject();
-        }
-
-        return buffer.WrittenSpan.ToArray();
-    }
+    // Mit demselben Encoder wie die Antworten: Ihr JSON steht hier als Text, und jedes " darin würde sonst zu ".
+    private static byte[] Encode(Action<Utf8JsonWriter> content) => McpJson.Encode(content);
 
     private static async Task WriteAsync(Stream pipe, byte[] message, CancellationToken cancellation)
     {

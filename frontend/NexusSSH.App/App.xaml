@@ -55,6 +55,13 @@
                     <SolidColorBrush x:Key="OnDraftAccentBrush" Color="#FF00121F" />
                     <SolidColorBrush x:Key="TileBackgroundBrush" Color="#FF151517" />
                     <SolidColorBrush x:Key="TileBorderBrush" Color="#FF222226" />
+                    <!--  Die Pille „Transfers“, während etwas läuft, danach fertig oder gescheitert  -->
+                    <SolidColorBrush x:Key="TransferRunningBackgroundBrush" Color="#FF102438" />
+                    <SolidColorBrush x:Key="TransferRunningTextBrush" Color="#FF8CC8FF" />
+                    <SolidColorBrush x:Key="TransferDoneBackgroundBrush" Color="#FF0F2A1A" />
+                    <SolidColorBrush x:Key="TransferDoneTextBrush" Color="#FF4ADE80" />
+                    <SolidColorBrush x:Key="TransferFailedBackgroundBrush" Color="#FF3A1416" />
+                    <SolidColorBrush x:Key="TransferFailedTextBrush" Color="#FFFF8F8F" />
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="HighContrast">
                     <SolidColorBrush x:Key="WindowBackgroundBrush" Color="{ThemeResource SystemColorWindowColor}" />
@@ -87,6 +94,12 @@
                     <SolidColorBrush x:Key="OnDraftAccentBrush" Color="{ThemeResource SystemColorHighlightTextColor}" />
                     <SolidColorBrush x:Key="TileBackgroundBrush" Color="{ThemeResource SystemColorWindowColor}" />
                     <SolidColorBrush x:Key="TileBorderBrush" Color="{ThemeResource SystemColorWindowTextColor}" />
+                    <SolidColorBrush x:Key="TransferRunningBackgroundBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+                    <SolidColorBrush x:Key="TransferRunningTextBrush" Color="{ThemeResource SystemColorHighlightTextColor}" />
+                    <SolidColorBrush x:Key="TransferDoneBackgroundBrush" Color="{ThemeResource SystemColorButtonFaceColor}" />
+                    <SolidColorBrush x:Key="TransferDoneTextBrush" Color="{ThemeResource SystemColorButtonTextColor}" />
+                    <SolidColorBrush x:Key="TransferFailedBackgroundBrush" Color="{ThemeResource SystemColorHighlightColor}" />
+                    <SolidColorBrush x:Key="TransferFailedTextBrush" Color="{ThemeResource SystemColorHighlightTextColor}" />
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
 

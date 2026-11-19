@@ -236,12 +236,20 @@ fn without_sftp_whole_files_and_folders_are_transferred() {
     std::fs::write(here.join("up").join("big.bin"), &content).unwrap();
     std::fs::write(here.join("up").join("sub").join("small.txt"), "klein").unwrap();
 
+    // Ohne SFTP ist jedes Stück ein eigener Befehl, und jeder startet am Server ein `sh` (unter Windows das von Git,
+    // dessen Prozesse teuer sind): Hier allein gut 4 s für beide Richtungen, mit 16 Läufen nebeneinander 12 s – auf
+    // einer ausgelasteten Windows-CI einmal über die 30 s von `patience()` (2026-11-06, beim Neustart grün).
+    // Gemessen wächst die Dauer mit der Last, ohne zu hängen; deshalb nur hier mehr Geduld.
     let finished = |transfer: u64| {
-        shell.fixture.recorder.find("the end of the transfer", |event| {
-            event["event"] == "transfer.state"
-                && event["transfer"] == transfer
-                && matches!(event["state"].as_str(), Some("completed" | "failed" | "cancelled"))
-        })
+        let patience = common::patience().max(std::time::Duration::from_secs(120));
+        shell
+            .fixture
+            .recorder
+            .find_within(patience, "the end of the transfer", |event| {
+                event["event"] == "transfer.state"
+                    && event["transfer"] == transfer
+                    && matches!(event["state"].as_str(), Some("completed" | "failed" | "cancelled"))
+            })
     };
 
     shell.fixture.ok(json!({

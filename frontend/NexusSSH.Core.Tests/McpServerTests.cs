@@ -71,6 +71,24 @@ public sealed class McpServerTests
     }
 
     [Fact]
+    public async Task The_line_carries_the_answer_without_blowing_it_up()
+    {
+        // Die Antwort eines Werkzeugs ist JSON voller Anführungszeichen; im Text der Zeile wird jedes zu \" (zwei
+        // Zeichen), nicht zu " (sechs), und was nicht ASCII ist, bleibt, wie es ist.
+        var text = McpJson.Write(writer => writer.WriteString("stdout", string.Concat(Enumerable.Repeat("\"ä€\n", 5000)))).Text;
+        var server = Server((_, _) => Task.FromResult(new McpResult(text)));
+
+        var line = await server.HandleAsync("""{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"servers"}}""", TestContext.Current.CancellationToken);
+
+        Assert.DoesNotContain("\\u0022", line, StringComparison.Ordinal);
+        Assert.DoesNotContain('\n', line!);
+        var escapes = text.Count(character => character is '"' or '\\');
+        Assert.InRange(System.Text.Encoding.UTF8.GetByteCount(line!), System.Text.Encoding.UTF8.GetByteCount(text) + escapes, System.Text.Encoding.UTF8.GetByteCount(text) + escapes + 200);
+        var content = Assert.Single(JsonDocument.Parse(line!).RootElement.GetProperty("result").GetProperty("content").EnumerateArray());
+        Assert.Equal(text, content.GetProperty("text").GetString());
+    }
+
+    [Fact]
     public async Task A_call_without_arguments_gets_an_empty_object()
     {
         McpCall? seen = null;

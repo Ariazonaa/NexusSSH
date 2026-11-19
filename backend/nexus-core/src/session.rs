@@ -77,6 +77,10 @@ pub(crate) enum Shell {
     /// Noch nicht zu sagen: Eine Probe blieb in ihrer Frist ohne Antwort. Wird nicht gemerkt – die nächste Frage
     /// probt neu ([`Link::shell`]).
     Unknown,
+    /// Noch nicht zu sagen: Für die Probe gab der Server keinen Kanal her ([`crate::exec::NO_CHANNEL`] – Shell,
+    /// Dateien und Tunnel belegen alle, die `MaxSessions` zulässt). Das sagt nichts über die Shell; wie
+    /// [`Self::Unknown`] wird es nicht gemerkt, und die nächste Frage probt neu.
+    NoChannel,
 }
 
 fn no_posix_shell() -> crate::sftp::Failure {
@@ -90,6 +94,15 @@ fn shell_unknown() -> crate::sftp::Failure {
     crate::sftp::Failure {
         code: "timeout",
         message: "the server did not say in time how it reads commands".to_owned(),
+    }
+}
+
+/// Was ein Befehl bekommt, wenn sich nicht fragen ließ, wie der Server Befehle liest ([`Shell::NoChannel`]). Dieselbe
+/// Antwort wie für einen Befehl ohne Kanal – die App nennt dann `MaxSessions`.
+fn no_channel_for_probe() -> crate::sftp::Failure {
+    crate::sftp::Failure {
+        code: crate::exec::NO_CHANNEL,
+        message: "the server allowed no further channel to ask how it reads commands".to_owned(),
     }
 }
 
@@ -108,19 +121,39 @@ const WINDOWS_PROBE_LIMIT: Duration = Duration::from_secs(60);
 /// Befehl nie antwortet, kostete sonst jede Anfrage eine volle Frist.
 const MAX_SHELL_SILENCES: u8 = 3;
 
-/// Was eine Probe ergab: die erwartete Antwort, etwas anderes – oder in der Frist gar nichts.
+/// Was eine Probe ergab: die erwartete Antwort, etwas anderes, in der Frist gar nichts – oder gar keinen Kanal, um
+/// zu fragen.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Probe {
     Yes,
     No,
     Silent,
+    NoChannel,
 }
 
+/// Was die Probe ergab. **„Kein Kanal“ ist keine Antwort:** Vorher galt es als Nein, und scheiterten beide Proben
+/// am Kanal (gleich nach dem Verbinden an einem Server mit `MaxSessions 3`), hatte die Verbindung für immer
+/// „keine POSIX-Shell“ (gefunden 2026-11-18).
 fn probe_outcome(result: &Result<crate::exec::Output, crate::sftp::Failure>, answer: &str) -> Probe {
     match result {
         Ok(output) if output.stdout.trim() == answer => Probe::Yes,
         Err(failure) if failure.code == "timeout" => Probe::Silent,
+        Err(failure) if failure.code == crate::exec::NO_CHANNEL => Probe::NoChannel,
         _ => Probe::No,
+    }
+}
+
+/// Was die Frage nach den Freigaben von DSM ergab ([`Link::shell_paths`]): `Ok` steht für die Verbindung fest – die
+/// Freigaben oder keine (kein DSM, der Befehl scheiterte). **Kein Kanal und keine Antwort in der Frist sind `Err`:**
+/// Das sagt nichts über den Server, und gemerkt als „keine Freigaben“ wären die Pfade auf DSM für die ganze
+/// Verbindung falsch gewesen.
+fn shares_outcome(
+    asked: Result<crate::exec::Output, crate::sftp::Failure>,
+) -> Result<Option<crate::exec::SharePaths>, ()> {
+    match asked {
+        Ok(output) => Ok(crate::exec::SharePaths::parse(&output.stdout)),
+        Err(failure) if failure.code == crate::exec::NO_CHANNEL || failure.code == "timeout" => Err(()),
+        Err(_) => Ok(None),
     }
 }
 
@@ -143,8 +176,14 @@ pub(crate) struct Link {
     shell: tokio::sync::OnceCell<Shell>,
     /// Wie oft die Probe dafür bisher stumm blieb ([`MAX_SHELL_SILENCES`]).
     shell_silences: std::sync::atomic::AtomicU8,
+    /// Wie viele Proben bisher nichts festlegten, und was die letzte ergab ([`Shell::Unknown`] oder
+    /// [`Shell::NoChannel`]) – für die Fragen, die auf sie gewartet haben ([`Link::shell`]).
+    shell_unsettled: std::sync::Mutex<(u64, Shell)>,
     /// Wie Pfade des SFTP-Servers in der Shell heißen, wo das anders ist (DSM) – einmal je Verbindung gefragt.
     shares: tokio::sync::OnceCell<Option<crate::exec::SharePaths>>,
+    /// Wie oft die Frage danach nichts festlegte (kein Kanal, keine Antwort) – für die Fragen, die auf sie gewartet
+    /// haben ([`Link::shell_paths`]).
+    shares_unsettled: std::sync::atomic::AtomicU64,
     /// Was das Profil erlaubte, als die Verbindung entstand: Agent- und X11-Forwarding. Die Verbindung nimmt
     /// solche Kanäle des Servers an, solange sie steht – wer das im Profil inzwischen abgeschaltet hat, darf sie
     /// deshalb nicht mehr mitbenutzen.
@@ -157,6 +196,44 @@ pub(crate) struct Link {
     measuring: watch::Sender<usize>,
     /// Wie viele Befehle gerade darauf warten, dass die Messung ihnen Platz macht ([`Self::making_room`]).
     held: watch::Sender<usize>,
+    /// Die Befehle, die gerade über [`Self::making_room`] laufen ([`Commands`]).
+    commands: watch::Sender<Commands>,
+}
+
+/// Was die Befehle einer Verbindung gerade tun: wie viele laufen und wie oft einer seinen Kanal zurückgegeben hat –
+/// darauf wartet ein Befehl, der keinen bekam ([`Link::making_room`]).
+#[derive(Clone, Copy, Debug, Default)]
+struct Commands {
+    running: usize,
+    released: u64,
+}
+
+/// Ein laufender Befehl. Endet er (auch abgebrochen), zählt er nicht mehr; hatte er einen Kanal, ist der jetzt frei.
+struct Running<'a> {
+    commands: &'a watch::Sender<Commands>,
+    had_channel: bool,
+}
+
+impl<'a> Running<'a> {
+    fn new(commands: &'a watch::Sender<Commands>) -> Self {
+        commands.send_modify(|commands| commands.running += 1);
+        Self {
+            commands,
+            had_channel: true,
+        }
+    }
+}
+
+impl Drop for Running<'_> {
+    fn drop(&mut self) {
+        let had_channel = self.had_channel;
+        self.commands.send_modify(|commands| {
+            commands.running = commands.running.saturating_sub(1);
+            if had_channel {
+                commands.released += 1;
+            }
+        });
+    }
 }
 
 /// Zählt, solange es lebt, einen Wert in einem `watch` hoch – für [`Link::measuring`] und [`Link::making_room`].
@@ -178,6 +255,10 @@ impl Drop for Counted<'_> {
 /// So lange wartet ein Befehl höchstens darauf, dass die Messung ihren Kanal schließt.
 const MAKE_ROOM_WAIT: Duration = Duration::from_secs(5);
 
+/// So lange versucht ein Befehl insgesamt, einen Kanal zu bekommen, während andere Befehle der Verbindung die
+/// letzten belegen ([`Link::making_room`]).
+const COMMAND_QUEUE_WAIT: Duration = Duration::from_secs(30);
+
 impl Link {
     /// Für die Messung der Auslastung, solange ihr Kanal offen ist: Ein Befehl, der keinen Kanal bekommt, weiß
     /// dann, dass sie ihm Platz machen kann ([`Self::making_room`]).
@@ -195,19 +276,53 @@ impl Link {
     /// Auslastung gerade einen offen, macht sie Platz: Sie schließt ihren Kanal, der Befehl läuft, danach misst
     /// sie weiter. An einem Server mit `MaxSessions 3` belegten Shell, Dateien und Messung alle drei, und die
     /// Belegung eines Ordners scheiterte mit „connection failed“ (gefunden 2026-10-24).
+    ///
+    /// **Belegt ein anderer Befehl dieser Verbindung den letzten Kanal, wartet der Befehl, bis einer frei wird**
+    /// ([`Commands`], höchstens [`COMMAND_QUEUE_WAIT`]), statt nach den kurzen Versuchen von
+    /// [`crate::exec::open_channel`] aufzugeben. Gleich nach dem Verbinden wollen viele zugleich einen Kanal (die
+    /// Probe der Shell entscheidet, dann laufen alle los, die auf sie warteten); an einem Server mit `MaxSessions 3`
+    /// (Shell, Dateien, ein Befehl) scheiterte so die Frage nach der Anmelde-Shell, und die App tippte einen Befehl
+    /// in eine fish-Shell, die ihn ablehnte (gefunden 2026-11, `mcpshells.ps1 -FishOnly`). Gewartet wird nur,
+    /// solange ein anderer Befehl läuft – sind die Kanäle anderweitig belegt (Shell, Dateien, Tunnel), gibt der
+    /// Befehl auf wie bisher.
     async fn making_room<T, F, Fut>(&self, run: F) -> Result<T, crate::sftp::Failure>
     where
         F: Fn() -> Fut,
         Fut: std::future::Future<Output = Result<T, crate::sftp::Failure>>,
     {
-        match run().await {
-            Err(failure) if failure.code == crate::exec::NO_CHANNEL && *self.measuring.borrow() > 0 => {
-                let _held = Counted::new(&self.held);
-                let mut measuring = self.measuring.subscribe();
-                let _ = timeout(MAKE_ROOM_WAIT, measuring.wait_for(|count| *count == 0)).await;
-                run().await
+        let deadline = tokio::time::Instant::now() + COMMAND_QUEUE_WAIT;
+        // Solange der Befehl hier wartet, beginnt die Messung nicht neu.
+        let mut held = None;
+        loop {
+            let released = self.commands.borrow().released;
+            let result = {
+                let mut running = Running::new(&self.commands);
+                let result = run().await;
+                running.had_channel = !matches!(&result, Err(failure) if failure.code == crate::exec::NO_CHANNEL);
+                result
+            };
+            match result {
+                Err(failure) if failure.code == crate::exec::NO_CHANNEL && tokio::time::Instant::now() < deadline => {
+                    if *self.measuring.borrow() > 0 {
+                        held.get_or_insert_with(|| Counted::new(&self.held));
+                        let mut measuring = self.measuring.subscribe();
+                        let _ = timeout(MAKE_ROOM_WAIT, measuring.wait_for(|count| *count == 0)).await;
+                        continue;
+                    }
+
+                    // Bis ein anderer Befehl seinen Kanal zurückgibt – oder keiner mehr läuft, der es könnte.
+                    let mut commands = self.commands.subscribe();
+                    let _ = tokio::time::timeout_at(
+                        deadline,
+                        commands.wait_for(|now| now.released != released || now.running == 0),
+                    )
+                    .await;
+                    if self.commands.borrow().released == released {
+                        return Err(failure);
+                    }
+                }
+                other => return other,
             }
-            other => other,
         }
     }
 
@@ -217,31 +332,71 @@ impl Link {
     /// eine Probe in ihrer Frist stumm, ist das kein Nein:** Dann gilt für diese Frage [`Shell::Unknown`], und die
     /// nächste probt neu – erst nach [`MAX_SHELL_SILENCES`] stummen Proben steht „keines davon“ fest. Vorher galt
     /// ein langsamer Server für die ganze Verbindung als einer ohne Befehle.
+    ///
+    /// **Gibt der Server für die Probe keinen Kanal her, ist das ebenso wenig ein Nein** ([`Shell::NoChannel`]): Es
+    /// wird nichts festgelegt und auch nicht als stumm gezählt; die nächste Frage probt neu. Vorher galt es als Nein,
+    /// und scheiterten beide Proben am Kanal, hatte die Verbindung für immer keine POSIX-Shell (2026-11-18). Die
+    /// Probe auf PowerShell entfällt dann – sie bekäme ebenso keinen.
+    ///
+    /// **Wer auf eine Probe wartete, die nichts festlegte, bekommt deren Ergebnis** und probt nicht gleich selbst:
+    /// Sonst fragte jeder Wartende der Reihe nach – gleich nach dem Verbinden sind das viele, bei einem stummen Server
+    /// jeder mit voller Frist. Neu geprobt wird erst bei der nächsten Frage; die Messung fragt dann nach einer Pause
+    /// ([`crate::monitor`]), die App nach wenigen Versuchen nicht mehr von selbst.
     pub(crate) async fn shell(&self) -> Shell {
+        let unsettled = || {
+            self.shell_unsettled
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+        };
+        let round = unsettled().0;
         let settled = self
             .shell
             .get_or_try_init(|| async {
-                // Ob noch einmal gefragt werden darf, wenn diese Probe stumm blieb.
-                let again = || self.shell_silences.fetch_add(1, Ordering::Relaxed) + 1 < MAX_SHELL_SILENCES;
-                let ask = |probe: String, answer: &'static str, limit: Duration| async move {
-                    let asked = self
-                        .making_room(|| crate::exec::run(self.handle(), &probe, limit))
-                        .await;
-                    probe_outcome(&asked, answer)
-                };
-                match ask(crate::exec::posix_probe(), crate::exec::POSIX_ANSWER, POSIX_PROBE_LIMIT).await {
-                    Probe::Yes => return Ok(Shell::Posix),
-                    Probe::Silent if again() => return Err(()),
-                    _ => {}
+                // Lief, während diese Frage wartete, eine Probe, die nichts festlegte: deren Ergebnis.
+                {
+                    let (rounds, last) = *unsettled();
+                    if rounds != round {
+                        return Err(last);
+                    }
                 }
-                match ask(crate::winserver::probe(), crate::winserver::ANSWER, WINDOWS_PROBE_LIMIT).await {
-                    Probe::Yes => Ok(Shell::Windows),
-                    Probe::Silent if again() => Err(()),
-                    _ => Ok(Shell::Neither),
+                let probed = self.probe_shell().await;
+                if let Err(last) = probed {
+                    let mut guard = unsettled();
+                    guard.0 += 1;
+                    guard.1 = last;
                 }
+                probed
             })
             .await;
-        settled.copied().unwrap_or(Shell::Unknown)
+        match settled {
+            Ok(shell) => *shell,
+            Err(unsettled) => unsettled,
+        }
+    }
+
+    /// Die Proben für [`Self::shell`]: `Ok`, was feststeht; `Err` ([`Shell::Unknown`] oder [`Shell::NoChannel`]),
+    /// wenn sich nichts sagen ließ.
+    async fn probe_shell(&self) -> Result<Shell, Shell> {
+        // Ob noch einmal gefragt werden darf, wenn diese Probe stumm blieb.
+        let again = || self.shell_silences.fetch_add(1, Ordering::Relaxed) + 1 < MAX_SHELL_SILENCES;
+        let ask = |probe: String, answer: &'static str, limit: Duration| async move {
+            let asked = self
+                .making_room(|| crate::exec::run(self.handle(), &probe, limit))
+                .await;
+            probe_outcome(&asked, answer)
+        };
+        match ask(crate::exec::posix_probe(), crate::exec::POSIX_ANSWER, POSIX_PROBE_LIMIT).await {
+            Probe::Yes => return Ok(Shell::Posix),
+            Probe::NoChannel => return Err(Shell::NoChannel),
+            Probe::Silent if again() => return Err(Shell::Unknown),
+            _ => {}
+        }
+        match ask(crate::winserver::probe(), crate::winserver::ANSWER, WINDOWS_PROBE_LIMIT).await {
+            Probe::Yes => Ok(Shell::Windows),
+            Probe::NoChannel => Err(Shell::NoChannel),
+            Probe::Silent if again() => Err(Shell::Unknown),
+            _ => Ok(Shell::Neither),
+        }
     }
 
     /// Was [`Self::shell`] festgestellt hat, ohne zu proben – `None`, solange es nicht feststeht.
@@ -255,6 +410,7 @@ impl Link {
         match self.shell().await {
             Shell::Posix => Ok(()),
             Shell::Unknown => Err(shell_unknown()),
+            Shell::NoChannel => Err(no_channel_for_probe()),
             Shell::Windows | Shell::Neither => Err(no_posix_shell()),
         }
     }
@@ -263,29 +419,40 @@ impl Link {
     /// Nur bei DSM ist das etwas anderes ([`crate::exec::SharePaths`]); sonst bleiben sie, wie sie sind. Gefragt
     /// wird nur eine POSIX-Shell – und erst, wenn feststeht, dass es eine ist (sonst merkte sich die Verbindung
     /// „keine Freigaben“, nur weil die Probe noch lief).
+    ///
+    /// **Bekam die Frage keinen Kanal oder keine Antwort in ihrer Frist, wird nichts gemerkt** (wie bei
+    /// [`Self::shell`]): Die Pfade bleiben diesmal, wie sie sind, und die nächste Frage fragt neu. Vorher galt das
+    /// für die ganze Verbindung als „keine Freigaben“, und auf DSM ging danach jeder Befehl mit einem Pfad ins Leere
+    /// (gefunden 2026-11-18). Wer auf eine solche Frage wartete, fragt nicht gleich selbst noch einmal.
     pub(crate) async fn shell_paths(&self, paths: &[String]) -> Vec<String> {
         if self.shell().await != Shell::Posix {
             return paths.to_vec();
         }
 
+        let round = self.shares_unsettled.load(Ordering::Relaxed);
         let shares = self
             .shares
-            .get_or_init(|| async {
+            .get_or_try_init(|| async {
+                // Lief, während diese Frage wartete, eine, die nichts festlegte: nicht gleich noch einmal.
+                if self.shares_unsettled.load(Ordering::Relaxed) != round {
+                    return Err(());
+                }
                 let command = crate::exec::posix(crate::exec::SHARES);
                 let asked = self
                     .making_room(|| crate::exec::run(self.handle(), &command, std::time::Duration::from_secs(10)))
-                    .await
-                    .ok()?;
-                crate::exec::SharePaths::parse(&asked.stdout)
+                    .await;
+                let settled = shares_outcome(asked);
+                if settled.is_err() {
+                    self.shares_unsettled.fetch_add(1, Ordering::Relaxed);
+                }
+                settled
             })
-            .await;
+            .await
+            .ok()
+            .and_then(Option::as_ref);
         paths
             .iter()
-            .map(|path| {
-                shares
-                    .as_ref()
-                    .map_or_else(|| path.clone(), |shares| shares.shell_path(path))
-            })
+            .map(|path| shares.map_or_else(|| path.clone(), |shares| shares.shell_path(path)))
             .collect()
     }
 
@@ -304,10 +471,14 @@ impl Link {
                     .await
             }
             (Shell::Windows, Some(windows)) => {
-                self.making_room(|| crate::exec::run(self.handle(), windows, crate::exec::LIMIT))
-                    .await
+                let mut output = self
+                    .making_room(|| crate::exec::run(self.handle(), windows, crate::exec::LIMIT))
+                    .await?;
+                output.stderr = crate::winserver::plain_errors(&output.stderr).trim().to_owned();
+                Ok(output)
             }
             (Shell::Unknown, _) => Err(shell_unknown()),
+            (Shell::NoChannel, _) => Err(no_channel_for_probe()),
             _ => Err(no_posix_shell()),
         }
     }
@@ -321,14 +492,21 @@ impl Link {
     ) -> Result<crate::exec::RunOutput, crate::sftp::Failure> {
         crate::exec::check_command(command)?;
         let limit = Duration::from_secs(seconds.clamp(1, crate::exec::LIMIT.as_secs()));
-        let line = match timeout(limit, self.shell()).await {
-            Ok(Shell::Posix) => crate::exec::posix(command),
-            Ok(Shell::Windows) => crate::winserver::user_command(command),
+        let (line, windows) = match timeout(limit, self.shell()).await {
+            Ok(Shell::Posix) => (crate::exec::posix(command), false),
+            Ok(Shell::Windows) => (crate::winserver::user_command(command), true),
             Ok(Shell::Unknown) | Err(_) => return Err(shell_unknown()),
+            Ok(Shell::NoChannel) => return Err(no_channel_for_probe()),
             Ok(Shell::Neither) => return Err(no_posix_shell()),
         };
-        self.making_room(|| crate::exec::run_command(self.handle(), &line, limit))
-            .await
+        let mut output = self
+            .making_room(|| crate::exec::run_command(self.handle(), &line, limit))
+            .await?;
+        // PowerShell schreibt Fehler als CLIXML ([`crate::winserver::plain_errors`]).
+        if windows {
+            output.stderr = crate::winserver::plain_errors(&output.stderr);
+        }
+        Ok(output)
     }
 
     /// Öffnet auf der stehenden Verbindung einen neuen SFTP-Kanal; `None`, wenn der Server keinen zulässt.
@@ -624,6 +802,11 @@ async fn drive(
         None => handle.channel_open_session().await?,
     };
 
+    // Getrennte Hälften: Stockt das Senden (Fenster des Servers voll), wird trotzdem weiter gelesen. Die zum Schreiben
+    // schließt den Kanal, wie auch immer die Sitzung endet ([`ShellChannel`]).
+    let (mut reader, channel) = channel.split();
+    let channel = ShellChannel(Some(channel));
+
     channel
         .request_pty(
             false,
@@ -702,8 +885,7 @@ async fn drive(
     // Kommt das Terminal mit dem Zeichnen nicht nach, hält die App die Ausgabe an.
     let (flow, mut paused) = watch::channel(false);
 
-    // Getrennte Hälften: Stockt das Senden (Fenster des Servers voll), wird trotzdem weiter gelesen.
-    let (mut reader, writer) = channel.split();
+    let writer = &channel;
     let read = async {
         let mut exit_status = None;
         let mut closed_cleanly = false;
@@ -783,6 +965,9 @@ async fn drive(
     }
 
     shell_gone.store(true, Ordering::Relaxed);
+    // Den Kanal der Shell gleich zurückgeben: Lehnte der Server sie ab, bliebe er sonst belegt, solange die Sitzung
+    // nur mit Dateien steht (hat der Server ihn schon geschlossen, schickt russh nichts mehr).
+    let _ = writer.close().await;
     shared.emit(Event::SessionFilesOnly {
         session,
         exit_status: match end {
@@ -869,6 +1054,34 @@ pub(crate) async fn relink(
         .await
         .map(Arc::new)
         .map_err(|failure| (failure.reason, failure.message))
+}
+
+/// Die Hälfte zum Schreiben des Kanals, auf dem die Shell läuft. **Fällt sie weg, wird der Kanal geschlossen** – auch,
+/// wenn die Sitzung von außen beendet wird (`Shared::finish` bricht ihre Aufgabe ab). russh schickt beim Wegfallen
+/// eines Kanals nichts, und auf einer geteilten Verbindung, die für die anderen Sitzungen weiterläuft, blieb er für den
+/// Server belegt: Bei `MaxSessions` kostete jeder geschlossene zweite Tab einen Kanal (gefunden 2026-11-18). Hat der
+/// Server ihn schon geschlossen (`exit`), schickt russh nichts mehr.
+struct ShellChannel(Option<russh::ChannelWriteHalf<Msg>>);
+
+impl std::ops::Deref for ShellChannel {
+    type Target = russh::ChannelWriteHalf<Msg>;
+
+    fn deref(&self) -> &Self::Target {
+        // Herausgenommen wird sie erst im Drop.
+        self.0.as_ref().expect("the shell channel is alive")
+    }
+}
+
+impl Drop for ShellChannel {
+    fn drop(&mut self) {
+        // Drop kann nicht warten, deshalb als eigene Aufgabe (wie bei [`Link`]); läuft kein Runtime mehr, endet die
+        // Verbindung ohnehin.
+        if let (Some(channel), Ok(runtime)) = (self.0.take(), tokio::runtime::Handle::try_current()) {
+            runtime.spawn(async move {
+                let _ = channel.close().await;
+            });
+        }
+    }
 }
 
 /// Wie die Shell einer Sitzung zu Ende ging.
@@ -979,12 +1192,15 @@ async fn connect(shared: &Arc<Shared>, session: u64, chain: &[Profile]) -> Resul
         x11,
         shell: tokio::sync::OnceCell::new(),
         shell_silences: std::sync::atomic::AtomicU8::new(0),
+        shell_unsettled: std::sync::Mutex::new((0, Shell::Unknown)),
         shares: tokio::sync::OnceCell::new(),
+        shares_unsettled: std::sync::atomic::AtomicU64::new(0),
         forwards: (profile.forward_agent, profile.forward_x11),
         tunnels: crate::tunnels::Tunnels::new(shared, &profile.id, remotes),
         peer,
         measuring: watch::Sender::new(0),
         held: watch::Sender::new(0),
+        commands: watch::Sender::new(Commands::default()),
     })
 }
 
@@ -2195,17 +2411,37 @@ mod probe_tests {
     }
 
     #[test]
-    fn only_silence_leaves_the_question_open() {
+    fn only_silence_and_no_channel_leave_the_question_open() {
         assert_eq!(probe_outcome(&output("nexus-posix\r\n"), "nexus-posix"), Probe::Yes);
         assert_eq!(
             probe_outcome(&output("'sh' is not recognized"), "nexus-posix"),
             Probe::No
         );
         assert_eq!(probe_outcome(&output(""), "nexus-posix"), Probe::No);
-        // Abgelehnt ist ein Nein; nur eine Probe, die in ihrer Frist nichts sagt, lässt die Frage offen.
+        // Abgelehnt ist ein Nein; nur eine Probe, die in ihrer Frist nichts sagt oder gar nicht fragen konnte (kein
+        // Kanal), lässt die Frage offen.
         assert_eq!(probe_outcome(&failure("no_exec"), "nexus-posix"), Probe::No);
         assert_eq!(probe_outcome(&failure("failed"), "nexus-posix"), Probe::No);
         assert_eq!(probe_outcome(&failure("timeout"), "nexus-posix"), Probe::Silent);
+        assert_eq!(
+            probe_outcome(&failure(crate::exec::NO_CHANNEL), "nexus-posix"),
+            Probe::NoChannel
+        );
         assert_eq!(shell_unknown().code, "timeout");
+        assert_eq!(no_channel_for_probe().code, crate::exec::NO_CHANNEL);
+    }
+
+    #[test]
+    fn only_silence_and_no_channel_leave_the_shares_open() {
+        // Eine Antwort legt fest – auch die leere (kein DSM); ebenso ein Befehl, der scheiterte.
+        assert_eq!(shares_outcome(output("")), Ok(None));
+        assert!(matches!(
+            shares_outcome(output("@home /var/services/homes/u\n@share /volume1/video/\n")),
+            Ok(Some(_))
+        ));
+        assert_eq!(shares_outcome(failure("failed")), Ok(None));
+        // Kein Kanal, keine Antwort in der Frist: nichts gemerkt, die nächste Frage fragt neu (2026-11-18).
+        assert_eq!(shares_outcome(failure(crate::exec::NO_CHANNEL)), Err(()));
+        assert_eq!(shares_outcome(failure("timeout")), Err(()));
     }
 }

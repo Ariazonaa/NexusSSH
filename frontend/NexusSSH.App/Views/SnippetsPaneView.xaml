@@ -144,9 +144,12 @@
             <ListView.ItemTemplate>
                 <DataTemplate x:DataType="vm:SnippetItem">
                     <Grid>
-                        <!--  Überschrift eines Ordners: ein Klick (oder Enter) klappt ihn ein und aus  -->
+                        <!--
+                            Überschrift eines Ordners: ein Klick (oder Enter) klappt ihn ein und aus. Die zusätzliche
+                            Luft gleich oben und unten – nur oben schob sie Ordner und Text in ihrer Zeile nach unten.
+                        -->
                         <Grid
-                            Margin="0,4,0,0"
+                            Margin="0,2,0,2"
                             ColumnSpacing="6"
                             Visibility="{x:Bind IsHeading}">
                             <Grid.ColumnDefinitions>
@@ -155,7 +158,9 @@
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
+                            <!--  Der Pfeil ist flach und stand mittig gemessen 1 px über Ordner und Schrift  -->
                             <controls:LineIcon
+                                Margin="0,2,0,0"
                                 VerticalAlignment="Center"
                                 Foreground="{ThemeResource MutedTextBrush}"
                                 Kind="{x:Bind app:Ui.CollapseIcon(IsCollapsed)}"

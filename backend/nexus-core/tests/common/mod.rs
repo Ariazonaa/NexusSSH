@@ -22,7 +22,7 @@ pub const PATIENCE: Duration = Duration::from_secs(30);
 /// Wie lange auf ein Ereignis gewartet wird: [`PATIENCE`], gegen einen langsamen echten Server mehr – Sekunden in
 /// `NEXUS_PATIENCE` (ein Windows mit PowerShell als Anmelde-Shell brauchte auf einer ausgelasteten VM länger als
 /// 30 s bis zur Shell).
-fn patience() -> Duration {
+pub fn patience() -> Duration {
     std::env::var("NEXUS_PATIENCE")
         .ok()
         .and_then(|seconds| seconds.parse().ok())

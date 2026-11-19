@@ -1378,28 +1378,38 @@ pub(crate) async fn run<H: Handler>(
         let Some(shell) = shell else {
             continue;
         };
-        // Unter Windows dieselben Abschnitte aus einem PowerShell-Skript ([`crate::winserver::monitor`]). Das endet
-        // nicht mit seinem Kanal – der Kern beendet es danach selbst, an der Nummer, die es genannt hat.
-        let windows = shell == crate::session::Shell::Windows;
-        let script = if windows {
-            crate::winserver::command(&crate::winserver::monitor(plain))
+        let end = if shell == crate::session::Shell::NoChannel {
+            // Für die Probe gab der Server keinen Kanal her: wie unten, wenn die Messung selbst keinen bekommt – mit
+            // deren Pausen, nicht alle paar Sekunden eine neue Probe.
+            End::Unavailable {
+                message: NO_CHANNEL_TEXT.to_owned(),
+                silent: true,
+            }
         } else {
-            SCRIPT.to_owned()
+            // Unter Windows dieselben Abschnitte aus einem PowerShell-Skript ([`crate::winserver::monitor`]). Das
+            // endet nicht mit seinem Kanal – der Kern beendet es danach selbst, an der Nummer, die es genannt hat.
+            let windows = shell == crate::session::Shell::Windows;
+            let script = if windows {
+                crate::winserver::command(&crate::winserver::monitor(plain))
+            } else {
+                SCRIPT.to_owned()
+            };
+            let mut remote = None;
+            let end = watch(
+                shared,
+                session,
+                (handle, link),
+                &script,
+                (&mut enabled, &mut held),
+                &mut answered,
+                &mut remote,
+            )
+            .await;
+            if let (true, Some(running)) = (windows, remote) {
+                let _ = crate::exec::run(handle, &crate::winserver::end_loop(running), OPEN_TIMEOUT).await;
+            }
+            end
         };
-        let mut remote = None;
-        let end = watch(
-            shared,
-            session,
-            (handle, link),
-            &script,
-            (&mut enabled, &mut held),
-            &mut answered,
-            &mut remote,
-        )
-        .await;
-        if let (true, Some(running)) = (windows, remote) {
-            let _ = crate::exec::run(handle, &crate::winserver::end_loop(running), OPEN_TIMEOUT).await;
-        }
         if answered {
             delivered = true;
             failures = 0;

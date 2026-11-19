@@ -1215,6 +1215,11 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
             return;
         }
 
+        // Eine Sitzung, die geht, wird nicht mehr gemessen – gleich als Erstes: Wechselt unten der aktive Tab, nähme das
+        // ihr nur das Hinsehen, und solange ihre erste Messung lief (Probe), schaltete das die Messung noch einmal ein
+        // (gefunden 2026-11-18).
+        session.Inspector.Dispose();
+
         if (ReferenceEquals(Logs?.Session, session))
         {
             Logs = null;
@@ -1239,6 +1244,7 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
         NoteEnded(session, L.Get("HistoryTabClosed"));
         session.Files.FileOpened -= OnFileOpened;
         session.Dispose();
+        ForgetMux(session);
         DropQuick(session);
         UpdateLayout();
         Log(L.Get("LogDisconnected", session.Profile.Name));
@@ -1915,6 +1921,30 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
     public void ZoomTerminal(int delta)
         => TerminalFontSize = Math.Clamp(TerminalFontSize + delta, TerminalThemes.MinFontSize, TerminalThemes.MaxFontSize);
 
+    /// <summary>
+    /// Die App endet: Jede Sitzung wird getrennt (<see cref="SessionViewModel.Dispose"/>). Scheitert das bei einer, geht
+    /// es mit den übrigen weiter – sonst liefen deren Verbindungen (und etwa ein mosh-server) nach dem Ende der App
+    /// weiter, gefunden 2026-11-01. Was scheiterte, kommt zurück, damit es im Protokoll steht.
+    /// </summary>
+    public IReadOnlyList<Exception> EndSessions()
+    {
+        List<Exception> failures = [];
+        foreach (var session in Sessions.ToList())
+        {
+            try
+            {
+                session.Dispose();
+            }
+            catch (Exception exception)
+            {
+                // Bewusst jede Ausnahme: Hier hört nur noch das Protokoll zu, und die übrigen Sitzungen müssen zu.
+                failures.Add(exception);
+            }
+        }
+
+        return failures;
+    }
+
     public void Dispose()
     {
         _editor?.Dispose();
@@ -2000,9 +2030,9 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
 
         // Erst, wenn die Verbindung ganz steht (Dateien und Auslastung hängen dann daran) – über die fragt die App
         // nach laufenden tmux-/screen-Sitzungen.
-        session.Settled += () => OnConnectedForMux(session);
-        session.Settled += () => _ = AskForCommandsAsync(session);
-        session.Settled += () => OnConnectedForCompletion(session);
+        WhenSettled(session, () => OnConnectedForMux(session));
+        WhenSettled(session, () => _ = AskForCommandsAsync(session));
+        WhenSettled(session, () => OnConnectedForCompletion(session));
         WatchSystem(session);
         WatchAlerts(session);
         WatchSnippets(session);
@@ -2022,6 +2052,20 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
         Log(L.Get("LogSessionOpened", profile.Name, profile.Address));
         return session;
     }
+
+    /// <summary>
+    /// Beginnt <paramref name="work"/>, sobald die Sitzung steht oder endet (<see cref="SessionViewModel.Settled"/>) –
+    /// aber nicht, wenn sie beendet wird: Dann meldet sie sich nur noch für die, die auf sie warten, und für eine
+    /// Sitzung, die gerade geht, fragte die App sonst den Server nach Befehlen, Namen und tmux (gefunden 2026-11-18).
+    /// </summary>
+    private static void WhenSettled(SessionViewModel session, Action work)
+        => session.Settled += () =>
+        {
+            if (!session.IsEnding)
+            {
+                work();
+            }
+        };
 
     /// <summary>
     /// So lange wird gewartet, bevor die App noch einmal fragt, wie der Server Befehle annimmt – wenn er es beim

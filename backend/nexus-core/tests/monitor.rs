@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 
 use common::{Fixture, PATIENCE, with_password};
 use nexus_testserver::{Monitor, Options};
-use serde_json::json;
+use serde_json::{Value, json};
 
 fn connected(monitor: Monitor) -> Fixture {
     let fixture = Fixture::new(Options {
@@ -271,6 +271,263 @@ fn a_command_gets_a_channel_while_the_monitor_holds_the_last_one() {
         std::thread::sleep(Duration::from_millis(200));
     }
     assert!(!fixture.recorder.saw("monitor.unavailable"));
+}
+
+#[test]
+fn a_command_waits_while_another_command_holds_the_last_channel() {
+    // MaxSessions 3 wie im Container mit fish: Shell, Dateien und ein Befehl. Gleich nach dem Verbinden wollen mehrere
+    // Befehle zugleich einen Kanal; so scheiterte die Frage nach der Anmelde-Shell, und die App tippte einen Befehl in
+    // eine fish-Shell (2026-11).
+    let fixture = Fixture::with(|directory| {
+        std::fs::create_dir_all(directory.join("remote")).unwrap();
+        Options {
+            max_sessions: Some(3),
+            sftp_root: Some(directory.join("remote")),
+            ..with_password()
+        }
+    });
+    let profile = fixture.profile(json!({}));
+    fixture.open(1, &profile);
+    fixture.trust_host_key();
+    let secret = fixture.recorder.event("prompt.secret");
+    fixture.answer(&secret, json!({ "values": ["geheim"] }));
+    fixture
+        .recorder
+        .find("verbunden", |event| event["state"] == "connected");
+    let result = |request: u64| {
+        fixture.recorder.find("the answer", |event| {
+            event["event"] == "sftp.result" && event["request"] == request
+        })
+    };
+
+    // Erst steht die Shell fest; dann belegt ein Befehl den letzten Kanal drei Sekunden lang – länger als die kurzen
+    // Versuche, einen Kanal zu öffnen.
+    fixture.ok(json!({ "op": "commands.probe", "session": 1, "request": 1 }));
+    result(1);
+    fixture.ok(json!({ "op": "exec.run", "session": 1, "request": 2, "command": "sleep 3", "seconds": 20 }));
+    std::thread::sleep(Duration::from_secs(1));
+    fixture.ok(json!({ "op": "commands.shell", "session": 1, "request": 3 }));
+
+    let shell = result(3);
+    assert_eq!(
+        (&shell["ok"], &shell["line"]),
+        (&json!(true), &json!("/bin/bash")),
+        "{shell}"
+    );
+    let held = result(2);
+    assert_eq!(
+        (&held["run"]["status"], &held["run"]["timed_out"]),
+        (&json!(0), &json!(false)),
+        "{held}"
+    );
+}
+
+/// Meldet sich mit `options` an und wartet, bis Sitzung 1 steht.
+fn signed_in(options: impl FnOnce(&std::path::Path) -> Options) -> (Fixture, String) {
+    let fixture = Fixture::with(|directory| options(directory));
+    let profile = fixture.profile(json!({}));
+    fixture.open(1, &profile);
+    fixture.trust_host_key();
+    let secret = fixture.recorder.event("prompt.secret");
+    fixture.answer(&secret, json!({ "values": ["geheim"] }));
+    fixture.recorder.find("verbunden", |event| {
+        event["state"] == "connected" && event["session"] == 1
+    });
+    (fixture, profile)
+}
+
+fn answer(fixture: &Fixture, request: Value) -> Value {
+    let number = request["request"].clone();
+    fixture.ok(request);
+    fixture.recorder.find("the answer", |event| {
+        event["event"] == "sftp.result" && event["request"] == number
+    })
+}
+
+#[test]
+fn a_shell_probe_without_a_channel_settles_nothing() {
+    // MaxSessions 3: Sitzung 1 belegt Shell und Dateien, die zweite auf derselben Verbindung die Shell. Ihre Dateien
+    // bekommen keinen Kanal, und der Zugriff über Befehle fragt nach der Shell – auch ohne Kanal. Vorher galt „kein
+    // Kanal“ als Nein, und die Verbindung hatte für immer keine POSIX-Shell (2026-11-18).
+    let (fixture, profile) = signed_in(|directory| {
+        std::fs::create_dir_all(directory.join("remote")).unwrap();
+        Options {
+            max_sessions: Some(3),
+            sftp_root: Some(directory.join("remote")),
+            ..with_password()
+        }
+    });
+    fixture.ok(json!({
+        "op": "session.open", "session": 2, "profile_id": profile, "cols": 80, "rows": 24, "share": 1,
+    }));
+    fixture.recorder.find("die zweite steht", |event| {
+        event["state"] == "connected" && event["session"] == 2
+    });
+
+    // Solange alle Kanäle belegt sind: „kein Kanal“, nicht „keine POSIX-Shell“.
+    let login_shell = |request: u64| {
+        answer(
+            &fixture,
+            json!({ "op": "commands.shell", "session": 1, "request": request }),
+        )
+    };
+    let crowded = login_shell(1);
+    assert_eq!(
+        (&crowded["ok"], &crowded["error"]),
+        (&json!(false), &json!("no_channel")),
+        "{crowded}"
+    );
+
+    // Ist wieder einer frei (die zweite wird geschlossen), fragt die nächste Frage neu – und die Shell steht fest.
+    fixture.ok(json!({ "op": "session.close", "session": 2 }));
+    fixture.recorder.find("die zweite endet", |event| {
+        event["state"] == "closed" && event["session"] == 2
+    });
+    let deadline = Instant::now() + PATIENCE;
+    let mut request = 2;
+    loop {
+        let asked = login_shell(request);
+        if asked["ok"] == true {
+            assert_eq!(asked["line"], "/bin/bash", "{asked}");
+            break;
+        }
+        assert_eq!(asked["error"], "no_channel", "{asked}");
+        assert!(
+            Instant::now() < deadline,
+            "no channel after the second session was closed: {asked}"
+        );
+        std::thread::sleep(Duration::from_millis(200));
+        request += 1;
+    }
+}
+
+/// Fragt `request` (mit der Nummer `number`), bis die Antwort nicht mehr „kein Kanal“ ist.
+fn until_a_channel_is_free(fixture: &Fixture, request: &Value, mut number: u64) -> Value {
+    let deadline = Instant::now() + PATIENCE;
+    loop {
+        let mut asked = request.clone();
+        asked["request"] = json!(number);
+        let answered = answer(fixture, asked);
+        if answered["error"] != "no_channel" {
+            return answered;
+        }
+        assert!(Instant::now() < deadline, "no channel became free: {answered}");
+        std::thread::sleep(Duration::from_millis(200));
+        number += 1;
+    }
+}
+
+#[test]
+fn closing_a_shared_session_closes_its_channel() {
+    // MaxSessions 2 ohne SFTP: Die Shell der ersten und die der zweiten Sitzung auf derselben Verbindung belegen
+    // beide Kanäle. Wird die zweite geschlossen, muss ihr Kanal frei werden – vorher fiel er nur weg, blieb für den
+    // Server belegt, und kein Befehl bekam je wieder einen (2026-11-18).
+    let (fixture, profile) = signed_in(|_| Options {
+        max_sessions: Some(2),
+        sftp_root: None,
+        ..with_password()
+    });
+    let login_shell = json!({ "op": "commands.shell", "session": 1 });
+    let mut first = login_shell.clone();
+    first["request"] = json!(1);
+    assert_eq!(answer(&fixture, first)["ok"], true);
+
+    fixture.ok(json!({
+        "op": "session.open", "session": 2, "profile_id": profile, "cols": 80, "rows": 24, "share": 1,
+    }));
+    fixture.recorder.find("die zweite steht", |event| {
+        event["state"] == "connected" && event["session"] == 2
+    });
+    // Die zweite teilt wirklich die Verbindung: Für einen Befehl ist kein Kanal mehr da.
+    let mut crowded = login_shell.clone();
+    crowded["request"] = json!(2);
+    let crowded = answer(&fixture, crowded);
+    assert_eq!(crowded["error"], "no_channel", "{crowded}");
+
+    fixture.ok(json!({ "op": "session.close", "session": 2 }));
+    fixture.recorder.find("die zweite endet", |event| {
+        event["state"] == "closed" && event["session"] == 2
+    });
+    let freed = until_a_channel_is_free(&fixture, &login_shell, 3);
+    assert_eq!(
+        (&freed["ok"], &freed["line"]),
+        (&json!(true), &json!("/bin/bash")),
+        "{freed}"
+    );
+}
+
+#[test]
+fn a_shares_question_without_a_channel_settles_nothing() {
+    // Wie Pfade in der Shell heißen (DSM), fragt der Kern einmal je Verbindung. Bekam die Frage keinen Kanal, galt das
+    // vorher für immer als „keine Freigaben“ (2026-11-18). Der Testserver führt die Befehle mit `sh` aus und schreibt
+    // jede Zeile mit; die Frage nach den Freigaben erkennt man an `synoinfo.conf`.
+    if !nexus_testserver::has_shell() {
+        eprintln!("no sh on this machine – skipped");
+        return;
+    }
+    let (fixture, profile) = signed_in(|directory| {
+        std::fs::create_dir_all(directory.join("home")).unwrap();
+        Options {
+            max_sessions: Some(2),
+            sftp_root: None,
+            real_shell: Some(directory.join("home")),
+            command_log: Some(directory.join("commands.log")),
+            ..with_password()
+        }
+    });
+    let asked_for_shares = || {
+        std::fs::read_to_string(fixture.directory.join("commands.log"))
+            .unwrap_or_default()
+            .lines()
+            .filter(|line| line.contains("synoinfo.conf"))
+            .count()
+    };
+
+    // Die zweite Sitzung auf derselben Verbindung belegt mit der ersten beide Kanäle.
+    fixture.ok(json!({
+        "op": "session.open", "session": 2, "profile_id": profile, "cols": 80, "rows": 24, "share": 1,
+    }));
+    fixture.recorder.find("die zweite steht", |event| {
+        event["state"] == "connected" && event["session"] == 2
+    });
+    // Die Größe des Ordners, in dem die Shell läuft (unter Windows heißt er dort `/c/…`).
+    let home = fixture.recorder.find("die erste steht", |event| {
+        event["state"] == "connected" && event["session"] == 1
+    })["home"]
+        .clone();
+    assert!(home.is_string(), "files over commands: {home}");
+    let size = json!({ "op": "sftp.size", "session": 1, "path": home });
+    let mut crowded = size.clone();
+    crowded["request"] = json!(1);
+    let crowded = answer(&fixture, crowded);
+    assert_eq!(crowded["error"], "no_channel", "{crowded}");
+    assert_eq!(asked_for_shares(), 0, "the shares question got no channel");
+
+    // Ist wieder ein Kanal frei, fragt der nächste Befehl neu.
+    fixture.ok(json!({ "op": "session.close", "session": 2 }));
+    fixture.recorder.find("die zweite endet", |event| {
+        event["state"] == "closed" && event["session"] == 2
+    });
+    let freed = until_a_channel_is_free(&fixture, &size, 2);
+    assert_eq!(asked_for_shares(), 1, "{freed}");
+}
+
+#[test]
+fn a_refused_sftp_channel_is_closed() {
+    // MaxSessions 2 ohne SFTP: Der abgelehnte Kanal blieb offen und belegte mit der Shell beide – kein Befehl bekam
+    // danach noch einen (2026-11-18).
+    let (fixture, _) = signed_in(|_| Options {
+        max_sessions: Some(2),
+        sftp_root: None,
+        ..with_password()
+    });
+
+    let shell = answer(&fixture, json!({ "op": "commands.shell", "session": 1, "request": 1 }));
+    assert_eq!(
+        (&shell["ok"], &shell["line"]),
+        (&json!(true), &json!("/bin/bash")),
+        "{shell}"
+    );
 }
 
 #[test]
