@@ -1,6 +1,6 @@
 # Features
 
-What NexusSSH can do today – by area, not by date. As of version 0.4.0 (phase 3 including its remaining items,
+What NexusSSH can do today – by area, not by date. As of version 0.5.0 (phase 3 including its remaining items,
 packaging).
 
 Everything is tested against the built-in test server and most of it against real OpenSSH servers: Debian as root,
@@ -71,7 +71,9 @@ the server load then comes from other sources (without paging and disk throughpu
   details"), on the right **Details** (opens the "Server details" page), **Transfers** (while something runs it
   turns blue and shows the direction, the file name or how many, the percentage and a thin progress bar, with
   server, speed and remaining time in its tooltip; afterwards "index.php uploaded" stays green for five seconds, a
-  failure stays red until clicked, paused transfers show amber; a click shows and hides the bottom pane with the
+  failure stays red until clicked, paused transfers show amber; deleting shows a bin, the name and how many items are
+  already gone, with the bar running without a percentage, then "node_modules deleted" or "node_modules: delete
+  failed"; with transfers and deletions at once it counts the tasks; a click shows and hides the bottom pane with the
   transfers) and **Problems n** (only when there
   are any; likewise with the problems). Without an active session, and with one that cannot be measured (local
   terminal, Telnet, serial), only the buttons on the right are there
@@ -485,6 +487,10 @@ the server load then comes from other sources (without paging and disk throughpu
   owner and group** like with `chmod` and `chown` (name or number) – for a folder, on request, **for everything in
   it**; folders stay enterable, links are not followed
 - New folder, rename (never overwrites), delete (folders including contents, with a confirmation prompt)
+- **Deleting shows its progress**: on the server, and for "Delete permanently" (Shift+Del) in the local column, each
+  deletion runs in the background as one task – several selected items included – with a row in the transfers (what,
+  server, how many items are gone, **Cancel**) and in the bottom bar. Cancel stops after the current item; what is
+  gone stays gone. The list reloads afterwards, an error also shows above it. Deletions are not kept across a restart
 - **Edit a file** (double-click, as in MobaXterm): fetch, open in the configured editor, upload again after every
   save
 - **Conflict when editing**: if the file on the server has changed since it was fetched, the app asks before
@@ -628,7 +634,7 @@ the server load then comes from other sources (without paging and disk throughpu
 - Closed on a new installation; "Transfers n" and "Problems n" in the bottom row show and hide it with the matching
   tab, the command palette with "Toggle bottom panel"
 - **Output**: the app's log
-- **Transfers**: all uploads and downloads
+- **Transfers**: all uploads and downloads, and above them the deletions with their count and "Cancel"
 - **Problems**: warnings and errors (failed connections and transfers, notices from the core), with a counter in the
   tab
 - **Search**: hits from the history of all terminals

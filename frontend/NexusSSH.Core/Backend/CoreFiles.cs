@@ -32,6 +32,9 @@ internal sealed class CoreRemoteFileSystem(CoreBackend backend, ulong session, S
     public Task DeleteAsync(string path)
         => backend.SftpAsync(new RequestDto("sftp.delete") { Session = session, Path = path });
 
+    public IDeletion StartDelete(IReadOnlyList<string> paths, Action<DeletionStatus> changed)
+        => backend.StartDelete(session, paths, changed);
+
     public Task SetPermissionsAsync(string path, int mode, bool recursive = false)
         => backend.SftpAsync(new RequestDto("sftp.chmod") { Session = session, Path = path, Mode = mode & Format.PermissionBits, Recursive = recursive ? true : null });
 

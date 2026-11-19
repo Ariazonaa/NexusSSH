@@ -473,7 +473,8 @@ public sealed partial class LocalBrowserView : UserControl
         }
     }
 
-    // Erst fragen. Gelöscht wird in den Papierkorb, wo das Laufwerk einen hat.
+    // Erst fragen. Gelöscht wird in den Papierkorb, wo das Laufwerk einen hat; endgültig (Umschalt+Entf) als
+    // Löschvorgang neben der Oberfläche, mit Zähler unten und „Abbrechen“ in den Transfers.
     private async Task DeleteSelectedAsync(bool forever = false)
     {
         if (Selected.FindAll(entry => !entry.IsDrive) is not { Count: > 0 } entries)
@@ -482,9 +483,18 @@ public sealed partial class LocalBrowserView : UserControl
         }
 
         var title = entries is [var single] ? L.Get("DeleteEntryTitle", single.DisplayName) : L.Get("DeleteEntriesTitle", entries.Count);
-        if (await App.Dialogs.ConfirmAsync(title, L.Get(forever ? "LocalDeleteForeverText" : "LocalDeleteText"), L.Get("Delete")))
+        if (!await App.Dialogs.ConfirmAsync(title, L.Get(forever ? "LocalDeleteForeverText" : "LocalDeleteText"), L.Get("Delete")))
         {
-            Local.Delete(entries, forever);
+            return;
+        }
+
+        if (forever)
+        {
+            await Local.DeleteForeverAsync(entries);
+        }
+        else
+        {
+            Local.Delete(entries);
         }
     }
 }

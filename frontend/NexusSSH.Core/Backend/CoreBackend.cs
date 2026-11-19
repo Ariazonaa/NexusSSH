@@ -32,6 +32,8 @@ public sealed class CoreBackend : INexusBackend, IProfileStore, IDisposable
     private readonly ConcurrentDictionary<ulong, TaskCompletionSource<EventDto>> _requests = new();
     private readonly ConcurrentDictionary<ulong, (Action<string> Text, Action<string?> Ended)> _follows = new();
     private long _lastFollow;
+    private readonly ConcurrentDictionary<ulong, Action<DeletionStatus>> _deletes = new();
+    private long _lastDelete;
     private long _lastSession;
     private long _lastRequest;
     private volatile IReadOnlyList<ServerProfile> _profiles = [];
@@ -353,6 +355,52 @@ public sealed class CoreBackend : INexusBackend, IProfileStore, IDisposable
         }
     }
 
+    /// <summary>Beginnt einen Löschvorgang (<c>delete.start</c>); sein Stand kommt als <c>delete.state</c>.</summary>
+    internal IDeletion StartDelete(ulong session, IReadOnlyList<string> paths, Action<DeletionStatus> changed)
+    {
+        var number = (ulong)Interlocked.Increment(ref _lastDelete);
+
+        // Vor dem Start eintragen: Das erste „läuft“ kann kommen, bevor delete.start zurückkehrt.
+        _deletes[number] = changed;
+        var response = Send(new RequestDto("delete.start") { Session = session, Delete = number, Paths = paths });
+        if (!response.Ok && _deletes.TryRemove(number, out _))
+        {
+            changed(new DeletionStatus(DeletionState.Failed, 0, response.Error ?? "failed", response.Message));
+        }
+
+        return new Deleting(this, number);
+    }
+
+    private sealed class Deleting(CoreBackend backend, ulong number) : IDeletion
+    {
+        // Nach dem Ende gibt es nichts mehr anzuhalten; der Kern nähme es auch so hin.
+        public void Cancel()
+        {
+            if (backend._deletes.ContainsKey(number))
+            {
+                backend.Send(new RequestDto("delete.cancel") { Delete = number });
+            }
+        }
+    }
+
+    // Das Ende genau einmal: Wer es aus der Liste nimmt, meldet es.
+    private void OnDeletion(ulong number, Action<DeletionStatus> changed, EventDto message)
+    {
+        var status = new DeletionStatus(DeletionStateOf(message.State), Math.Max(message.Removed ?? 0, 0), message.Error, message.Message);
+        if (!status.IsFinished || _deletes.TryRemove(number, out _))
+        {
+            changed(status);
+        }
+    }
+
+    private static DeletionState DeletionStateOf(string? state) => state switch
+    {
+        "running" => DeletionState.Running,
+        "done" => DeletionState.Done,
+        "cancelled" => DeletionState.Cancelled,
+        _ => DeletionState.Failed,
+    };
+
     internal bool Write(ulong session, ReadOnlySpan<byte> data) => _transport.Write(session, data);
 
     internal void Forget(ulong session) => _connections.TryRemove(session, out _);
@@ -504,6 +552,10 @@ public sealed class CoreBackend : INexusBackend, IProfileStore, IDisposable
 
             case "transfer.state":
                 TransferQueue.OnEvent(message);
+                break;
+
+            case "delete.state" when message.Delete is { } delete && _deletes.TryGetValue(delete, out var deletion):
+                OnDeletion(delete, deletion, message);
                 break;
 
             case "follow.data" when message.Follow is { } follow && _follows.TryGetValue(follow, out var reader):

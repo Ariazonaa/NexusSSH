@@ -447,8 +447,17 @@ public interface IRemoteFileSystem
     /// <summary>Benennt um oder verschiebt. Ein vorhandenes Ziel wird nie überschrieben.</summary>
     Task RenameAsync(string from, string to);
 
-    /// <summary>Löscht eine Datei oder ein Verzeichnis samt Inhalt.</summary>
+    /// <summary>Löscht eine Datei oder ein Verzeichnis samt Inhalt – still, ohne Rückmeldung unterwegs (der Abgleich).</summary>
     Task DeleteAsync(string path);
+
+    /// <summary>
+    /// Ein Löschvorgang, den der Benutzer sieht: die Pfade nacheinander, jeder samt Inhalt. <paramref name="changed"/>
+    /// kommt von einem beliebigen Thread – gleich zu Beginn mit 0, unterwegs mit der Zahl schon gelöschter Einträge
+    /// und am Ende genau einmal mit dem Endzustand. Beim ersten Fehler hört er auf; was bis dahin weg ist, bleibt weg.
+    /// Ohne eigenen Weg im Backend wird je Pfad <see cref="DeleteAsync"/> gerufen und je Pfad gezählt.
+    /// </summary>
+    IDeletion StartDelete(IReadOnlyList<string> paths, Action<DeletionStatus> changed)
+        => Deletions.OneByOne(DeleteAsync, paths, changed);
 
     /// <summary>
     /// Setzt die Zugriffsrechte wie <c>chmod</c> (<paramref name="mode"/> z. B. <c>0644</c> oktal). Mit

@@ -2,6 +2,14 @@
 
 Newest version first. For everything NexusSSH can do, see [FEATURES.md](FEATURES.md).
 
+## 0.5.0 – 2026-11-19
+
+- **Deleting shows in the bottom bar like a transfer.** Deleting on the server – and "Delete permanently" in the
+  local column – no longer seems to do nothing for minutes on a large folder: the Transfers pill shows a bin, the name
+  and how many items are already gone ("node_modules · 1,234 deleted"), then "deleted" in green or "delete failed" in
+  red. Each deletion has a row in the transfers with its count and a **Cancel** button that stops after the current
+  item. Several selected items are one deletion, and the app stays usable meanwhile
+
 ## 0.4.0 – 2026-11-19
 
 - **Transfers show in the bottom bar.** While an up- or download runs, the Transfers pill turns blue and shows the

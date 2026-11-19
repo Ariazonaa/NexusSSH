@@ -16,6 +16,7 @@ using WinRT;
 [assembly: GeneratedWinRTExposedExternalType(typeof(ObservableCollection<SessionViewModel>))]
 [assembly: GeneratedWinRTExposedExternalType(typeof(ObservableCollection<LogEntry>))]
 [assembly: GeneratedWinRTExposedExternalType(typeof(ObservableCollection<TransferItemViewModel>))]
+[assembly: GeneratedWinRTExposedExternalType(typeof(ObservableCollection<DeletionViewModel>))]
 [assembly: GeneratedWinRTExposedExternalType(typeof(ObservableCollection<SearchHit>))]
 [assembly: GeneratedWinRTExposedExternalType(typeof(ObservableCollection<RemoteEntry>))]
 [assembly: GeneratedWinRTExposedExternalType(typeof(ObservableCollection<PathSegment>))]

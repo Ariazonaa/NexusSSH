@@ -414,6 +414,98 @@ public sealed class MockRemoteFileSystem : IRemoteFileSystem
         return true;
     });
 
+    /// <summary>
+    /// So lange braucht ein Löschvorgang (<see cref="StartDelete"/>) je Eintrag – in den Beispieldaten, damit man ihm
+    /// in der Zeile unten zusehen und ihn anhalten kann. Null (Vorgabe, Tests): alles sofort, im Aufruf selbst.
+    /// </summary>
+    public TimeSpan DeleteStep { get; set; }
+
+    public IDeletion StartDelete(IReadOnlyList<string> paths, Action<DeletionStatus> changed)
+    {
+        var run = new MockDeletion();
+        _ = DeleteStepwiseAsync(paths, changed, run);
+        return run;
+    }
+
+    // Eintrag für Eintrag, das Tiefste zuerst – wie der Kern. Nach einer Pause geht es dort weiter, wo der Aufruf
+    // herkam (in der App im Thread der Oberfläche), also nie neben einem Auflisten.
+    private async Task DeleteStepwiseAsync(IReadOnlyList<string> paths, Action<DeletionStatus> changed, MockDeletion run)
+    {
+        changed(new DeletionStatus(DeletionState.Running, 0));
+        long removed = 0;
+        foreach (var path in paths)
+        {
+            var normalized = RemotePath.Normalize(path);
+            if (Find(normalized) is null)
+            {
+                changed(new DeletionStatus(DeletionState.Failed, removed, "not_found", $"{path}: No such file or directory"));
+                return;
+            }
+
+            foreach (var victim in DeepestFirst(normalized))
+            {
+                if (run.IsCancelled)
+                {
+                    changed(new DeletionStatus(DeletionState.Cancelled, removed));
+                    return;
+                }
+
+                if (DeleteStep > TimeSpan.Zero)
+                {
+                    await Task.Delay(DeleteStep);
+                }
+
+                RemoveOne(victim);
+                removed++;
+                if (DeleteStep > TimeSpan.Zero)
+                {
+                    changed(new DeletionStatus(DeletionState.Running, removed));
+                }
+            }
+        }
+
+        changed(new DeletionStatus(DeletionState.Done, removed));
+    }
+
+    private List<string> DeepestFirst(string path)
+    {
+        List<string> order = [];
+        Visit(path);
+        return order;
+
+        void Visit(string current)
+        {
+            if (_directories.TryGetValue(current, out var children))
+            {
+                foreach (var child in children.ToList())
+                {
+                    Visit(RemotePath.Combine(current, child.Name));
+                }
+            }
+
+            order.Add(current);
+        }
+    }
+
+    private void RemoveOne(string path)
+    {
+        if (RemotePath.Parent(path) is { } parent && _directories.TryGetValue(parent, out var siblings))
+        {
+            siblings.RemoveAll(entry => entry.Name == RemotePath.Name(path));
+        }
+
+        _directories.Remove(path);
+    }
+
+    private sealed class MockDeletion : IDeletion
+    {
+        private volatile bool _cancelled;
+
+        public bool IsCancelled => _cancelled;
+
+        public void Cancel() => _cancelled = true;
+    }
+
     public Task SetPermissionsAsync(string path, int mode, bool recursive = false) => Run(() =>
     {
         // Wie der Kern: In einem ganzen Baum bleiben Ordner betretbar, wo gelesen werden darf.

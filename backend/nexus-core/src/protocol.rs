@@ -495,7 +495,8 @@ pub enum Request {
         /// Die Zeile des öffentlichen Schlüssels.
         public_key: String,
     },
-    /// Datei oder Verzeichnis samt Inhalt löschen.
+    /// Datei oder Verzeichnis samt Inhalt löschen – still, das Ergebnis kommt als `sftp.result` (der Abgleich).
+    /// Was der Benutzer löscht, läuft als Löschvorgang (`delete.start`), den man sieht und abbrechen kann.
     #[serde(rename = "sftp.delete")]
     SftpDelete {
         /// Nummer der Sitzung.
@@ -504,6 +505,25 @@ pub enum Request {
         request: u64,
         /// Was gelöscht wird.
         path: String,
+    },
+    /// Ein Löschvorgang: die Pfade nacheinander, jeweils samt Inhalt. Die Antwort kommt gleich; wie weit er ist,
+    /// meldet `delete.state` – `running` gleich zu Beginn und danach höchstens alle [`crate::core::DELETE_REPORT`],
+    /// der Endzustand genau einmal. Beim ersten Fehler hört er auf; was bis dahin weg ist, bleibt weg.
+    #[serde(rename = "delete.start")]
+    DeleteStart {
+        /// Nummer der Sitzung.
+        session: u64,
+        /// Nummer des Löschvorgangs, von der App vergeben.
+        delete: u64,
+        /// Was gelöscht wird, als absolute Pfade.
+        paths: Vec<String>,
+    },
+    /// Hält einen Löschvorgang nach dem Eintrag an, der gerade gelöscht wird. Unbekannte Nummern sind kein Fehler:
+    /// Er kann schon von selbst geendet haben.
+    #[serde(rename = "delete.cancel")]
+    DeleteCancel {
+        /// Nummer des Löschvorgangs.
+        delete: u64,
     },
     /// Transfer in die Warteschlange stellen. Der Stand kommt als `transfer.state`.
     #[serde(rename = "transfer.start")]
@@ -880,6 +900,20 @@ pub enum TransferPhase {
     /// Gescheitert; `message` sagt, woran.
     Failed,
     /// Vom Benutzer abgebrochen oder mit der Sitzung beendet.
+    Cancelled,
+}
+
+/// Stand eines Löschvorgangs (`delete.state`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DeletePhase {
+    /// Er löscht noch.
+    Running,
+    /// Alles ist weg.
+    Done,
+    /// Ein Eintrag ließ sich nicht löschen; `error` und `message` sagen, woran es lag.
+    Failed,
+    /// Auf Wunsch angehalten (`delete.cancel`).
     Cancelled,
 }
 
@@ -1408,6 +1442,22 @@ pub enum Event {
         #[serde(skip_serializing_if = "Option::is_none")]
         message: Option<String>,
     },
+    /// Wie weit ein Löschvorgang ist (`delete.start`).
+    #[serde(rename = "delete.state")]
+    DeleteState {
+        /// Nummer des Löschvorgangs.
+        delete: u64,
+        /// So viele Einträge sind schon weg – Dateien, Verweise und Verzeichnisse.
+        removed: u64,
+        /// Stand.
+        state: DeletePhase,
+        /// Nur bei `failed`: Fehlerart, maschinenlesbar.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        error: Option<&'static str>,
+        /// Nur bei `failed`: Meldung des Servers, englisch.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        message: Option<String>,
+    },
     /// Stand eines Transfers.
     #[serde(rename = "transfer.state")]
     TransferState {
@@ -1548,6 +1598,47 @@ mod tests {
         assert_eq!(
             json,
             r#"{"event":"session.state","session":1,"state":"closed","reason":"auth_failed"}"#
+        );
+    }
+
+    #[test]
+    fn a_deletion_is_started_and_cancelled_by_the_number_of_the_app() {
+        let Request::DeleteStart { session, delete, paths } =
+            serde_json::from_str(r#"{"op":"delete.start","session":2,"delete":9,"paths":["/srv/a","/srv/b c"]}"#)
+                .unwrap()
+        else {
+            panic!("falsche Variante");
+        };
+        assert_eq!((session, delete), (2, 9));
+        assert_eq!(paths, ["/srv/a", "/srv/b c"]);
+        assert!(matches!(
+            serde_json::from_str::<Request>(r#"{"op":"delete.cancel","delete":9}"#).unwrap(),
+            Request::DeleteCancel { delete: 9 }
+        ));
+
+        let running = serde_json::to_string(&Event::DeleteState {
+            delete: 9,
+            removed: 0,
+            state: DeletePhase::Running,
+            error: None,
+            message: None,
+        })
+        .unwrap();
+        assert_eq!(
+            running,
+            r#"{"event":"delete.state","delete":9,"removed":0,"state":"running"}"#
+        );
+        let failed = serde_json::to_string(&Event::DeleteState {
+            delete: 9,
+            removed: 12,
+            state: DeletePhase::Failed,
+            error: Some("permission_denied"),
+            message: Some("/srv/b c: Permission denied".to_owned()),
+        })
+        .unwrap();
+        assert_eq!(
+            failed,
+            r#"{"event":"delete.state","delete":9,"removed":12,"state":"failed","error":"permission_denied","message":"/srv/b c: Permission denied"}"#
         );
     }
 

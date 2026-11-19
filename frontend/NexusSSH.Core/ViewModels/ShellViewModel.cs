@@ -265,6 +265,7 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
             Notify(server, L.Get("NotifyTransferFailed", file));
             Sound(SoundEvent.TransferFailed);
         };
+        Transfers.DeletionFailed += (name, server, detail) => Log(L.Get("LogDeletionFailed", name, server, detail), LogSeverity.Error);
         Transfers.TransferCompleted += (file, server) =>
         {
             Notify(server, L.Get("NotifyTransferDone", file));
@@ -2037,6 +2038,7 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
         WatchAlerts(session);
         WatchSnippets(session);
         session.Files.FileOpened += OnFileOpened;
+        session.Files.Transfers = Transfers;
         session.Files.ShowHidden = ShowHiddenFiles;
         session.Files.ShowTree = ShowDirectoryTree;
         session.ShowServerTitle = ServerTabTitles;

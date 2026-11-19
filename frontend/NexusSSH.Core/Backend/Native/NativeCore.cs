@@ -15,7 +15,7 @@ namespace NexusSSH.Core.Backend.Native;
 public static unsafe partial class NativeCore
 {
     /// <summary>ABI-Version, gegen die diese App gebaut ist. Zieht mit <c>ABI_VERSION</c> in <c>lib.rs</c> mit.</summary>
-    public const uint ExpectedAbi = 16;
+    public const uint ExpectedAbi = 17;
 
     /// <summary><c>kind</c> des Rückrufs: Ereignis als JSON.</summary>
     internal const uint CallbackEvent = 0;

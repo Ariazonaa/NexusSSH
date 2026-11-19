@@ -987,6 +987,9 @@ public sealed partial class MainWindow : Window
         Shell.IsBottomPanelVisible = true;
         Shell.Log("self-test", LogSeverity.Warning);
 
+        // Eine Zeile in der Liste der Löschvorgänge (unter AOT eine eigene Liste) – gelöscht wird dabei nichts.
+        Shell.Transfers.StartDeletion("self-test", "self-test", changed => NexusSSH.Core.Services.Deletions.OneByOne(_ => Task.CompletedTask, ["self-test"], changed));
+
         (Shell.IsSftpVisible, Shell.IsSnippetsVisible) = (true, true);
         // Ins Terminal setzt die App den Fokus nur, wenn ihr Fenster vorn ist (TerminalHost.FocusWebView) – der
         // Selbsttest läuft ohne Aktivierung, und ein anderes Fenster kann vorn sein. Deshalb geht der Lauf vom

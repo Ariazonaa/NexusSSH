@@ -4,7 +4,7 @@
 
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, Weak};
 use std::time::{Duration, Instant};
 
@@ -134,6 +134,8 @@ pub(crate) struct Shared {
     transfers: Mutex<HashMap<u64, TransferEntry>>,
     /// Laufendes Mitlesen von Dateien: Wer hier sendet (oder den Sender fallen lässt), beendet es.
     follows: Mutex<HashMap<u64, oneshot::Sender<()>>>,
+    /// Laufende Löschvorgänge (`delete.start`): Wer das Zeichen setzt, hält einen nach dem aktuellen Eintrag an.
+    deletes: Mutex<HashMap<u64, Arc<AtomicBool>>>,
     prompts: Mutex<HashMap<u64, PendingPrompt>>,
     next_prompt: AtomicU64,
     /// Sitzungen, deren Aufbau ausführlich gemeldet wird (`session.open` mit `trace`).
@@ -655,6 +657,7 @@ impl Core {
             switches: Mutex::new(HashMap::new()),
             transfers: Mutex::new(HashMap::new()),
             follows: Mutex::new(HashMap::new()),
+            deletes: Mutex::new(HashMap::new()),
             prompts: Mutex::new(HashMap::new()),
             next_prompt: AtomicU64::new(1),
             traced: Mutex::default(),
@@ -1350,6 +1353,32 @@ impl Core {
                 sftp::delete(&sftp, &path).await.map(|()| None)
             }),
 
+            Request::DeleteStart { session, delete, paths } => {
+                let (Some(sftp), Some(runtime)) = (lock(&shared.sftp).get(&session).cloned(), &self.runtime) else {
+                    return Response::error("no_sftp", session.to_string());
+                };
+
+                let stop = Arc::new(AtomicBool::new(false));
+                {
+                    let mut deletes = lock(&shared.deletes);
+                    if deletes.contains_key(&delete) {
+                        return Response::error("delete_exists", delete.to_string());
+                    }
+                    deletes.insert(delete, Arc::clone(&stop));
+                }
+
+                runtime.spawn(run_delete(Arc::clone(shared), sftp, delete, paths, stop));
+                Response::ok()
+            }
+
+            Request::DeleteCancel { delete } => {
+                if let Some(stop) = lock(&shared.deletes).get(&delete) {
+                    stop.store(true, Ordering::Relaxed);
+                }
+
+                Response::ok()
+            }
+
             Request::TransferStart {
                 session,
                 transfer,
@@ -1889,6 +1918,62 @@ async fn copy_over_sftp(
     }
 
     Ok(exec::Answer::Nothing)
+}
+
+/// So oft meldet ein Löschvorgang höchstens, wie weit er ist – öfter brächte der Oberfläche nur Arbeit.
+pub const DELETE_REPORT: Duration = Duration::from_millis(250);
+
+/// Ein Löschvorgang (`delete.start`): die Pfade nacheinander, jeder samt Inhalt. Meldet gleich zu Beginn `running`
+/// mit 0, unterwegs höchstens alle [`DELETE_REPORT`] den Zähler und am Ende genau einmal den Endzustand.
+async fn run_delete(
+    shared: Arc<Shared>,
+    sftp: Arc<SftpSession>,
+    delete: u64,
+    paths: Vec<String>,
+    stop: Arc<AtomicBool>,
+) {
+    use crate::protocol::DeletePhase;
+
+    let report = |removed: u64, state: DeletePhase, failure: Option<Failure>| {
+        let (error, message) = failure.map_or((None, None), |failure| (Some(failure.code), Some(failure.message)));
+        shared.emit(Event::DeleteState {
+            delete,
+            removed,
+            state,
+            error,
+            message,
+        });
+    };
+
+    report(0, DeletePhase::Running, None);
+    let mut removed = 0u64;
+    let mut reported = Instant::now();
+    let mut outcome = Ok(true);
+    for path in &paths {
+        outcome = sftp::delete_counted(
+            &sftp,
+            path,
+            || {
+                removed += 1;
+                if reported.elapsed() >= DELETE_REPORT {
+                    reported = Instant::now();
+                    report(removed, DeletePhase::Running, None);
+                }
+            },
+            || stop.load(Ordering::Relaxed),
+        )
+        .await;
+        if !matches!(outcome, Ok(true)) {
+            break;
+        }
+    }
+
+    lock(&shared.deletes).remove(&delete);
+    match outcome {
+        Ok(true) => report(removed, DeletePhase::Done, None),
+        Ok(false) => report(removed, DeletePhase::Cancelled, None),
+        Err(failure) => report(removed, DeletePhase::Failed, Some(failure)),
+    }
 }
 
 /// So lange wartet ein Kern, der endet, auf seine laufenden Transfers.

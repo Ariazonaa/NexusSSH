@@ -660,6 +660,14 @@ public sealed class MockBackend : INexusBackend, IProfileStore, IDisposable
             .File("/etc/ssh/sshd_config", 3_254, hoursAgo: 900)
             .File("/var/log/syslog", 1_482_301, hoursAgo: 0);
 
+        // Ein Ordner mit vielen Einträgen: Sein Löschen läuft ein paar Sekunden, man sieht es in der Zeile unten
+        // zählen und kann es in den Transfers anhalten.
+        files.DeleteStep = TimeSpan.FromMilliseconds(20);
+        for (var package = 0; package < 120; package++)
+        {
+            files.File($"{home}/app/node_modules/pkg-{package:000}/index.js", 1_024 + package, hoursAgo: 48);
+        }
+
         if (profile.Tags.Contains("web"))
         {
             // Beispiel aus Spec §4

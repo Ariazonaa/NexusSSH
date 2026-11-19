@@ -137,6 +137,15 @@ public sealed partial class BottomPanelView : UserControl
         var transfers = Tabs.SelectedItem == TransfersTab;
         PauseAllButton.Visibility = Ui.VisibleIf(transfers && Shell.Transfers.CanPauseAll);
         ResumeAllButton.Visibility = Ui.VisibleIf(transfers && Shell.Transfers.CanResumeAll);
+        DeletionsList.Visibility = Ui.VisibleIf(Shell.Transfers.Deletions.Count > 0);
+    }
+
+    private void OnCancelDeletionClicked(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is DeletionViewModel deletion)
+        {
+            Shell.Transfers.Cancel(deletion);
+        }
     }
 
     private void OnPauseAllClicked(object sender, RoutedEventArgs e) => Shell.Transfers.PauseAll();

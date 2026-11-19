@@ -108,6 +108,7 @@
         <Grid x:Name="TransfersPane" Grid.Row="1">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
             <Grid
@@ -137,8 +138,86 @@
                     Style="{StaticResource ColumnHeaderStyle}"
                     Text="{loc:Loc Key=ColumnStatus}" />
             </Grid>
+            <!--
+                Löschvorgänge über den Transfers, je Vorgang eine Zeile: was, Server, Stand, ein Zähler statt eines
+                Prozents (die Gesamtzahl ist vorher unbekannt) und „Abbrechen“. Nur da, wenn es welche gibt (Code).
+            -->
             <ListView
+                x:Name="DeletionsList"
                 Grid.Row="1"
+                MaxHeight="140"
+                Padding="0,2,0,0"
+                AutomationProperties.Name="{loc:Loc Key=DeletionsListName}"
+                ItemContainerStyle="{StaticResource CompactListItemStyle}"
+                ItemsSource="{x:Bind Shell.Transfers.Deletions}"
+                SelectionMode="None"
+                Visibility="Collapsed">
+                <ListView.ItemTemplate>
+                    <DataTemplate x:DataType="vm:DeletionViewModel">
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="14" />
+                                <ColumnDefinition Width="2*" MinWidth="120" />
+                                <ColumnDefinition Width="*" MinWidth="90" />
+                                <ColumnDefinition Width="170" />
+                                <ColumnDefinition Width="2*" />
+                                <ColumnDefinition Width="32" />
+                                <ColumnDefinition Width="32" />
+                            </Grid.ColumnDefinitions>
+                            <FontIcon
+                                FontSize="14"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Glyph="&#xE74D;" />
+                            <TextBlock
+                                Grid.Column="1"
+                                VerticalAlignment="Center"
+                                Text="{x:Bind Name}"
+                                TextTrimming="CharacterEllipsis" />
+                            <TextBlock
+                                Grid.Column="2"
+                                VerticalAlignment="Center"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Text="{x:Bind Server}"
+                                TextTrimming="CharacterEllipsis" />
+                            <TextBlock
+                                Grid.Column="3"
+                                VerticalAlignment="Center"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Text="{x:Bind StatusText, Mode=OneWay}" />
+                            <!--  Lauflicht, solange er läuft; darunter wie viele schon weg sind bzw. der Grund eines Fehlers  -->
+                            <StackPanel
+                                Grid.Column="4"
+                                VerticalAlignment="Center"
+                                Spacing="2">
+                                <ProgressBar
+                                    AutomationProperties.Name="{x:Bind Name}"
+                                    IsIndeterminate="{x:Bind IsRunning, Mode=OneWay}"
+                                    Visibility="{x:Bind IsRunning, Mode=OneWay}" />
+                                <TextBlock
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    Style="{StaticResource CaptionTextBlockStyle}"
+                                    Text="{x:Bind DetailText, Mode=OneWay}"
+                                    TextTrimming="CharacterEllipsis"
+                                    ToolTipService.ToolTip="{x:Bind DetailText, Mode=OneWay}" />
+                            </StackPanel>
+                            <Button
+                                Grid.Column="5"
+                                Width="28"
+                                Height="28"
+                                AutomationProperties.Name="{x:Bind app:Ui.CancelDeletionName(Name)}"
+                                Click="OnCancelDeletionClicked"
+                                Style="{StaticResource IconButtonStyle}"
+                                Tag="{x:Bind}"
+                                ToolTipService.ToolTip="{loc:Loc Key=CancelDeletion}"
+                                Visibility="{x:Bind CanCancel, Mode=OneWay}">
+                                <FontIcon FontSize="12" Glyph="&#xE711;" />
+                            </Button>
+                        </Grid>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+            <ListView
+                Grid.Row="2"
                 Padding="0,2,0,6"
                 AutomationProperties.Name="{loc:Loc Key=Transfers}"
                 ItemContainerStyle="{StaticResource CompactListItemStyle}"

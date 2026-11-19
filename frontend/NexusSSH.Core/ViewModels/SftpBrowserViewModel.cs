@@ -419,15 +419,38 @@ public sealed partial class SftpBrowserViewModel : ObservableObject
             }
         });
 
-    /// <summary>Löscht die Einträge, Ordner samt Inhalt. Bricht beim ersten Fehler ab; was bis dahin gelöscht ist, bleibt gelöscht.</summary>
-    public Task<bool> DeleteAsync(IReadOnlyList<RemoteEntry> entries)
-        => ChangeAsync(async files =>
+    /// <summary>
+    /// Wo Löschvorgänge zu sehen sind (die Transfers, gesetzt von der Shell). Ohne sie löscht der Browser, ohne dass
+    /// es jemand unterwegs sieht.
+    /// </summary>
+    public TransferCenterViewModel? Transfers { get; set; }
+
+    /// <summary>
+    /// Löscht die Einträge, Ordner samt Inhalt, als ein Löschvorgang (<see cref="Transfers"/>: mit Zähler in der Zeile
+    /// unten und „Abbrechen“). Bricht beim ersten Fehler ab; was bis dahin gelöscht ist, bleibt gelöscht. Danach lädt
+    /// die Liste neu, ein Fehler steht in <see cref="Error"/>. <c>true</c>, wenn alles weg ist.
+    /// </summary>
+    public async Task<bool> DeleteAsync(IReadOnlyList<RemoteEntry> entries)
+    {
+        if (_files is not { } files || entries.Count == 0)
         {
-            foreach (var entry in entries)
-            {
-                await files.DeleteAsync(PathOf(entry));
-            }
-        });
+            return false;
+        }
+
+        List<string> paths = [.. entries.Select(PathOf)];
+        var name = entries is [var single] ? single.DisplayName : L.Get("DeletionEntries", entries.Count.ToString(L.Culture));
+        var status = Transfers is { } center
+            ? await center.StartDeletion(name, Profile?.Name ?? string.Empty, changed => files.StartDelete(paths, changed)).Finished
+            : await Deletions.RunAsync(files, paths);
+
+        // Kann die Liste nicht neu geladen werden, ist das der wichtigere Fehler – er bleibt stehen.
+        if (await ShowAsync(CurrentPath) && status.State == DeletionState.Failed)
+        {
+            Error = FailureText.Describe(status.Code, status.Message);
+        }
+
+        return status.State == DeletionState.Done;
+    }
 
     /// <summary>Stellt lokale Dateien und Ordner zum Hochladen ins aktuelle Verzeichnis in die Warteschlange.</summary>
     /// <param name="rule">

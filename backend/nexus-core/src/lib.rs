@@ -58,7 +58,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 ///
 /// Wird bei jeder inkompatiblen Änderung an [`ffi`] oder [`protocol`] erhöht. Die App prüft den Wert beim
 /// Start und weigert sich, mit einer DLL zu arbeiten, die nicht zu ihr passt.
-pub const ABI_VERSION: u32 = 16;
+pub const ABI_VERSION: u32 = 17;
 
 /// Nur für Tests: Der Kern öffnet kein SFTP mehr und greift, wo der Server Befehle erlaubt, über die auf Dateien
 /// zu – so lässt sich dieser Weg an Servern prüfen, die SFTP anbieten. Die App ruft das nie auf.

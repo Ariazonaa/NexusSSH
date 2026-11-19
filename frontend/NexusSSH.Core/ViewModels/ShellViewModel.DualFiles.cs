@@ -116,6 +116,7 @@ public sealed partial class ShellViewModel
             ShowHidden = ShowHiddenFiles,
             Sort = LocalColumns.Sort,
             SortDescending = LocalColumns.Descending,
+            Transfers = Transfers,
         };
         local.PropertyChanged += (_, e) =>
         {

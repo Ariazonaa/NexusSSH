@@ -31,6 +31,9 @@ public enum TransferBadgeDirection
     Up,
     Down,
     Both,
+
+    /// <summary>Es wird gelöscht (<see cref="DeletionViewModel"/>): Papierkorb statt Pfeil.</summary>
+    Delete,
 }
 
 /// <summary>
@@ -40,6 +43,8 @@ public enum TransferBadgeDirection
 /// Anzahl), Prozent und ein Balken; danach <see cref="DoneFor"/> lang „fertig“, bei einem Fehler „fehlgeschlagen“, bis
 /// man draufklickt (<see cref="Acknowledge"/>). Ein „Lauf“ reicht vom ersten Transfer, der beginnt, bis keiner mehr
 /// läuft oder wartet – was in ihm geschah, entscheidet, was danach dasteht: gescheitert vor angehalten vor fertig.
+/// Löschvorgänge (<see cref="DeletionViewModel"/>, 2026-11-19) gehören wie Transfers zum Lauf: Papierkorb, Name und
+/// Zähler statt Prozent.
 /// </summary>
 public sealed partial class TransferBadge : ObservableObject, IDisposable
 {
@@ -54,6 +59,10 @@ public sealed partial class TransferBadge : ObservableObject, IDisposable
 
     // Die Transfers, deren Scheitern gerade dasteht: Verschwinden sie (Liste geleert), geht die Meldung mit.
     private readonly HashSet<string> _failed = new(StringComparer.Ordinal);
+
+    // Wie bei den Transfers: die Löschvorgänge dieses Laufs und die, deren Scheitern gerade dasteht.
+    private readonly Dictionary<string, DeletionViewModel> _deletionRun = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _failedDeletions = new(StringComparer.Ordinal);
     private ITimer? _timer;
     private long _shown;
 
@@ -116,31 +125,46 @@ public sealed partial class TransferBadge : ObservableObject, IDisposable
 
     public void Dispose() => _timer?.Dispose();
 
-    /// <summary>Nach jedem Abgleich der Transfers (<see cref="TransferCenterViewModel"/>).</summary>
-    internal void Update(IReadOnlyList<TransferItem> current, IReadOnlyList<TransferItemViewModel> rows, OverallTransfer overall)
+    /// <summary>
+    /// Nach jedem Abgleich der Transfers und jeder Meldung eines Löschvorgangs (<see cref="TransferCenterViewModel"/>).
+    /// Löschvorgänge zählen wie Transfers zum Lauf; danach gilt dieselbe Reihenfolge – gescheitert vor angehalten
+    /// vor fertig. Laufen beide Arten, nennt die Pille die Zahl der Vorgänge.
+    /// </summary>
+    internal void Update(IReadOnlyList<TransferItem> current, IReadOnlyList<TransferItemViewModel> rows, OverallTransfer overall, IReadOnlyList<DeletionViewModel>? deletions = null)
     {
+        deletions ??= [];
         var active = current.Where(item => !item.IsFinished).ToList();
         foreach (var item in current.Where(item => !item.IsFinished || _run.ContainsKey(item.Id)))
         {
             _run[item.Id] = item;
         }
 
-        if (active.Count > 0)
+        var deleting = deletions.Where(deletion => deletion.IsRunning).ToList();
+        foreach (var deletion in deleting)
         {
-            ShowRunning(active, rows, overall);
+            _deletionRun[deletion.Id] = deletion;
+        }
+
+        if (active.Count > 0 || deleting.Count > 0)
+        {
+            ShowRunning(active, rows, overall, deleting);
             return;
         }
 
-        if (_run.Count > 0)
+        if (_run.Count > 0 || _deletionRun.Count > 0)
         {
             var ended = _run.Values.ToList();
+            var deleted = _deletionRun.Values.ToList();
             _run.Clear();
-            Conclude(ended);
+            _deletionRun.Clear();
+            Conclude(ended, deleted);
             return;
         }
 
         // Kein Lauf seit dem letzten Mal: Was dasteht, gilt nur, solange es seine Transfers noch gibt.
-        if (Kind == TransferBadgeKind.Failed && !current.Any(item => _failed.Contains(item.Id) && IsFailure(item)))
+        if (Kind == TransferBadgeKind.Failed
+            && !current.Any(item => _failed.Contains(item.Id) && IsFailure(item))
+            && !deletions.Any(deletion => _failedDeletions.Contains(deletion.Id)))
         {
             ShowIdle();
         }
@@ -166,6 +190,46 @@ public sealed partial class TransferBadge : ObservableObject, IDisposable
 
     private static string PercentText(double fraction)
         => L.Get("TransferBadgePercent", ((int)Math.Floor(Math.Clamp(fraction, 0, 1) * 100)).ToString(L.Culture));
+
+    // Welche Richtung zeigt, was aus Transfers und Löschvorgängen besteht: nur gelöscht – der Papierkorb, beides – beide Pfeile.
+    private static TransferBadgeDirection DirectionOf(IReadOnlyList<TransferItem> transfers, int deletions)
+        => deletions == 0 ? DirectionOf(transfers)
+            : transfers.Count == 0 ? TransferBadgeDirection.Delete
+            : TransferBadgeDirection.Both;
+
+    private static string Count(long number) => number.ToString(L.Culture);
+
+    private void ShowRunning(List<TransferItem> active, IReadOnlyList<TransferItemViewModel> rows, OverallTransfer overall, List<DeletionViewModel> deleting)
+    {
+        if (deleting.Count == 0)
+        {
+            ShowRunning(active, rows, overall);
+            return;
+        }
+
+        Show(TransferBadgeKind.Running);
+        Direction = DirectionOf(active, deleting.Count);
+
+        // Wie viele es werden, weiß niemand vorher: ein Zähler statt eines Prozents, der Balken läuft ohne Stand.
+        IsIndeterminate = true;
+        if (active.Count > 0)
+        {
+            Text = L.Get("TransferBadgeTasks", Count(active.Count + deleting.Count));
+            return;
+        }
+
+        if (deleting is [var only])
+        {
+            Text = only.Name;
+            ToolTip = only.Server;
+        }
+        else
+        {
+            Text = L.Get("DeletionBadgeMany", Count(deleting.Count));
+        }
+
+        Number = L.Get("DeletionBadgeRemoved", deleting.Sum(deletion => deletion.Removed).ToString("N0", L.Culture));
+    }
 
     private void ShowRunning(List<TransferItem> active, IReadOnlyList<TransferItemViewModel> rows, OverallTransfer overall)
     {
@@ -195,19 +259,27 @@ public sealed partial class TransferBadge : ObservableObject, IDisposable
         Number = fraction is { } shown ? PercentText(shown) : string.Empty;
     }
 
-    private void Conclude(List<TransferItem> ended)
+    private void Conclude(List<TransferItem> ended, List<DeletionViewModel> deleted)
     {
         var failed = ended.Where(IsFailure).ToList();
         var paused = ended.Where(TransferItemViewModel.WasPaused).ToList();
         var completed = ended.Where(item => item.State == TransferState.Completed).ToList();
-        if (failed.Count > 0)
+        var failedDeletions = deleted.Where(deletion => deletion.State == DeletionState.Failed).ToList();
+        var doneDeletions = deleted.Where(deletion => deletion.State == DeletionState.Done).ToList();
+        if (failed.Count > 0 || failedDeletions.Count > 0)
         {
             Show(TransferBadgeKind.Failed);
             _failed.UnionWith(failed.Select(item => item.Id));
-            Direction = DirectionOf(failed);
-            Text = failed is [var one]
-                ? L.Get("TransferBadgeFailed", Format.Visible(one.FileName))
-                : L.Get("TransferBadgeFailedMany", failed.Count.ToString(L.Culture));
+            _failedDeletions.UnionWith(failedDeletions.Select(deletion => deletion.Id));
+            Direction = DirectionOf(failed, failedDeletions.Count);
+            Text = (failed, failedDeletions) switch
+            {
+                ([var one], []) => L.Get("TransferBadgeFailed", Format.Visible(one.FileName)),
+                ([], [var gone]) => L.Get("DeletionBadgeFailed", gone.Name),
+                (_, []) => L.Get("TransferBadgeFailedMany", Count(failed.Count)),
+                ([], _) => L.Get("DeletionBadgeFailedMany", Count(failedDeletions.Count)),
+                _ => L.Get("TransferBadgeTasksFailed", Count(failed.Count + failedDeletions.Count)),
+            };
         }
         else if (paused.Count > 0)
         {
@@ -215,15 +287,18 @@ public sealed partial class TransferBadge : ObservableObject, IDisposable
             Direction = DirectionOf(paused);
             Text = L.Get("TransferBadgePaused", paused is [var one] ? Format.Visible(one.FileName) : paused.Count.ToString(L.Culture));
         }
-        else if (completed.Count > 0)
+        else if (completed.Count > 0 || doneDeletions.Count > 0)
         {
             Show(TransferBadgeKind.Done);
-            Direction = DirectionOf(completed);
-            Text = completed switch
+            Direction = DirectionOf(completed, doneDeletions.Count);
+            Text = (completed, doneDeletions) switch
             {
-                [{ Direction: TransferDirection.Upload } one] => L.Get("TransferBadgeUploaded", Format.Visible(one.FileName)),
-                [var one] => L.Get("TransferBadgeDownloaded", Format.Visible(one.FileName)),
-                _ => L.Get("TransferBadgeDone", completed.Count.ToString(L.Culture)),
+                ([{ Direction: TransferDirection.Upload } one], []) => L.Get("TransferBadgeUploaded", Format.Visible(one.FileName)),
+                ([var one], []) => L.Get("TransferBadgeDownloaded", Format.Visible(one.FileName)),
+                ([], [var gone]) => L.Get("DeletionBadgeDone", gone.Name),
+                (_, []) => L.Get("TransferBadgeDone", Count(completed.Count)),
+                ([], _) => L.Get("DeletionBadgeDoneMany", Count(doneDeletions.Count)),
+                _ => L.Get("TransferBadgeTasksDone", Count(completed.Count + doneDeletions.Count)),
             };
             var shown = _shown;
             _timer = _time.CreateTimer(_ => _dispatcher.Post(() => EndDone(shown)), null, DoneFor, Timeout.InfiniteTimeSpan);
@@ -252,6 +327,7 @@ public sealed partial class TransferBadge : ObservableObject, IDisposable
         if (kind != TransferBadgeKind.Failed)
         {
             _failed.Clear();
+            _failedDeletions.Clear();
         }
 
         Kind = kind;

@@ -203,7 +203,8 @@
                 Visibility="{x:Bind Shell.CanShowDetails, Mode=OneWay}" />
             <!--
                 „Transfers“ zeigt, was läuft (TransferBadge, Core): Richtung, Name oder Anzahl, Prozent und unten ein
-                dünner Balken; danach kurz „fertig“ oder „fehlgeschlagen“, bis man draufklickt. Die Farben schaltet
+                dünner Balken – beim Löschen der Papierkorb, der Zähler und der Balken als Lauflicht; danach kurz
+                „fertig“ oder „fehlgeschlagen“, bis man draufklickt. Die Farben schaltet
                 der Zustand (VisualStateGroup unten). Eine Sprachausgabe hört Beginn und Ende (LiveSetting).
             -->
             <Button

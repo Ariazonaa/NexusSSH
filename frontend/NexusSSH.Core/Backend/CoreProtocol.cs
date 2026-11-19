@@ -347,8 +347,11 @@ internal sealed record RequestDto(string Op)
     /// <summary><c>sftp.write</c>: der neue Inhalt als Base64.</summary>
     public string? Data { get; init; }
 
-    /// <summary><c>sftp.checksum</c>: die Dateien, als absolute Pfade.</summary>
+    /// <summary><c>sftp.checksum</c>: die Dateien, als absolute Pfade. <c>delete.start</c>: was gelöscht wird.</summary>
     public IReadOnlyList<string>? Paths { get; init; }
+
+    /// <summary><c>delete.start</c>, <c>delete.cancel</c>: Nummer des Löschvorgangs, von der App vergeben.</summary>
+    public ulong? Delete { get; init; }
 
     /// <summary><c>sftp.copy</c>: Quelle und Ziel je Eintrag.</summary>
     public IReadOnlyList<PairDto>? Pairs { get; init; }
@@ -709,6 +712,12 @@ internal sealed record EventDto
 
     /// <summary><c>follow.data</c>, <c>follow.end</c>: Nummer des Mitlesens.</summary>
     public ulong? Follow { get; init; }
+
+    /// <summary><c>delete.state</c>: Nummer des Löschvorgangs (der Stand steht in <c>State</c>, der Grund in <c>Error</c>/<c>Message</c>).</summary>
+    public ulong? Delete { get; init; }
+
+    /// <summary><c>delete.state</c>: so viele Einträge sind schon weg.</summary>
+    public long? Removed { get; init; }
 
     /// <summary><c>sftp.result</c> zu <c>sftp.read</c>: das gelesene Stück als Base64; <c>Size</c> nennt dann die ganze Datei.</summary>
     public string? Data { get; init; }

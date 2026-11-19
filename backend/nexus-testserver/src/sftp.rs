@@ -189,13 +189,18 @@ fn is_pipe(path: &Path) -> bool {
 
 /// Dateien mit der Endung `.slow` kommen wie über eine langsame Leitung: Jede Leseanfrage wartet [`SLOW_READ`],
 /// und weil der Server eine nach der anderen beantwortet, wartet die sechzehnte vorausgeschickte sechzehnmal so
-/// lange. Ein Client, der jeder Anfrage ab dem Absenden nur zehn Sekunden gibt, scheitert daran.
+/// lange. Ein Client, der jeder Anfrage ab dem Absenden nur zehn Sekunden gibt, scheitert daran. Auch ihr Löschen
+/// dauert ([`SLOW_REMOVE`]).
 fn is_slow(path: &Path) -> bool {
     path.extension().is_some_and(|extension| extension == "slow")
 }
 
 /// So lange braucht jede Leseanfrage an eine langsame Datei ([`is_slow`]).
 pub const SLOW_READ: std::time::Duration = std::time::Duration::from_millis(800);
+
+/// So lange braucht das Löschen einer langsamen Datei ([`is_slow`]) – damit ein Löschvorgang lange genug läuft, um
+/// ihm beim Zählen zuzusehen und ihn mittendrin anzuhalten.
+pub const SLOW_REMOVE: std::time::Duration = std::time::Duration::from_millis(30);
 
 impl russh_sftp::server::Handler for Sftp {
     type Error = StatusCode;
@@ -392,7 +397,12 @@ impl russh_sftp::server::Handler for Sftp {
     }
 
     async fn remove(&mut self, id: u32, filename: String) -> Result<Status, Self::Error> {
-        fs::remove_file(self.local(&filename)).map_err(status)?;
+        let local = self.local(&filename);
+        if is_slow(&local) {
+            tokio::time::sleep(SLOW_REMOVE).await;
+        }
+
+        fs::remove_file(local).map_err(status)?;
         Ok(ok(id))
     }
 

@@ -165,6 +165,8 @@ public static class Ui
 
     public static string RetryTransferName(string file) => $"{L.Get("RetryTransfer")}: {file}";
 
+    public static string CancelDeletionName(string name) => $"{L.Get("CancelDeletion")}: {name}";
+
     public static string ResetShortcutName(string command) => $"{L.Get("ShortcutReset")}: {command}";
 
     public static string ChangeShortcutName(string command) => $"{L.Get("ShortcutChange")}: {command}";
@@ -474,6 +476,7 @@ public static class Ui
         {
             TransferBadgeDirection.Up => Controls.LineIconKind.Up,
             TransferBadgeDirection.Down => Controls.LineIconKind.ArrowDown,
+            TransferBadgeDirection.Delete => Controls.LineIconKind.Delete,
             _ => Controls.LineIconKind.UpDown,
         },
     };

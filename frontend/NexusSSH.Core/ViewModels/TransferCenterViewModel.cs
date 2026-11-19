@@ -214,6 +214,29 @@ public sealed class TransferCenterViewModel : IDisposable
 
     public ObservableCollection<TransferItemViewModel> Items { get; } = [];
 
+    /// <summary>Die Löschvorgänge: eine Zeile je Vorgang, über den Transfers. Nur im Speicher – nicht in <c>transfers.json</c>.</summary>
+    public ObservableCollection<DeletionViewModel> Deletions { get; } = [];
+
+    /// <summary>Ein Löschvorgang ist gescheitert: was, Server und der Grund als Satz.</summary>
+    public event Action<string, string, string>? DeletionFailed;
+
+    /// <summary>
+    /// Beginnt einen Löschvorgang und zeigt ihn in der Liste und in der Pille unten. <paramref name="name"/> ist schon
+    /// zum Anzeigen gesäubert; <paramref name="start"/> bekommt, wohin der Stand gemeldet wird.
+    /// </summary>
+    public DeletionViewModel StartDeletion(string name, string server, Func<Action<DeletionStatus>, IDeletion> start)
+    {
+        var row = new DeletionViewModel(name, server, _dispatcher);
+        row.Changed += OnDeletionChanged;
+        Deletions.Add(row);
+        Refresh();
+        row.Begin(start);
+        return row;
+    }
+
+    /// <summary>Hält einen Löschvorgang nach dem aktuellen Eintrag an.</summary>
+    public void Cancel(DeletionViewModel deletion) => deletion.Cancel();
+
     /// <summary>
     /// Der Stand aller Transfers zusammen, nach jedem Abgleich neu (<see cref="Synced"/>). Gerechnet wird über
     /// alles, was seit dem letzten Leerlauf lief: Wird von drei Transfers einer fertig, springt der Balken nicht
@@ -232,7 +255,19 @@ public sealed class TransferCenterViewModel : IDisposable
     /// <summary>Startet einen gescheiterten oder abgebrochenen Transfer noch einmal.</summary>
     public bool Retry(TransferItemViewModel item) => _queue.Retry(item.Id);
 
-    public void ClearFinished() => _queue.ClearFinished();
+    public void ClearFinished()
+    {
+        foreach (var done in Deletions.Where(deletion => !deletion.IsRunning).ToList())
+        {
+            done.Changed -= OnDeletionChanged;
+            Deletions.Remove(done);
+        }
+
+        _queue.ClearFinished();
+
+        // Auch wenn an den Transfers nichts zu räumen war: Pille und Knöpfe sehen die neue Liste.
+        Refresh();
+    }
 
     /// <summary>Etwas läuft oder wartet – lässt sich also anhalten.</summary>
     public bool CanPauseAll => Items.Any(item => item.CanCancel);
@@ -329,7 +364,24 @@ public sealed class TransferCenterViewModel : IDisposable
         _failed.IntersectWith(current.Select(item => item.Id));
         _completed.IntersectWith(current.Select(item => item.Id));
         Overall = Sum(current);
-        Badge.Update(current, Items, Overall);
+        Badge.Update(current, Items, Overall, Deletions);
+        Synced?.Invoke();
+    }
+
+    // Ein Löschvorgang meldet sich: Die Transfers sind dieselben, nur Pille und Knöpfe sehen neu hin.
+    private void OnDeletionChanged(DeletionViewModel deletion)
+    {
+        if (deletion is { State: DeletionState.Failed, Failure: { } failure })
+        {
+            DeletionFailed?.Invoke(deletion.Name, deletion.Server, failure);
+        }
+
+        Refresh();
+    }
+
+    private void Refresh()
+    {
+        Badge.Update(_queue.Items, Items, Overall, Deletions);
         Synced?.Invoke();
     }
 

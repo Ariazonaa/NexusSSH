@@ -832,11 +832,28 @@ pub(crate) async fn rename(sftp: &SftpSession, from: &str, to: &str) -> Result<(
 
 /// Löscht eine Datei oder ein Verzeichnis samt Inhalt. Links werden entfernt, nicht verfolgt.
 pub(crate) async fn delete(sftp: &SftpSession, path: &str) -> Result<(), Failure> {
+    delete_counted(sftp, path, || {}, || false).await.map(|_| ())
+}
+
+/// Wie [`delete`], für einen Löschvorgang, den der Benutzer sieht: `removed` nach jedem entfernten Eintrag (Datei,
+/// Verweis oder Verzeichnis), `stopped` vor jedem nächsten – sagt es ja, hört das Löschen dort auf, und was weg ist,
+/// bleibt weg. `Ok(false)` heißt: angehalten, bevor alles weg war.
+pub(crate) async fn delete_counted(
+    sftp: &SftpSession,
+    path: &str,
+    mut removed: impl FnMut(),
+    stopped: impl Fn() -> bool,
+) -> Result<bool, Failure> {
     // Ohne Rekursion der async-Funktion: ein Stapel aus Verzeichnissen, die erst geleert und dann entfernt werden.
     let mut pending = vec![(path.to_owned(), false)];
     while let Some((current, emptied)) = pending.pop() {
+        if stopped() {
+            return Ok(false);
+        }
+
         if emptied {
             sftp.remove_dir(current).await?;
+            removed();
             continue;
         }
 
@@ -850,10 +867,11 @@ pub(crate) async fn delete(sftp: &SftpSession, path: &str) -> Result<(), Failure
             }
         } else {
             sftp.remove_file(current).await?;
+            removed();
         }
     }
 
-    Ok(())
+    Ok(true)
 }
 
 /// Nur für Tests: Der Kern tut, als böte kein Server SFTP an – so lässt sich der Dateizugriff über Befehle an

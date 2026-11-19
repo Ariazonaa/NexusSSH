@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using NexusSSH.Core.Localization;
+using NexusSSH.Core.Services;
 using NexusSSH.Core.Settings;
 
 namespace NexusSSH.Core.ViewModels;
@@ -282,6 +283,37 @@ public sealed partial class LocalBrowserViewModel : ObservableObject
                 }
             }
         });
+    }
+
+    /// <summary>Wo Löschvorgänge zu sehen sind (die Transfers, gesetzt von der Shell).</summary>
+    public TransferCenterViewModel? Transfers { get; set; }
+
+    /// <summary>
+    /// Löscht Einträge endgültig, ohne Papierkorb (Umschalt+Entf), als Löschvorgang neben der Oberfläche: mit Zähler in
+    /// der Zeile unten und „Abbrechen“ (<see cref="Transfers"/>). Laufwerke nie. Danach liest der Ordner neu; was
+    /// scheiterte, steht in <see cref="Error"/>. <c>true</c>, wenn alles weg ist.
+    /// </summary>
+    public async Task<bool> DeleteForeverAsync(IEnumerable<LocalEntry> entries)
+    {
+        var wanted = entries.Where(entry => !entry.IsDrive).ToList();
+        if (wanted.Count == 0)
+        {
+            return false;
+        }
+
+        List<string> paths = [.. wanted.Select(entry => entry.FullPath)];
+        var name = wanted is [var single] ? single.DisplayName : L.Get("DeletionEntries", wanted.Count.ToString(L.Culture));
+        var status = Transfers is { } center
+            ? await center.StartDeletion(name, L.Get("LocalComputer"), changed => Deletions.Local(paths, changed)).Finished
+            : await Task.Run(() => Deletions.DeleteLocally(paths, () => false, _ => { }));
+
+        Refresh();
+        if (status.State == DeletionState.Failed)
+        {
+            Error = status.Message is { Length: > 0 } message ? message : L.Get("LocalDeleteFailed");
+        }
+
+        return status.State == DeletionState.Done;
     }
 
     // Etwas am Ordner ändern und ihn danach neu lesen – auch wenn es scheiterte: Ein Teil kann geschehen sein.
