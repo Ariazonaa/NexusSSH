@@ -547,9 +547,9 @@ the server load then comes from other sources (without paging and disk throughpu
 - **Into Explorer**: drag files and whole folders from the list into an Explorer window or onto the desktop – also
   onto a folder in it or in the navigation pane. The app finds out where they were dropped and downloads them there
   itself, like any download: progress and "Cancel" in its transfers, the usual question before overwriting, no copy
-  dialog of Explorer and no limit on the number of files or the length of paths. Dropped where nothing can be
-  downloaded to (into a ZIP file, onto a phone), the app says so. Other programs (a mail, a browser) get the files
-  as before, loaded only once dropped. **Copy** (Ctrl+C, context menu) and paste works too – there Explorer shows
+  dialog of Explorer, and paths over 259 characters or more than 20,000 files are no problem. Dropped onto a ZIP
+  file, nothing is downloaded: Explorer reports an error, the app notes it under Problems. Other programs, such as
+  a browser, get the files as before, loaded only once dropped. **Copy** (Ctrl+C, context menu) and paste works too – there Explorer shows
   its copy dialog and the app the transfer; "Cancel" on either side ends both. While dragging, Windows shows an image
   (file or folder icon) and below it what happens on release ("Copy to Downloads")
 - **Many small files**: up to eight files of a folder are in flight at once – 3,000 small files take about 45 s over
