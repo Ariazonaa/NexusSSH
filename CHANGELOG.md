@@ -2,6 +2,12 @@
 
 Newest version first. For everything NexusSSH can do, see [FEATURES.md](FEATURES.md).
 
+## 0.6.1 – 2026-11-20
+
+- **Fixed:** dropping files from the server list onto a ZIP file in Explorer showed an Explorer error ("The
+  specified directory … is empty"). Explorer now simply does not accept the drop there, as before 0.6.0 – it never
+  took files from the app into an archive. Download first, then add to the archive
+
 ## 0.6.0 – 2026-11-20
 
 - **Dragging into Explorer downloads directly.** Files and folders dragged from the server list into an Explorer
@@ -9,9 +15,9 @@ Newest version first. For everything NexusSSH can do, see [FEATURES.md](FEATURES
   into that folder – with progress and Cancel in its transfers and its own question before overwriting, without
   Explorer's copy dialog that sat at "Calculating time" until everything was loaded. Folders with paths over 259
   characters or more than 20,000 files no longer fail. Other programs, such as a browser, get the files as before
-- **Known limits:** dropping onto a ZIP file in Explorer no longer works – Explorer reports an error, nothing is
-  downloaded, and the app notes it under Problems; download first, then add to the archive. Copying (Ctrl+C) and
-  pasting into Explorer still shows Explorer's copy dialog
+- **Known limits:** dropping onto a ZIP file in Explorer shows an error from Explorer and downloads nothing (fixed
+  in the next version: the drop is not accepted there, as before). Copying (Ctrl+C) and pasting into Explorer still
+  shows Explorer's copy dialog
 
 ## 0.5.0 – 2026-11-19
 

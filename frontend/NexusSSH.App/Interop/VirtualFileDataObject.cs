@@ -23,17 +23,18 @@ namespace NexusSSH.App.Interop;
 /// Dort kann es mehrmals abgeholt werden – jedes Einfügen ist ein eigener Durchgang.
 /// </para>
 /// <para>
-/// Beim Ziehen bekommt der Explorer etwas anderes als alle übrigen Programme: nur einen leeren Merker-Ordner
-/// (<paramref name="marker"/>, als <c>CF_HDROP</c>), keine virtuellen Dateien. Wo er dessen Kopie anlegt, dorthin
-/// lädt die App selbst (<see cref="DropLanding"/>) – ohne den Kopierdialog des Explorers, der sonst so lange bei
-/// „Zeitberechnung“ steht, bis die Dateien geladen sind, und ohne die Grenzen einer Liste virtueller Dateien.
+/// Beim Ziehen bekommt der Explorer etwas anderes als alle übrigen Programme: als Liste nur einen leeren Ordner mit
+/// dem Namen des Merkers (<paramref name="marker"/>), keine virtuellen Dateien. Wo er ihn anlegt, dorthin lädt die
+/// App selbst (<see cref="DropLanding"/>) – ohne den Kopierdialog des Explorers, der sonst so lange bei
+/// „Zeitberechnung“ steht, bis die Dateien geladen sind, und ohne die Grenzen einer Liste virtueller Dateien. Kein
+/// <c>CF_HDROP</c>: Zum Ablegen in Ordner nimmt der Explorer ohnehin die Liste, aber eine ZIP-Datei nähme
+/// <c>CF_HDROP</c> an und scheiterte dann am leeren Ordner („Das angegebene Verzeichnis … ist leer“). Ohne nimmt sie
+/// das Ablegen gar nicht an – wie vor dem Merker, denn virtuelle Dateien kennt ein Archiv des Explorers nicht.
 /// </para>
 /// </summary>
 [GeneratedComClass]
 internal sealed unsafe partial class VirtualFileDataObject(IVirtualFiles files, nint ownWindow, string? marker = null) : IOleDataObject, IDataObjectAsyncCapability
 {
-    private const ushort CF_HDROP = 15;
-
     private const uint FD_ATTRIBUTES = 0x0004;
     private const uint FD_WRITESTIME = 0x0020;
     private const uint FD_FILESIZE = 0x0040;
@@ -103,15 +104,8 @@ internal sealed unsafe partial class VirtualFileDataObject(IVirtualFiles files, 
 
         try
         {
-            // Der Explorer bekommt nur den Merker, alle anderen nur die virtuellen Dateien.
-            if (format->Format == CF_HDROP && (format->Tymed & Ole.TYMED_HGLOBAL) != 0)
-            {
-                return marker is not null && ToExplorer() ? Global(DropFiles(marker), medium) : Ole.DV_E_FORMATETC;
-            }
-
-            // Fragt der Explorer nach der Liste (sie steht in der gemerkten Aufzählung vorn), beschreibt auch sie nur
-            // den Merker: einen leeren Ordner gleichen Namens. Welches Format er auch nimmt – es entsteht derselbe
-            // Ordner, und Inhalt gibt es keinen.
+            // Der Explorer bekommt als Liste nur den Merker – einen leeren Ordner, ohne Inhalt –, alle anderen die
+            // virtuellen Dateien. Gefragt wird die Liste erst beim Loslassen; dann steht fest, ob über einem Archiv.
             if ((format->Format == Descriptor || format->Format == Contents) && ToExplorer())
             {
                 return format->Format == Descriptor && (format->Tymed & Ole.TYMED_HGLOBAL) != 0
@@ -178,8 +172,7 @@ internal sealed unsafe partial class VirtualFileDataObject(IVirtualFiles files, 
 
         var explorer = ToExplorer();
         var offered = (IsFlag(format->Format) || format->Format == Descriptor) && (format->Tymed & Ole.TYMED_HGLOBAL) != 0
-            || !explorer && format->Format == Contents && (format->Tymed & Ole.TYMED_ISTREAM) != 0
-            || explorer && format->Format == CF_HDROP && (format->Tymed & Ole.TYMED_HGLOBAL) != 0;
+            || !explorer && format->Format == Contents && (format->Tymed & Ole.TYMED_ISTREAM) != 0;
         return offered ? Ole.S_OK : Ole.DV_E_FORMATETC;
     }
 
@@ -247,7 +240,7 @@ internal sealed unsafe partial class VirtualFileDataObject(IVirtualFiles files, 
     /// <summary>Ob das Ziehbild gerade als eigenes Fenster zu sehen ist – dann zeigt es auch den Hinweis des Empfängers.</summary>
     public bool ShowsDragImage => Stored(IsShowingLayered) is { Data.Length: >= 4 } kept && BinaryPrimitives.ReadInt32LittleEndian(kept.Data) != 0;
 
-    private static bool IsOwn(ushort format) => format == Descriptor || format == Contents || format == CF_HDROP || IsFlag(format);
+    private static bool IsOwn(ushort format) => format == Descriptor || format == Contents || IsFlag(format);
 
     private static byte[]? FromGlobal(nint memory)
     {
@@ -345,14 +338,6 @@ internal sealed unsafe partial class VirtualFileDataObject(IVirtualFiles files, 
                 (Descriptor, Ole.TYMED_HGLOBAL), (Contents, Ole.TYMED_ISTREAM), (PreferredEffect, Ole.TYMED_HGLOBAL),
                 (ExcludeFromMonitors, Ole.TYMED_HGLOBAL), (InHistory, Ole.TYMED_HGLOBAL), (InCloud, Ole.TYMED_HGLOBAL),
             ]);
-
-            // Den Merker in der Aufzählung immer, nicht nur über dem Explorer: Windows merkt sich die erste Aufzählung
-            // für das ganze Ziehen. Wer ihn bekommt, entscheidet GetData; die übrigen fragen ohnehin zuerst nach der
-            // Liste (sie steht vorn).
-            if (marker is not null)
-            {
-                offered.Add((CF_HDROP, Ole.TYMED_HGLOBAL));
-            }
             lock (_storedGate)
             {
                 offered.AddRange(_stored.Select(stored => (stored.Key, stored.Value.Tymed)));
@@ -459,17 +444,6 @@ internal sealed unsafe partial class VirtualFileDataObject(IVirtualFiles files, 
 
     /// <summary>Ob zuletzt der Explorer gefragt hat – nach dem Loslassen: ob dort abgelegt wurde.</summary>
     public bool ToExplorerAtLast => marker is not null && _toExplorer;
-
-    // DROPFILES: Abstand der Namen (20), Punkt, zwei Schalter (der zweite: Unicode), dann die Namen, mit zwei Nullen am Ende.
-    private static byte[] DropFiles(string path)
-    {
-        var name = Encoding.Unicode.GetBytes(path + "\0\0");
-        var data = new byte[20 + name.Length];
-        BinaryPrimitives.WriteUInt32LittleEndian(data, 20);
-        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(16), 1);
-        name.CopyTo(data, 20);
-        return data;
-    }
 
     /// <summary>Ob der Empfänger die Daten gerade im Hintergrund abholt; dann meldet er sich selbst, wenn er fertig ist.</summary>
     public bool IsInOperation => _inOperation != 0;

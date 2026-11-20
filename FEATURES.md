@@ -1,6 +1,6 @@
 # Features
 
-What NexusSSH can do today – by area, not by date. As of version 0.6.0 (phase 3 including its remaining items,
+What NexusSSH can do today – by area, not by date. As of version 0.6.1 (phase 3 including its remaining items,
 packaging).
 
 Everything is tested against the built-in test server and most of it against real OpenSSH servers: Debian as root,
@@ -547,8 +547,8 @@ the server load then comes from other sources (without paging and disk throughpu
 - **Into Explorer**: drag files and whole folders from the list into an Explorer window or onto the desktop – also
   onto a folder in it or in the navigation pane. The app finds out where they were dropped and downloads them there
   itself, like any download: progress and "Cancel" in its transfers, the usual question before overwriting, no copy
-  dialog of Explorer, and paths over 259 characters or more than 20,000 files are no problem. Dropped onto a ZIP
-  file, nothing is downloaded: Explorer reports an error, the app notes it under Problems. Other programs, such as
+  dialog of Explorer, and paths over 259 characters or more than 20,000 files are no problem. A ZIP file in Explorer
+  does not accept the drop – download first, then add to the archive. Other programs, such as
   a browser, get the files as before, loaded only once dropped. **Copy** (Ctrl+C, context menu) and paste works too – there Explorer shows
   its copy dialog and the app the transfer; "Cancel" on either side ends both. While dragging, Windows shows an image
   (file or folder icon) and below it what happens on release ("Copy to Downloads")
