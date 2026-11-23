@@ -23,19 +23,22 @@ internal static partial class Attention
     /// bleibt es beim Blinken in der Taskleiste.
     /// </summary>
     /// <remarks>
-    /// Zeigen und Anmelden sind zweierlei: <c>Register</c> scheitert mit dem Windows App SDK 2.5.1 in jeder
+    /// Zeigen und Anmelden sind zweierlei: <c>Register</c> scheiterte mit dem Windows App SDK 2.5.1 in jeder
     /// App, die das SDK selbst mitbringt (0x8007007E, „Microsoft.WindowsAppRuntime.Insights.Resource.dll“ –
-    /// die Datei liegt nur im Laufzeitpaket; microsoft/WindowsAppSDK#6774, gefunden 2026-10-11). Hinweise lassen
-    /// sich trotzdem zeigen; nur der Klick darauf erreicht die App dann nicht. Deshalb hängt das Zeigen allein an
-    /// <c>IsSupported</c> – vorher blieb mit der gescheiterten Anmeldung jeder Hinweis aus.
+    /// die Datei lag nur im Laufzeitpaket; microsoft/WindowsAppSDK#6774, gefunden 2026-10-11; laut den Notizen zu
+    /// 2.6.4 behoben). Hinweise lassen sich auch ohne Anmeldung zeigen; nur der Klick darauf erreicht die App dann
+    /// nicht. Deshalb hängt das Zeigen allein an <c>IsSupported</c> – vorher blieb mit der gescheiterten Anmeldung
+    /// jeder Hinweis aus. <paramref name="clicked"/> läuft, wenn der Benutzer auf einen Hinweis klickt, solange die
+    /// App läuft; der Empfänger muss vor <c>Register</c> stehen, sonst startet Windows für den Klick die App neu.
     /// </remarks>
-    public static void Register()
+    public static void Register(Action clicked)
     {
         try
         {
             _usable = AppNotificationManager.IsSupported();
             if (_usable)
             {
+                AppNotificationManager.Default.NotificationInvoked += (_, _) => clicked();
                 AppNotificationManager.Default.Register();
                 _registered = true;
             }
@@ -180,6 +183,24 @@ internal static partial class Attention
             // Das Blinken in der Taskleiste bleibt.
         }
     }
+
+    /// <summary>
+    /// Holt <paramref name="window"/> nach vorn, nachdem der Benutzer auf einen Hinweis geklickt hat. <c>Activate</c>
+    /// allein reicht dafür nicht: Die Shell gibt der App mit dem Klick kein Recht auf den Vordergrund weiter, vorn
+    /// blieb ein Fenster des Explorers (Windows-VM, 2026-11-22). <c>SwitchToThisWindow</c> nimmt auch das Beispiel
+    /// von Microsoft für Hinweise einer App ohne Paket (WindowsAppSDK-Samples, CsUnpackagedAppNotifications,
+    /// <c>App.ToForeground</c>). Nur für diesen Klick – sonst nimmt sich die App nie selbst den Vordergrund.
+    /// </summary>
+    public static void ToFrontAfterClick(nint window)
+    {
+        if (window != 0)
+        {
+            SwitchToThisWindow(window, true);
+        }
+    }
+
+    [LibraryImport("user32.dll")]
+    private static partial void SwitchToThisWindow(nint window, [MarshalAs(UnmanagedType.Bool)] bool altTab);
 
     [LibraryImport("user32.dll")]
     private static partial nint GetForegroundWindow();

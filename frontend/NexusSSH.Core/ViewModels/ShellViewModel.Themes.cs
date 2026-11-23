@@ -7,8 +7,8 @@ namespace NexusSSH.Core.ViewModels;
 // Eigene Farbschemata: aus Dateien anderer Terminals gelesen und neben die mitgelieferten gestellt.
 public sealed partial class ShellViewModel
 {
-    /// <summary>Alle Farbschemata zur Wahl: die mitgelieferten, dahinter die des Benutzers.</summary>
-    public IReadOnlyList<TerminalTheme> Themes => BindableList.Of<TerminalTheme>([.. TerminalThemes.All, .. Settings.CustomThemes]);
+    /// <summary>Alle Farbschemata zur Wahl: die mitgelieferten, dahinter die des Benutzers, dann die der Pakete.</summary>
+    public IReadOnlyList<TerminalTheme> Themes => BindableList.Of<TerminalTheme>([.. TerminalThemes.All, .. Settings.CustomThemes, .. PackThemes]);
 
     /// <summary>
     /// Das eigene Farbschema eines Profils; <c>null</c>, wenn es keines nennt oder es das genannte nicht (mehr) gibt –

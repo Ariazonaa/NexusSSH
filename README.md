@@ -5,7 +5,7 @@ WinUI 3 front end (C# / .NET 10), Rust core.
 
 ![NexusSSH main window](docs/images/main.png)
 
-> **Status:** version 0.6.1 (the first public release was 0.1.0). SSH sessions with a terminal (including jump hosts), server profiles with
+> **Status:** version 0.7.0 (the first public release was 0.1.0). SSH sessions with a terminal (including jump hosts), server profiles with
 > `~/.ssh/config` import, an SFTP browser with up-/download and edit-in-place, server monitoring, split terminals,
 > search, color schemes, a command palette, saved commands, local terminals, Mosh and AI access through MCP. Full
 > list: [`FEATURES.md`](FEATURES.md).
@@ -134,6 +134,7 @@ cargo run --manifest-path backend/Cargo.toml -p nexus-testserver --target-dir "$
 - [`FEATURES.md`](FEATURES.md) — everything NexusSSH can do
 - [`docs/architecture.md`](docs/architecture.md) — layout, the Rust-core interface, security
 - [`docs/deployment.md`](docs/deployment.md) — silent install (German)
+- [`docs/plugins.md`](docs/plugins.md) — writing plugins (German); SDK in `backend/plugin-sdk`, example in `backend/plugin-example`
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — pull requests, and how to correct a translation or add a language
 
 ## Third-party material

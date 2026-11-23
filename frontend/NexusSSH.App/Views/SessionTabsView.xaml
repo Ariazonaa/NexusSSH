@@ -119,6 +119,27 @@
                                     Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
                                     Glyph="&#xEA8F;"
                                     Visibility="{x:Bind HasBell, Mode=OneWay}" />
+                                <!--  Neue Ausgabe, während der Tab nicht zu sehen war (die Glocke geht vor)  -->
+                                <Ellipse
+                                    Width="7"
+                                    Height="7"
+                                    VerticalAlignment="Center"
+                                    AutomationProperties.Name="{loc:Loc Key=TabActivity}"
+                                    Fill="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                                    Visibility="{x:Bind ShowsActivity, Mode=OneWay}" />
+                                <!--  Die Sitzung wurde still, während auf ihre Stille geachtet wurde  -->
+                                <FontIcon
+                                    AutomationProperties.Name="{loc:Loc Key=TabSilence}"
+                                    FontSize="12"
+                                    Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                                    Glyph="&#xE916;"
+                                    Visibility="{x:Bind HasSilence, Mode=OneWay}" />
+                                <!--  Auf die Stille dieser Sitzung wird geachtet  -->
+                                <FontIcon
+                                    AutomationProperties.Name="{loc:Loc Key=TabWatchesSilence}"
+                                    FontSize="10"
+                                    Glyph="&#xE7B3;"
+                                    Visibility="{x:Bind WatchesSilence, Mode=OneWay}" />
                                 <!--  Die Ausgabe dieser Sitzung wird gerade mitgeschrieben  -->
                                 <FontIcon
                                     FontSize="10"

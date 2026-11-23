@@ -505,6 +505,81 @@ public sealed partial class SessionViewModel : ObservableObject, ITerminalSessio
 
     internal void ClearBell() => HasBell = false;
 
+    partial void OnHasBellChanged(bool value) => OnPropertyChanged(nameof(ShowsActivity));
+
+    // --- Aktivität und Stille ---
+    //
+    // Die Ausgabe kommt auf einem Faden des Kerns (OnOutput). Dort wird nur gezählt und höchstens einmal je Zeit im
+    // Hintergrund in die Oberfläche gemeldet – nicht je Datenstück, das bremste das Terminal. Was die App selbst ins
+    // Terminal schreibt (Print), geht daran vorbei und zählt nicht.
+
+    // Bis die Oberfläche es sagt (UpdateInView), gilt ein Tab als nicht zu sehen – auch einer, der im Hintergrund aufgeht.
+    private volatile bool _inView;
+    private volatile bool _noticesActivity = true;
+    private int _activityPosted;
+    private long _outputCount;
+
+    /// <summary>
+    /// In diesem Tab kam neue Ausgabe, während er nicht zu sehen war – der Reiter zeigt einen Punkt, bis er angesehen
+    /// wird. Nur mit der Einstellung <see cref="ShellViewModel.ActivityTab"/>.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowsActivity))]
+    public partial bool HasActivity { get; private set; }
+
+    /// <summary>Der Punkt am Reiter: Aktivität, aber nicht, wenn dort schon die Glocke steht.</summary>
+    public bool ShowsActivity => HasActivity && !HasBell;
+
+    /// <summary>Der Benutzer will hören, wenn diese Sitzung still wird (<see cref="ShellViewModel.ToggleSilenceWatch"/>).</summary>
+    [ObservableProperty]
+    public partial bool WatchesSilence { get; internal set; }
+
+    /// <summary>Die Sitzung wurde still, während der Benutzer darauf achten ließ und sie nicht zu sehen war.</summary>
+    [ObservableProperty]
+    public partial bool HasSilence { get; private set; }
+
+    /// <summary>Wie oft Ausgabe vom Server kam – nur zum Vergleichen, ob seit dem letzten Blick etwas kam.</summary>
+    internal long OutputCount => Interlocked.Read(ref _outputCount);
+
+    /// <summary>Ob der Tab gerade zu sehen ist (vorn, als Bereich der Teilung vorn oder in einem eigenen Fenster).</summary>
+    internal bool IsInView => _inView;
+
+    /// <summary>Setzt die Oberfläche: zu sehen oder nicht, und ob Aktivität gezeigt wird. Zu sehen löscht die Marken.</summary>
+    internal void SetInView(bool inView, bool noticesActivity)
+    {
+        _noticesActivity = noticesActivity;
+        _inView = inView;
+        if (inView || !noticesActivity)
+        {
+            Interlocked.Exchange(ref _activityPosted, 0);
+            HasActivity = false;
+        }
+
+        if (inView)
+        {
+            HasSilence = false;
+        }
+    }
+
+    internal void MarkSilence() => HasSilence = true;
+
+    internal void ClearSilence() => HasSilence = false;
+
+    private void CountOutput()
+    {
+        Interlocked.Increment(ref _outputCount);
+        if (!_inView && _noticesActivity && Interlocked.Exchange(ref _activityPosted, 1) == 0)
+        {
+            _dispatcher.Post(() =>
+            {
+                if (!_inView && _noticesActivity)
+                {
+                    HasActivity = true;
+                }
+            });
+        }
+    }
+
     /// <summary>
     /// Schaltet im Terminal ab, was ein Programm der vorigen Verbindung eingeschaltet haben kann: den zweiten
     /// Bildschirm, jede Art Mausmeldung samt Kodierung, dann der Soft-Reset (DECSTR: Cursortasten, Ziffernblock,
@@ -654,6 +729,7 @@ public sealed partial class SessionViewModel : ObservableObject, ITerminalSessio
 
     private void OnOutput(ReadOnlyMemory<byte> data)
     {
+        CountOutput();
         _screen.Feed(data.Span);
         if (OutputTap is { } tap)
         {
@@ -671,6 +747,23 @@ public sealed partial class SessionViewModel : ObservableObject, ITerminalSessio
     {
         Output?.Invoke(data);
         WriteLog(data.Span);
+        if (_lineWatcher is { } watcher)
+        {
+            (_lines ??= new OutputLines()).Append(data.Span, watcher);
+        }
+    }
+
+    private volatile Action<string>? _lineWatcher;
+    private OutputLines? _lines;
+
+    /// <summary>
+    /// Bekommt jede fertige Zeile der Ausgabe als lesbaren Text – auf dem Faden der Ausgabe, nicht dem der Oberfläche.
+    /// Nur gesetzt, solange ein Plugin Zeilen beobachtet; sonst zerlegt die Sitzung nichts.
+    /// </summary>
+    internal Action<string>? LineWatcher
+    {
+        get => _lineWatcher;
+        set => _lineWatcher = value;
     }
 
     // Spricht der Server nicht in UTF-8, wird an dieser einen Stelle umgerechnet (TerminalCharset) – für SSH,

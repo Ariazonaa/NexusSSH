@@ -425,10 +425,18 @@ public sealed class TmuxControlTests
 
     private static async Task Settle()
     {
-        // Die Antworten laufen über Aufgaben weiter – kurz abwarten, bis sie durch sind.
-        for (var turn = 0; turn < 20; turn++)
+        // Die Antworten laufen über Aufgaben im Threadpool weiter. Mindestens 200 ms, danach weiter, bis seine
+        // Warteschlange 50 ms lang leer ist (höchstens 1 s): Auf einem ausgelasteten Runner der CI reichten feste
+        // 200 ms nicht – die Bereiche standen noch nicht (2026-11-22, zwei Tests unter Linux).
+        var quiet = 0;
+        for (var turn = 0; turn < 100; turn++)
         {
             await Task.Delay(10);
+            quiet = ThreadPool.PendingWorkItemCount == 0 ? quiet + 1 : 0;
+            if (turn >= 19 && quiet >= 5)
+            {
+                return;
+            }
         }
     }
 

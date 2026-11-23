@@ -100,6 +100,14 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopico
 
 [Run]
 Filename: "{app}\{#AppExe}"; Description: "{cm:RunNow}"; Flags: nowait postinstall skipifsilent
+; Ein Update aus der App heraus (still, mit /RELAUNCH): Die App hat sich dafür beendet und startet danach wieder.
+Filename: "{app}\{#AppExe}"; Flags: nowait runasoriginaluser; Check: IsRelaunch
 
 ; Profile, Host-Schlüssel und Einstellungen unter %LOCALAPPDATA%\NexusSSH bleiben bei der Deinstallation stehen –
 ; ebenso gespeicherte Passwörter in der Windows-Anmeldeinformationsverwaltung. Wer neu installiert, findet alles wieder.
+
+[Code]
+function IsRelaunch: Boolean;
+begin
+  Result := WizardSilent and (Pos('/RELAUNCH', Uppercase(GetCmdTail)) > 0);
+end;

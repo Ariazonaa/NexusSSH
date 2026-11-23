@@ -40,6 +40,9 @@ internal sealed class FakePrompts : IUserPrompts
 
     public List<(string Server, string Command)> Commands { get; } = [];
 
+    /// <summary>Welches Plugin zuletzt nach einem Befehl fragte; <c>null</c> bei einem KI-Programm.</summary>
+    public string? Plugin { get; private set; }
+
     /// <summary>Ob die letzte Frage sagte, dass in ein Terminal getippt wird.</summary>
     public bool InTerminal { get; private set; }
 
@@ -52,9 +55,21 @@ internal sealed class FakePrompts : IUserPrompts
     /// <summary>Läuft, während nach einem Befehl gefragt wird.</summary>
     public Action? Asking { get; set; }
 
+    /// <summary>Antwort auf die Frage nach einem Befehl aus einem Erweiterungspaket; gefragt wurde nach <see cref="PackCommands"/>.</summary>
+    public CommandAnswer PackAnswer { get; set; }
+
+    public List<(string Package, string Name, string Command)> PackCommands { get; } = [];
+
+    public Task<CommandAnswer> ConfirmPackCommandAsync(string package, string name, string command)
+    {
+        PackCommands.Add((package, name, command));
+        return Task.FromResult(PackAnswer);
+    }
+
     public async Task<CommandAnswer> ConfirmCommandAsync(CommandQuestion question, CancellationToken cancellation)
     {
         Commands.Add((question.Server, question.Command));
+        Plugin = question.Plugin;
         InTerminal = question.InTerminal;
         Until = question.Until;
         Asking?.Invoke();

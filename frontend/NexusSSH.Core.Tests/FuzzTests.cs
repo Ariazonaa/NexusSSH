@@ -240,10 +240,38 @@ public class FuzzTests
     public void The_answer_of_the_update_check_never_throws()
         => Hammer(
             [
-                """{"tag_name":"v0.22.0","name":"NexusSSH 0.22.0","draft":false,"prerelease":false,"html_url":"https://example.org/releases/v0.22.0","body":"notes","assets":[{"name":"NexusSSH-Setup-0.22.0.exe","browser_download_url":"https://example.org/a.exe","size":123}]}""",
+                """{"tag_name":"v0.22.0","name":"NexusSSH 0.22.0","draft":false,"prerelease":false,"html_url":"https://example.org/releases/v0.22.0","body":"notes","assets":[{"name":"NexusSSH-Setup-0.22.0.exe","browser_download_url":"https://example.org/a.exe","size":123,"digest":"sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"},{"digest":"sha256:","size":-5},null]}""",
                 """{"tag_name":"v999999999999.1","draft":true,"prerelease":null,"html_url":"file:///c:/x"}""",
             ],
             json => UpdateCheck.Parse(json, new Version(0, 21, 0)));
+
+    [Fact]
+    public void Reading_an_extension_package_never_throws()
+        => Hammer(
+            [
+                """{"format":1,"id":"a.b","name":"P","version":"1.0","themes":[{"name":"T","background":"#000000","foreground":"#ffffff","cursor":"#ffffff","selection":"#333333","ansi":["#000000","#111111","#222222","#333333","#444444","#555555","#666666","#777777","#888888","#999999","#aaaaaa","#bbbbbb","#cccccc","#dddddd","#eeeeee","#ffffff"]}],"snippets":[{"name":"s","text":"ls -la\n","run":true,"folder":"f"}],"highlights":[{"pattern":"err(or)?","regex":true,"ignoreCase":true,"color":"red"}],"completions":[{"command":"kubectl","subs":["get"],"flags":["-n"],"pathSubs":["cp"]}]}""",
+                """{"format":1,"id":"x","name":null,"version":"1","snippets":[null,{"text":null}],"themes":[{"ansi":[null]}],"completions":[{"command":null,"subs":[null,1]}]}""",
+            ],
+            text => Extensions.ExtensionFormat.Parse(text, out _));
+
+    [Fact]
+    public void The_description_and_the_answer_of_a_plugin_never_throw()
+    {
+        Hammer(
+            [
+                """{"format":1,"id":"a.b","name":"P","version":"1.0","author":"A","description":"D","permissions":["notify","files"],"commands":[{"id":"c","title":"C"}]}""",
+                """{"format":1,"id":null,"name":[1],"permissions":[null,1,"notify"],"commands":[null,{"id":1}]}""",
+            ],
+            text => Plugins.PluginManifest.Parse(text, out _));
+        Hammer(
+            [
+                """{"view":{"title":"T","text":"x\ny","table":{"columns":["a","b"],"rows":[["1","2"],["3"]]}},"notify":"n","log":"l","storage":{"k":[1,{"x":null}]}}""",
+                """{"view":{"table":{"columns":null,"rows":[null,[1,null,{}]]}},"notify":1,"storage":"s"}""",
+                """{"run":{"command":"ls -la","timeout_seconds":30},"state":{"a":[1,2]}}""",
+                """{"read":{"path":"/etc/hostname","offset":10},"state":null}""",
+            ],
+            text => Plugins.PluginOutput.Parse(text));
+    }
 
     [Fact]
     public void Colouring_a_line_of_a_file_never_throws_and_stays_inside_the_line()

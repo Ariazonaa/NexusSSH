@@ -118,6 +118,7 @@ public enum UiRequest
     ImportSessions,
     ImportSessionFile,
     CreateKey,
+    AuthorizedKeys,
     FocusCommandBar,
     FocusTerminal,
     ClearTerminal,
@@ -167,6 +168,7 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
     private readonly DropFetcher? _drops;
     private readonly IUpdateService? _updates;
     private readonly SessionRetry? _retry;
+    private readonly Func<TimeSpan, Action, IDisposable>? _schedule;
     private readonly Version _currentVersion;
     private IReadOnlyList<ServerProfile> _profiles = [];
 
@@ -188,6 +190,7 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
         _prompts = prompts;
         _updates = updates;
         _retry = schedule is null ? null : new SessionRetry(() => AutoReconnect, schedule);
+        _schedule = schedule;
         _currentVersion = GetType().Assembly.GetName().Version ?? new Version(0, 0, 0);
         Settings = settings;
         CheckForUpdates = settings.CheckForUpdates;
@@ -227,7 +230,14 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
         ProfileSort = settings.ProfileSort;
         RestoreTabs = settings.RestoreTabs;
         ConfirmClose = settings.ConfirmClose;
-        TerminalTheme = TerminalThemes.Find(settings.TerminalTheme, settings.CustomThemes);
+        // Ein Schema aus einem Paket gibt es erst, wenn die Pakete gelesen sind (UseExtensions) – bis dahin bleibt die Wahl stehen.
+        var chosenTheme = settings.TerminalTheme;
+        TerminalTheme = TerminalThemes.Find(chosenTheme, settings.CustomThemes);
+        if (TerminalThemes.IsFromPack(chosenTheme))
+        {
+            settings.TerminalTheme = chosenTheme;
+        }
+
         TerminalFontSize = Math.Clamp(settings.TerminalFontSize, TerminalThemes.MinFontSize, TerminalThemes.MaxFontSize);
         ProblemsTitle = L.Get("Problems");
         ProfileGroups = BindableList.Of<ProfileGroup>([]);
@@ -445,7 +455,7 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
         }
     }
 
-    public IReadOnlyList<HighlightRule> HighlightRules => TerminalHighlights.Parse(Settings.Highlights);
+    public IReadOnlyList<HighlightRule> HighlightRules => [.. TerminalHighlights.Parse(Settings.Highlights), .. PackHighlights];
 
     /// <summary>Sagt, wie viele Zeilen der Regeln nichts ergeben; leer, wenn alle verstanden sind.</summary>
     public string HighlightHint => TerminalHighlights.Ignored(Settings.Highlights) is > 0 and var ignored ? L.Get("HighlightsIgnored", ignored) : string.Empty;
@@ -686,6 +696,13 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
     {
         get => Settings.PasteTabs;
         set => SetLook(Settings.PasteTabs != value, () => Settings.PasteTabs = value);
+    }
+
+    /// <summary>Vor dem Einfügen mehrerer Zeilen immer fragen, auch wenn die Shell geschützt einfügt.</summary>
+    public bool PasteAlwaysAsk
+    {
+        get => Settings.PasteAlwaysAsk;
+        set => SetLook(Settings.PasteAlwaysAsk != value, () => Settings.PasteAlwaysAsk = value);
     }
 
     // Eine Einstellung des Terminals ändern: Die Seite bekommt danach alles neu (TerminalHost hört auf TerminalLook).
@@ -1729,10 +1746,23 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
             return false;
         }
 
+        // Ein Befehl aus einem Erweiterungspaket läuft erst nach Freigabe: Sein Name könnte etwas anderes versprechen,
+        // als sein Text tut.
+        if (!IsApproved(snippet))
+        {
+            _ = RunPackSnippetAsync(session, snippet);
+            return true;
+        }
+
+        SendSnippet(session, snippet);
+        return true;
+    }
+
+    private static void SendSnippet(SessionViewModel session, Snippet snippet)
+    {
         // Ein Terminal kennt Zeilenenden nur als Wagenrücklauf – so, wie die Enter-Taste ihn schickt.
         var text = snippet.Text.ReplaceLineEndings("\r");
         session.Send(snippet.Run ? text.TrimEnd('\r') + "\r" : text);
-        return true;
     }
 
     /// <summary>
@@ -2063,6 +2093,7 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
         WhenSettled(session, () => OnConnectedForCompletion(session));
         WatchSystem(session);
         WatchAlerts(session);
+        WatchPluginLines(session);
         WatchSnippets(session);
         session.Files.FileOpened += OnFileOpened;
         session.Files.Transfers = Transfers;
@@ -2287,6 +2318,7 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
             var active when SplitOf(active) is { } split => new TerminalLayout(split.Root, active, split.Zoomed, split.Fixed),
             var active => new TerminalLayout(new SplitLeaf<SessionViewModel>(active), active),
         };
+        UpdateInView();
         OnPropertyChanged(nameof(ShowsDetachedNote));
     }
 

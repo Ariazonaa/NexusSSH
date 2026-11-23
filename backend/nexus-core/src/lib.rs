@@ -17,6 +17,7 @@
 //!
 //! `docs/architecture.md` beschreibt das Zusammenspiel mit der App.
 
+mod authkeys;
 pub mod core;
 mod dial;
 mod elevate;
@@ -34,6 +35,7 @@ mod logs;
 mod metered;
 mod monitor;
 mod mosh;
+mod plugins;
 mod ppk;
 mod probe;
 pub mod profiles;

@@ -495,6 +495,68 @@ pub enum Request {
         /// Die Zeile des öffentlichen Schlüssels.
         public_key: String,
     },
+    /// Die Dateien `authorized_keys` des angemeldeten Kontos samt ihren Schlüsseln (nur über SFTP); Antwort als
+    /// `sftp.result` mit `server_keys`.
+    #[serde(rename = "authorized.list")]
+    AuthorizedList {
+        /// Nummer der Sitzung.
+        session: u64,
+        /// Nummer der Anfrage.
+        request: u64,
+    },
+    /// Einen öffentlichen Schlüssel an eine der Dateien von `authorized.list` anhängen (über SFTP) – nur, wenn die Datei
+    /// noch `version` ist (eine fehlende: leer); steht er schon dort, geschieht nichts.
+    #[serde(rename = "authorized.add")]
+    AuthorizedAdd {
+        /// Nummer der Sitzung.
+        session: u64,
+        /// Nummer der Anfrage.
+        request: u64,
+        /// Der Pfad, wie `authorized.list` ihn nannte.
+        path: String,
+        /// Die Version, wie `authorized.list` sie nannte.
+        #[serde(default)]
+        version: String,
+        /// Die Zeile des öffentlichen Schlüssels.
+        public_key: String,
+    },
+    /// Eine Zeile aus einer der Dateien von `authorized.list` entfernen – nur, wenn die Datei noch `version` ist und in
+    /// Zeile `line` der Schlüssel mit `fingerprint` steht (sonst Fehler `changed`).
+    #[serde(rename = "authorized.remove")]
+    AuthorizedRemove {
+        /// Nummer der Sitzung.
+        session: u64,
+        /// Nummer der Anfrage.
+        request: u64,
+        /// Der Pfad, wie `authorized.list` ihn nannte.
+        path: String,
+        /// Die Version, wie `authorized.list` sie nannte.
+        version: String,
+        /// Nummer der Zeile, ab 1.
+        line: u32,
+        /// Fingerabdruck des Schlüssels in dieser Zeile.
+        fingerprint: String,
+    },
+    /// Ein Plugin lesen und prüfen (WebAssembly, nichts importiert, Exporte, Beschreibung) – für die Vorschau.
+    /// Antwortet gleich mit `manifest` und `sha256`.
+    #[serde(rename = "plugin.inspect")]
+    PluginInspect {
+        /// Die Datei des Plugins.
+        path: String,
+    },
+    /// Ein Plugin aufrufen: `input` (JSON der App) hinein, seine Antwort als `sftp.result` mit `output` heraus.
+    /// Läuft nur, wenn die Datei noch `sha256` hat – die Fassung, die der Benutzer installiert hat.
+    #[serde(rename = "plugin.call")]
+    PluginCall {
+        /// Nummer der Anfrage.
+        request: u64,
+        /// Die Datei des Plugins.
+        path: String,
+        /// SHA-256 der installierten Fassung.
+        sha256: String,
+        /// Was das Plugin bekommt (JSON, von der App gebaut).
+        input: String,
+    },
     /// Datei oder Verzeichnis samt Inhalt löschen – still, das Ergebnis kommt als `sftp.result` (der Abgleich).
     /// Was der Benutzer löscht, läuft als Löschvorgang (`delete.start`), den man sieht und abbrechen kann.
     #[serde(rename = "sftp.delete")]
@@ -787,6 +849,12 @@ pub struct Response {
     /// `local.shells`
     #[serde(skip_serializing_if = "Option::is_none")]
     pub shells: Option<Vec<LocalShell>>,
+    /// `plugin.inspect`: die Beschreibung des Plugins, wie sie im Modul steht (JSON; die App prüft sie).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub manifest: Option<String>,
+    /// `plugin.inspect`: SHA-256 der Datei als Hex – `plugin.call` nimmt nur diese Datei.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sha256: Option<String>,
 }
 
 /// Eine Shell dieses Rechners, wie die App sie zur Wahl stellt – ohne Pfad und Argumente, die kennt nur der Kern.
@@ -1387,6 +1455,12 @@ pub enum Event {
         /// Nur bei `exec.run`: was der Befehl hinterlassen hat.
         #[serde(skip_serializing_if = "Option::is_none")]
         run: Option<crate::exec::RunOutput>,
+        /// Nur bei `authorized.list`: die Dateien mit Schlüsseln, die sich am Konto anmelden dürfen.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        server_keys: Option<Vec<crate::authkeys::ServerKeyFile>>,
+        /// Nur bei `plugin.call`: die Antwort des Plugins (JSON, wie es sie schrieb – die App prüft sie).
+        #[serde(skip_serializing_if = "Option::is_none")]
+        output: Option<String>,
         /// Nur bei `logs.read`: die Zeilen, älteste zuerst.
         #[serde(skip_serializing_if = "Option::is_none")]
         logs: Option<Vec<crate::logs::LogLine>>,

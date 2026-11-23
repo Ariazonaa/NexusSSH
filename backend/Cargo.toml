@@ -1,9 +1,9 @@
 [workspace]
 resolver = "3"
-members = ["nexus-core", "nexus-testserver", "mosh-client"]
+members = ["nexus-core", "nexus-testserver", "mosh-client", "plugin-sdk", "plugin-example"]
 
 [workspace.package]
-version = "0.6.1"
+version = "0.7.0"
 edition = "2024"
 publish = false
 
@@ -18,7 +18,7 @@ tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "time", "
 sha2 = "0.11"
 # FTP/FTPS als Dateiziel (2026-10-09): Client auf tokio, TLS über rustls mit ring wie russh.
 # „deprecated“ schaltet in der Bibliothek allein das implizite TLS frei (Port 990) – so nennt sie es selbst.
-suppaftp = { version = "12.2.0", default-features = false, features = ["tokio-rustls-ring", "deprecated"] }
+suppaftp = { version = "13.0.0", default-features = false, features = ["tokio-rustls-ring", "deprecated"] }
 tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
 rustls-platform-verifier = "0.7"
 # Nur für Tests und den Testserver: ein selbst signiertes Zertifikat für den kleinen FTP-Server.

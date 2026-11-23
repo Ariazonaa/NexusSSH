@@ -37,6 +37,10 @@ mosh-client = { path = "../mosh-client" }
 # Lange PowerShell-Skripte für Windows-Server gehen komprimiert hinüber (`winserver::command`) – sonst wären sie
 # länger, als `cmd.exe` eine Zeile annimmt. Über russh ohnehin dabei, dieselbe Fassung.
 flate2 = "1"
+# Plugins mit Code (`plugins.rs`): WebAssembly, ausgeführt von einem Interpreter in reinem Rust – ohne JIT, mit
+# begrenzten Rechenschritten (Fuel) und begrenztem Speicher. Ohne `wat` und `memory64` (braucht kein Plugin); mit
+# `auto-dispatch`, sonst verteilt der Interpreter über Endaufrufe, und ein Build ohne Optimierung läuft über den Stack.
+wasmi = { version = "2.0.2", default-features = false, features = ["std", "validate", "auto-dispatch"] }
 
 [target.'cfg(windows)'.dependencies]
 # Windows Credential Manager (CredReadW/CredWriteW/CredDeleteW), serielle Schnittstellen und das lokale Terminal
@@ -53,6 +57,8 @@ nexus-testserver = { path = "../nexus-testserver" }
 rcgen.workspace = true
 # Nur für den SSH-Agenten der Tests: russh nimmt dessen Verbindungen als Stream entgegen. Ist über russh ohnehin dabei.
 futures = "0.3"
+# Kleine Plugins für die Tests aus WebAssembly-Text, ohne eigene Toolchain.
+wat = "1.263.0"
 
 [lints]
 workspace = true

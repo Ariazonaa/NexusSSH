@@ -497,6 +497,104 @@ fn a_new_key_pair_lies_in_the_ssh_directory_and_its_public_half_goes_to_the_serv
 }
 
 #[test]
+fn the_authorized_keys_are_listed_and_one_line_is_removed_without_touching_the_rest() {
+    let files = Files::connected();
+    let generated = |name: &str, comment: &str| {
+        files
+            .fixture
+            .ok(json!({ "op": "key.generate", "name": name, "comment": comment }))["public_key"]
+            .as_str()
+            .unwrap()
+            .to_owned()
+    };
+    let (mine, other) = (generated("id_mine", "me@pc"), generated("id_other", "old laptop"));
+    let authorized = files.remote.join(".ssh").join("authorized_keys");
+    std::fs::create_dir_all(authorized.parent().unwrap()).unwrap();
+    let before = format!("# managed by hand\r\n{mine}\r\n\nno-pty,command=\"echo a b\" {other}\r\nbroken\r\n");
+    std::fs::write(&authorized, &before).unwrap();
+
+    let listed = files.sftp(json!({ "op": "authorized.list" }));
+    assert_eq!(listed["ok"], true, "{listed}");
+    let file = &listed["server_keys"][0];
+    assert_eq!(file["exists"], true, "{listed}");
+    assert!(
+        file["path"].as_str().unwrap().ends_with("/.ssh/authorized_keys"),
+        "{listed}"
+    );
+    let keys = file["keys"].as_array().unwrap();
+    assert_eq!(keys.len(), 3, "{listed}");
+    assert_eq!((&keys[0]["line"], &keys[0]["comment"]), (&json!(2), &json!("me@pc")));
+    assert_eq!(
+        (&keys[1]["line"], &keys[1]["comment"], &keys[1]["options"]),
+        (&json!(4), &json!("old laptop"), &json!("no-pty,command=\"echo a b\""))
+    );
+    assert_eq!(keys[2]["unreadable"], "broken");
+
+    // Entfernen nimmt genau die eine Zeile; alles andere bleibt Byte für Byte.
+    let remove = |version: &Value, line: &Value, fingerprint: &Value| {
+        files.sftp(json!({
+            "op": "authorized.remove", "path": file["path"], "version": version, "line": line, "fingerprint": fingerprint,
+        }))
+    };
+    let removed = remove(&file["version"], &keys[1]["line"], &keys[1]["fingerprint"]);
+    assert_eq!(removed["ok"], true, "{removed}");
+    assert_eq!(
+        std::fs::read_to_string(&authorized).unwrap(),
+        format!("# managed by hand\r\n{mine}\r\n\nbroken\r\n")
+    );
+
+    // Mit dem alten Stand geht nichts mehr: Die Datei hat sich inzwischen geändert.
+    let stale = remove(&file["version"], &keys[0]["line"], &keys[0]["fingerprint"]);
+    assert_eq!(
+        (&stale["ok"], &stale["error"]),
+        (&json!(false), &json!("changed")),
+        "{stale}"
+    );
+
+    // Eine andere Datei als die von `authorized.list` nimmt der Kern nicht an.
+    let elsewhere = files.sftp(json!({
+        "op": "authorized.remove", "path": "/notes.txt", "version": file["version"], "line": 1, "fingerprint": keys[0]["fingerprint"],
+    }));
+    assert_eq!(
+        (&elsewhere["ok"], &elsewhere["error"]),
+        (&json!(false), &json!("not_allowed")),
+        "{elsewhere}"
+    );
+    assert!(std::fs::read_to_string(&authorized).unwrap().contains(&mine));
+
+    // Hinzufügen hängt an, im Zeilenende der Datei; zweimal derselbe Schlüssel ergibt eine Zeile.
+    let now = files.sftp(json!({ "op": "authorized.list" }));
+    let add = |version: &Value, key: &str| {
+        files.sftp(json!({ "op": "authorized.add", "path": file["path"], "version": version, "public_key": key }))
+    };
+    let added = add(&now["server_keys"][0]["version"], &other);
+    assert_eq!(added["ok"], true, "{added}");
+    let again = files.sftp(json!({ "op": "authorized.list" }));
+    assert_eq!(add(&again["server_keys"][0]["version"], &other)["ok"], true);
+    assert_eq!(
+        std::fs::read_to_string(&authorized).unwrap(),
+        format!("# managed by hand\r\n{mine}\r\n\nbroken\r\n{other}\r\n")
+    );
+    // Mit altem Stand, oder etwas, das kein Schlüssel ist: nichts.
+    let stale = add(&now["server_keys"][0]["version"], &mine);
+    assert_eq!(stale["error"], "changed", "{stale}");
+    let refused = add(&again["server_keys"][0]["version"], "ssh-ed25519 AAAA; rm -rf ~");
+    assert_eq!(refused["error"], "invalid_key", "{refused}");
+
+    // Ohne Datei: da, aber leer – und Hinzufügen legt Verzeichnis und Datei an.
+    std::fs::remove_dir_all(authorized.parent().unwrap()).unwrap();
+    let none = files.sftp(json!({ "op": "authorized.list" }));
+    assert_eq!(
+        (&none["server_keys"][0]["exists"], &none["server_keys"][0]["keys"]),
+        (&json!(false), &json!([])),
+        "{none}"
+    );
+    let created = add(&none["server_keys"][0]["version"], &mine);
+    assert_eq!(created["ok"], true, "{created}");
+    assert_eq!(std::fs::read_to_string(&authorized).unwrap(), format!("{mine}\n"));
+}
+
+#[test]
 fn a_search_finds_names_below_a_folder_whatever_their_case() {
     let files = Files::connected();
     let deep = files.remote.join("srv").join("app").join("conf");
@@ -3667,7 +3765,7 @@ fn a_halted_upload_keeps_its_partial_file_and_continues_in_it() {
 /// „Schlüssel erzeugen und hinterlegen“ an einem echten Server ([`real_server`]): Der Eintrag in `authorized_keys`
 /// entsteht dort durch einen Befehl an der Shell des Kontos – bash, die `ash` von BusyBox, fish –, und danach muss
 /// sich mit dem neuen Schlüssel anmelden lassen. Der Kommentar des Schlüssels ist `nexus-real-test`: An ihm lässt
-/// sich die Zeile danach wieder aus `authorized_keys` nehmen (das kann der Test nicht selbst).
+/// sich die Zeile erkennen; am Ende nimmt der Test sie über `authorized.remove` selbst wieder heraus.
 #[test]
 fn a_new_key_is_installed_on_a_real_server_and_signs_in() {
     let Some((files, _)) = real_server() else {
@@ -3714,6 +3812,34 @@ fn a_new_key_is_installed_on_a_real_server_and_signs_in() {
             .iter()
             .any(|event| event["session"] == 2)
     );
+
+    // Die Liste zeigt den neuen Schlüssel, und Entfernen nimmt ihn wieder heraus – über SFTP, ohne die Shell.
+    let fingerprint = json!(
+        russh::keys::PublicKey::from_openssh(&public_key)
+            .unwrap()
+            .fingerprint(russh::keys::HashAlg::Sha256)
+            .to_string()
+    );
+    let listed = files.sftp(json!({ "op": "authorized.list" }));
+    let (file, key) = listed["server_keys"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find_map(|file| {
+            let key = file["keys"]
+                .as_array()?
+                .iter()
+                .find(|key| key["fingerprint"] == fingerprint)?;
+            Some((file.clone(), key.clone()))
+        })
+        .unwrap_or_else(|| panic!("new key not listed: {listed}"));
+    assert_eq!(key["comment"], "nexus-real-test");
+    let removed = files.sftp(json!({
+        "op": "authorized.remove", "path": file["path"], "version": file["version"], "line": key["line"], "fingerprint": fingerprint,
+    }));
+    assert_eq!(removed["ok"], true, "{removed}");
+    let after = files.sftp(json!({ "op": "authorized.list" }));
+    assert!(!after.to_string().contains(fingerprint.as_str().unwrap()), "{after}");
 }
 
 #[test]

@@ -505,6 +505,10 @@ impl Link {
         // PowerShell schreibt Fehler als CLIXML ([`crate::winserver::plain_errors`]).
         if windows {
             output.stderr = crate::winserver::plain_errors(&output.stderr);
+            // Den Wert meldet Windows PowerShell als Anmelde-Shell nicht weiter ([`crate::winserver::user_command`]).
+            if let Some(status) = crate::winserver::take_status(&mut output.stdout) {
+                output.status = Some(status);
+            }
         }
         Ok(output)
     }

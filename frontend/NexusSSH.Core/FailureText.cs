@@ -34,6 +34,8 @@ public static class FailureText
             "local_not_found" => L.Get("TransferLocalNotFound"),
             "local_permission_denied" => L.Get("TransferLocalDenied"),
             "local_io" => L.Get("TransferLocalFailed"),
+            "changed" => L.Get("AuthorizedChanged"),
+            "not_written" => L.Get("AuthorizedNotWritten"),
             _ => L.Get("SftpFailed"),
         };
 

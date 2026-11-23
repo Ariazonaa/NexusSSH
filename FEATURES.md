@@ -1,6 +1,6 @@
 # Features
 
-What NexusSSH can do today – by area, not by date. As of version 0.6.1 (phase 3 including its remaining items,
+What NexusSSH can do today – by area, not by date. As of version 0.7.0 (phase 3 including its remaining items,
 packaging).
 
 Everything is tested against the built-in test server and most of it against real OpenSSH servers: Debian as root,
@@ -106,6 +106,10 @@ the server load then comes from other sources (without paging and disk throughpu
 - **Notice of new versions**: at startup (at most once a day, can be turned off in the settings) the app checks the
   GitHub releases and shows a notice with a link to the download page when a newer version is available. Also by hand
   via the command palette ("Check for updates"). Just one request to GitHub – no account, no data
+- **Update from the app**: "Update now" in that notice downloads the setup for this computer (x64 or ARM64) from
+  GitHub, checks it against the size and SHA-256 GitHub names (and its signature, once the setups are signed), then
+  closes the app, installs the new version the way the old one was installed (for you or for everyone) and starts it
+  again. Only after asking, and only for an installed app – otherwise the notice keeps its link
 
 ## Servers
 
@@ -170,6 +174,13 @@ the server load then comes from other sources (without paging and disk throughpu
 - **Generate and deploy keys**: a new Ed25519 key pair in `~/.ssh` (optionally with a passphrase), the public part is
   added to `authorized_keys` on the connected server and the profile is switched to the key – what `ssh-keygen` and
   `ssh-copy-id` otherwise do. Existing files stay untouched
+- **Authorized keys on the server**: which keys may sign in to the account of a connection (`~/.ssh/authorized_keys`;
+  for root on OpenWrt dropbear's file; on Windows also `administrators_authorized_keys` if the account can read it) –
+  type and length, fingerprint, comment and options such as `from=` or `command=`, with the matching key file on this
+  computer named and the profile's own key marked. **Remove** a single key: read and written over SFTP, never a shell
+  command; exactly that line goes, every other byte of the file stays, and if the file changed since it was shown,
+  nothing is removed. Removing the profile's own or the last key asks more clearly. **Add** one of your own keys that
+  is not there yet – also over SFTP, so it works on Windows servers and without a further channel
 - **Manage keys**: a home page page with your own key files (what is in `~/.ssh` and what a profile or an identity
   names) – type and length, fingerprint, comment, format, whether a passphrase protects it and who uses it, read
   without the passphrase. **Change the passphrase**, set or remove it; the file keeps its format. **Convert** between
@@ -330,6 +341,9 @@ the server load then comes from other sources (without paging and disk throughpu
   flash; the app does not take the foreground for it
 - **What the bell does** is configurable: mark the tab, play a sound, flash the taskbar icon – each on its own, or
   none of them
+- **Activity and silence on the tab:** new output in a tab you are not looking at puts a dot on it (can be turned
+  off); "Watch for silence" in the tab menu reports when a session has had no output for a set time (5–600 s,
+  default 15) – a clock on the tab and a Windows notification, e.g. at the end of a long run
 - **Sounds for errors and events:** server unreachable, sign-in rejected, connection dropped, transfer failed (on by
   default), optionally also "connected" and "transfer finished" – each switchable on its own, with a button to listen,
   optionally only when the window is not in front. The sounds played are those of Windows; the same sound comes at
@@ -352,6 +366,22 @@ the server load then comes from other sources (without paging and disk throughpu
   one. The folder travels along into the export
 - **Color schemes**: Black (default: Campbell on pure black), Campbell, One Half Dark, Dracula, Nord, Gruvbox Dark,
   Solarized Dark, Tango Dark
+- **Extension packages** (`.nxext`, Settings → Extensions): one file with color schemes, saved commands, highlighting
+  rules and completion for more programs – no code; it runs nothing and sees no passwords. A preview shows everything
+  in it, every command with its full text, before it is installed. Its content sits next to your own (commands in
+  their own read-only folder; editing makes an own copy) and goes away with it; each package can be switched off.
+  A command from a package only runs after asking – "Always allow" frees exactly that text. **Save as package**
+  turns your own color schemes, commands and rules into such a file to pass on
+- **Plugins** (`.nxplugin`, Settings → Extensions): code from outside as WebAssembly, run sealed off in the core – no
+  files, no network, no passwords, limited computing time and memory. A preview shows the author, the commands, the
+  checksum and the permissions it asks for, each to tick (none ticked by default). Its commands appear in the command
+  palette; results show as text and table; it keeps data of its own. With the permissions for it, a plugin can
+  suggest commands on the server of the active session – each one runs only after you approve its full text, in a
+  channel of its own – and read files there. Plugins can also listen to sessions connecting and disconnecting and
+  watch terminal output for their patterns (they only get the lines that match, and in the background they may only
+  notify, log and keep data – never open dialogs or run anything). A plugin that fails or misbehaves is switched
+  off; a changed plugin file is not loaded. Writing plugins: a Rust SDK, an example plugin (disk usage) and a guide
+  (`docs/plugins.md`); any language that builds WebAssembly without imports works
 - **Images in the terminal** (Sixel and the iTerm2 protocol; setting, **off** by default): for `img2sixel`, `chafa`,
   `imgcat` or the preview in file managers. The image data comes from the server – hence the warning and fixed limits
   for size and memory
@@ -369,6 +399,8 @@ the server load then comes from other sources (without paging and disk throughpu
 - **Pasted text is cleaned up** (can be turned off): control characters and invisible characters are dropped,
   non-breaking spaces become ordinary ones, and the line break at the end is removed – a pasted line only runs with
   Enter. Optionally tabs become spaces
+- **Asks before pasting several lines** into a shell that would run each one at once (no bracketed paste), with the
+  first lines shown; optionally it always asks, also when the shell waits for Enter
 - **Clickable addresses and paths**: Ctrl+click opens a web address in the browser and shows a path in the file
   browser (opens the folder, selects the file)
 - **Suggestions while typing** from the saved commands: a small list at the cursor, Tab accepts; can be turned off.

@@ -452,7 +452,11 @@ public sealed partial class DialogService(Func<XamlRoot?> xamlRoot) : IUserPromp
                 MaxWidth = 460,
                 Children =
                 {
-                    new TextBlock { Text = L.Get(question.InTerminal ? "McpCommandHintTerminal" : "McpCommandHint"), TextWrapping = TextWrapping.Wrap },
+                    new TextBlock
+                    {
+                        Text = question.Plugin is { } plugin ? L.Get("PluginCommandHint", plugin) : L.Get(question.InTerminal ? "McpCommandHintTerminal" : "McpCommandHint"),
+                        TextWrapping = TextWrapping.Wrap,
+                    },
                     new TextBlock
                     {
                         Text = string.Join('\n', question.Command.Split('\n').Select(Format.Visible)),
@@ -462,7 +466,7 @@ public sealed partial class DialogService(Func<XamlRoot?> xamlRoot) : IUserPromp
                     },
                     new TextBlock
                     {
-                        Text = L.Get("McpCommandAlwaysHint"),
+                        Text = question.Plugin is null ? L.Get("McpCommandAlwaysHint") : L.Get("PluginCommandOnce"),
                         TextWrapping = TextWrapping.Wrap,
                         Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
                     },
@@ -470,7 +474,9 @@ public sealed partial class DialogService(Func<XamlRoot?> xamlRoot) : IUserPromp
                 },
             },
             PrimaryButtonText = L.Get("McpCommandRun"),
-            SecondaryButtonText = L.Get("McpCommandAlways"),
+
+            // Ein Plugin bekommt keine dauerhafte Freigabe: Jeder seiner Befehle wird gefragt.
+            SecondaryButtonText = question.Plugin is null ? L.Get("McpCommandAlways") : string.Empty,
             DefaultButton = ContentDialogButton.Close,
         };
 
@@ -563,6 +569,452 @@ public sealed partial class DialogService(Func<XamlRoot?> xamlRoot) : IUserPromp
         return await ShowAsync(dialog, CancellationToken.None) == ContentDialogResult.Primary
             ? new KeyRequest(name.Text.Trim(), passphrase.Password.Length > 0 ? passphrase.Password : null, forIdentity?.IsChecked == true)
             : null;
+    }
+
+    /// <summary>
+    /// „Hinterlegte Schlüssel“: die Dateien <c>authorized_keys</c> des Kontos mit ihren Schlüsseln, je einer mit
+    /// „Entfernen“ (die Rückfrage steht in der Zeile selbst – ein zweiter Dialog geht über einem offenen nicht), unter jeder
+    /// Datei „Eigenen Schlüssel hinzufügen“. Nach jedem Schritt liest der Dialog neu; was geschieht, entscheidet Core.
+    /// </summary>
+    public async Task ShowAuthorizedKeysAsync(AuthorizedKeysViewModel keys)
+    {
+        var secondary = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"];
+        var caution = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["SystemFillColorCautionBrush"];
+        var caption = (Style)Application.Current.Resources["CaptionTextBlockStyle"];
+        var list = new StackPanel { Spacing = 14 };
+        var status = new TextBlock { TextWrapping = TextWrapping.Wrap, Foreground = caution, Visibility = Visibility.Collapsed };
+        // Breiter als 500 geht nicht: Ein ContentDialog ist höchstens 548 breit, samt Rand.
+        var content = new StackPanel { Width = 480, Spacing = 12 };
+        content.Children.Add(new TextBlock { Text = L.Get("AuthorizedIntro"), TextWrapping = TextWrapping.Wrap, Foreground = secondary });
+        content.Children.Add(status);
+        content.Children.Add(new ScrollViewer { Content = list, MaxHeight = 420, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
+
+        void Say(string? text)
+        {
+            status.Text = text ?? string.Empty;
+            status.Visibility = string.IsNullOrEmpty(text) ? Visibility.Collapsed : Visibility.Visible;
+        }
+
+        TextBlock Line(string text, bool mono = false, Microsoft.UI.Xaml.Media.Brush? brush = null)
+        {
+            var line = new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true, Style = caption };
+            if (mono)
+            {
+                line.FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Cascadia Mono, Consolas");
+            }
+
+            if (brush is not null)
+            {
+                line.Foreground = brush;
+            }
+
+            return line;
+        }
+
+        async Task Run(Func<Task<string?>> step)
+        {
+            list.IsHitTestVisible = false;
+            Say(L.Get("AuthorizedLoading"));
+            var failure = await step();
+            Render();
+            Say(failure ?? (keys.Error.Length > 0 ? keys.Error : null));
+            list.IsHitTestVisible = true;
+        }
+
+        UIElement Row(AuthorizedKeyItem item)
+        {
+            var info = new StackPanel { Spacing = 2 };
+            info.Children.Add(new TextBlock { Text = item.Title, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true });
+            info.Children.Add(Line(item.Details, mono: item.CanRemove, brush: secondary));
+            if (item.LocalName.Length > 0)
+            {
+                info.Children.Add(Line(item.IsProfileKey ? $"{L.Get("AuthorizedLocal", item.LocalName)} · {L.Get("AuthorizedProfileKey")}" : L.Get("AuthorizedLocal", item.LocalName), brush: secondary));
+            }
+
+            var row = new Grid { ColumnSpacing = 12 };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.Children.Add(info);
+            if (!item.CanRemove)
+            {
+                return row;
+            }
+
+            var remove = new Button { Content = L.Get("AuthorizedRemove"), VerticalAlignment = VerticalAlignment.Top };
+            AutomationProperties.SetName(remove, $"{L.Get("AuthorizedRemove")}: {item.Title}");
+            Grid.SetColumn(remove, 1);
+            row.Children.Add(remove);
+
+            // Die Rückfrage erscheint unter der Zeile: deutlicher, wenn es der eigene oder der letzte Schlüssel ist.
+            var confirm = new StackPanel { Spacing = 6, Visibility = Visibility.Collapsed, Margin = new Thickness(0, 6, 0, 0) };
+            confirm.Children.Add(new TextBlock { Text = keys.RemoveWarning(item), TextWrapping = TextWrapping.Wrap, Foreground = caution });
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+            var yes = new Button { Content = L.Get("AuthorizedRemoveYes"), Style = (Style)Application.Current.Resources["AccentButtonStyle"] };
+            var no = new Button { Content = L.Get("Cancel") };
+            buttons.Children.Add(yes);
+            buttons.Children.Add(no);
+            confirm.Children.Add(buttons);
+            Grid.SetRow(confirm, 1);
+            Grid.SetColumnSpan(confirm, 2);
+            row.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            row.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            row.Children.Add(confirm);
+
+            remove.Click += (_, _) =>
+            {
+                remove.IsEnabled = false;
+                confirm.Visibility = Visibility.Visible;
+                no.Focus(FocusState.Programmatic);
+            };
+            no.Click += (_, _) =>
+            {
+                confirm.Visibility = Visibility.Collapsed;
+                remove.IsEnabled = true;
+                remove.Focus(FocusState.Programmatic);
+            };
+            yes.Click += async (_, _) => await Run(() => keys.RemoveAsync(item));
+            return row;
+        }
+
+        void Render()
+        {
+            list.Children.Clear();
+            foreach (var file in keys.Files)
+            {
+                var head = new StackPanel { Spacing = 2 };
+                head.Children.Add(new TextBlock { Text = file.Title, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true });
+                if (file.Note.Length > 0)
+                {
+                    head.Children.Add(Line(file.Note, brush: secondary));
+                }
+
+                list.Children.Add(head);
+                foreach (var item in file.Keys)
+                {
+                    list.Children.Add(Row(item));
+                }
+
+                if (file.File.Error.Length == 0)
+                {
+                    list.Children.Add(Adding(file));
+                }
+            }
+        }
+
+        // Einen eigenen Schlüssel an diese Datei hängen – nur die, die dort noch nicht stehen.
+        UIElement Adding(AuthorizedKeyFileItem file)
+        {
+            var add = new StackPanel { Spacing = 6 };
+            add.Children.Add(Line(L.Get("AuthorizedAddHeader"), brush: secondary));
+            if (file.Addable.Count == 0)
+            {
+                add.Children.Add(Line(L.Get("AuthorizedNothingToAdd"), brush: secondary));
+                return add;
+            }
+
+            var names = file.Addable.Select(key => key.Comment.Length > 0 ? $"{key.Name} · {key.Comment}" : key.Name).ToList();
+            var choice = new ComboBox { ItemsSource = names, SelectedIndex = 0, MinWidth = 280, MaxWidth = 360 };
+            AutomationProperties.SetName(choice, $"{L.Get("AuthorizedAddHeader")}: {file.Title}");
+            var button = new Button { Content = L.Get("AuthorizedAdd") };
+            AutomationProperties.SetName(button, $"{L.Get("AuthorizedAdd")}: {file.Title}");
+            button.Click += async (_, _) =>
+            {
+                if (choice.SelectedIndex is >= 0 and var index && index < file.Addable.Count)
+                {
+                    var key = file.Addable[index];
+                    await Run(() => keys.AddAsync(file, key));
+                }
+            };
+            var line = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+            line.Children.Add(choice);
+            line.Children.Add(button);
+            add.Children.Add(line);
+            return add;
+        }
+
+        var dialog = new ContentDialog
+        {
+            Title = L.Get("AuthorizedTitle", keys.ServerName),
+            Content = content,
+            CloseButtonText = L.Get("Close"),
+            DefaultButton = ContentDialogButton.Close,
+        };
+        dialog.Opened += async (_, _) => await Run(async () =>
+        {
+            await keys.LoadAsync();
+            return null;
+        });
+
+        await ShowAsync(dialog, CancellationToken.None);
+    }
+
+    /// <summary>
+    /// Die Vorschau eines Erweiterungspakets vor dem Installieren: wer es gemacht hat, was drin ist – die Befehle mit
+    /// ihrem ganzen Text –, und ob es ein installiertes ersetzt. Alles darin kommt von außen und ist schon geprüft.
+    /// </summary>
+    public async Task<bool> ConfirmExtensionAsync(NexusSSH.Core.Extensions.ExtensionPackage package, NexusSSH.Core.Extensions.ExtensionPackage? installed)
+    {
+        var secondary = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"];
+        var mono = new Microsoft.UI.Xaml.Media.FontFamily("Cascadia Mono, Consolas");
+        var content = new StackPanel { Width = 480, Spacing = 8 };
+        var by = package.Author.Length > 0 ? L.Get("ExtensionTitleBy", package.Name, package.Version, package.Author) : L.Get("ExtensionTitle", package.Name, package.Version);
+        content.Children.Add(new TextBlock { Text = by, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
+        if (package.Description.Length > 0)
+        {
+            content.Children.Add(new TextBlock { Text = package.Description, TextWrapping = TextWrapping.Wrap });
+        }
+
+        content.Children.Add(new TextBlock { Text = package.Summary, Foreground = secondary, TextWrapping = TextWrapping.Wrap });
+        if (installed is not null)
+        {
+            content.Children.Add(new TextBlock { Text = L.Get("ExtensionReplaces", installed.Version), TextWrapping = TextWrapping.Wrap });
+        }
+
+        var details = new StackPanel { Spacing = 4 };
+        if (package.Themes.Count > 0)
+        {
+            details.Children.Add(new TextBlock { Text = $"{L.Get("ExtensionThemes")}: {string.Join(", ", package.Themes.Select(theme => theme.Name))}", TextWrapping = TextWrapping.Wrap });
+        }
+
+        foreach (var snippet in package.Snippets)
+        {
+            details.Children.Add(new TextBlock { Text = $"{snippet.Name}{(snippet.Run ? " ⏎" : string.Empty)}", Margin = new Thickness(0, 4, 0, 0) });
+            details.Children.Add(new TextBlock { Text = string.Join('\n', snippet.Text.Split('\n').Select(Format.Visible)), FontFamily = mono, Foreground = secondary, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true });
+        }
+
+        if (package.Highlights.Count > 0)
+        {
+            details.Children.Add(new TextBlock { Text = $"{L.Get("ExtensionHighlights")}: {string.Join(", ", package.Highlights.Select(rule => $"{rule.Color} {rule.Pattern}"))}", TextWrapping = TextWrapping.Wrap });
+        }
+
+        if (package.Completions.Count > 0)
+        {
+            details.Children.Add(new TextBlock { Text = $"{L.Get("ExtensionCompletions")}: {string.Join(", ", package.Completions.Select(table => table.Command))}", TextWrapping = TextWrapping.Wrap });
+        }
+
+        content.Children.Add(new ScrollViewer { Content = details, MaxHeight = 280, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });
+        content.Children.Add(new TextBlock { Text = L.Get("ExtensionFromOutside"), Foreground = secondary, TextWrapping = TextWrapping.Wrap });
+
+        var dialog = new ContentDialog
+        {
+            Title = L.Get("ExtensionPreviewTitle"),
+            Content = content,
+            PrimaryButtonText = installed is null ? L.Get("ExtensionInstall") : L.Get("ExtensionReplace"),
+            CloseButtonText = L.Get("Cancel"),
+            DefaultButton = ContentDialogButton.Close,
+        };
+        return await ShowAsync(dialog, CancellationToken.None) == ContentDialogResult.Primary;
+    }
+
+    /// <summary>
+    /// Die Vorschau eines Plugins vor dem Installieren: wer es gemacht hat, seine Befehle, seine Prüfsumme, und die
+    /// Rechte, die es erbittet – jedes zum Anhaken, von Haus aus keines. Liefert die gewährten Rechte, <c>null</c> bei Abbruch.
+    /// </summary>
+    public async Task<IReadOnlyList<string>?> ConfirmPluginAsync(NexusSSH.Core.Plugins.PluginManifest manifest, PluginInspection inspection, NexusSSH.Core.Plugins.InstalledPlugin? installed)
+    {
+        var secondary = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"];
+        var content = new StackPanel { Width = 480, Spacing = 8 };
+        var by = manifest.Author.Length > 0 ? L.Get("ExtensionTitleBy", manifest.Name, manifest.Version, manifest.Author) : L.Get("ExtensionTitle", manifest.Name, manifest.Version);
+        content.Children.Add(new TextBlock { Text = by, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
+        if (manifest.Description.Length > 0)
+        {
+            content.Children.Add(new TextBlock { Text = manifest.Description, TextWrapping = TextWrapping.Wrap });
+        }
+
+        foreach (var line in PluginLines(manifest))
+        {
+            content.Children.Add(new TextBlock { Text = line, TextWrapping = TextWrapping.Wrap });
+        }
+
+        if (installed is not null)
+        {
+            content.Children.Add(new TextBlock { Text = L.Get("ExtensionReplaces", installed.Manifest.Version), TextWrapping = TextWrapping.Wrap });
+        }
+
+        content.Children.Add(new TextBlock { Text = L.Get("PluginBase"), Foreground = secondary, TextWrapping = TextWrapping.Wrap });
+        var boxes = new List<(string Permission, CheckBox Box)>();
+        content.Children.Add(new TextBlock { Text = manifest.Permissions.Count > 0 ? L.Get("PluginPermissionsAsked") : L.Get("PluginNoPermissionsAsked"), TextWrapping = TextWrapping.Wrap });
+        foreach (var permission in manifest.Permissions)
+        {
+            // Von Haus aus nichts gewährt – auch nicht beim Ersetzen: Neue Rechte gibt es nur angehakt.
+            var box = new CheckBox { Content = ShellViewModel.PermissionName(permission), IsChecked = installed?.Has(permission) == true };
+            boxes.Add((permission, box));
+            content.Children.Add(box);
+        }
+
+        content.Children.Add(new TextBlock { Text = L.Get("PluginCode"), Foreground = secondary, TextWrapping = TextWrapping.Wrap });
+        content.Children.Add(new TextBlock { Text = L.Get("PluginSha", inspection.Sha256), Foreground = secondary, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true, FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Cascadia Mono, Consolas") });
+
+        var dialog = new ContentDialog
+        {
+            Title = L.Get("PluginPreviewTitle"),
+            Content = new ScrollViewer { Content = content, MaxHeight = 520, VerticalScrollBarVisibility = ScrollBarVisibility.Auto },
+            PrimaryButtonText = installed is null ? L.Get("ExtensionInstall") : L.Get("ExtensionReplace"),
+            CloseButtonText = L.Get("Cancel"),
+            DefaultButton = ContentDialogButton.Close,
+        };
+        return await ShowAsync(dialog, CancellationToken.None) == ContentDialogResult.Primary
+            ? [.. boxes.Where(entry => entry.Box.IsChecked == true).Select(entry => entry.Permission)]
+            : null;
+    }
+
+    /// <summary>Was ein Plugin tut, in Zeilen: seine Befehle, die Ereignisse, auf die es hört, die Muster, deren Zeilen es sieht.</summary>
+    public static IEnumerable<string> PluginLines(NexusSSH.Core.Plugins.PluginManifest manifest)
+    {
+        if (manifest.Commands.Count > 0)
+        {
+            yield return L.Get("PluginCommandsList", string.Join(", ", manifest.Commands.Select(command => command.Title)));
+        }
+
+        if (manifest.Events.Count > 0)
+        {
+            yield return L.Get("PluginEventsList", ShellViewModel.EventNames(manifest.Events));
+        }
+
+        if (manifest.Watch.Count > 0)
+        {
+            yield return L.Get("PluginWatchList", ShellViewModel.PatternTexts(manifest.Watch));
+        }
+    }
+
+    /// <summary>Was ein Plugin zeigen will: Text und Tabelle, beides fremd und schon gesäubert.</summary>
+    public async Task ShowPluginViewAsync(string plugin, NexusSSH.Core.Plugins.PluginView view)
+    {
+        var content = new StackPanel { Spacing = 10, MaxWidth = 560 };
+        if (view.Text.Length > 0)
+        {
+            content.Children.Add(new TextBlock { Text = view.Text, TextWrapping = TextWrapping.Wrap, IsTextSelectionEnabled = true });
+        }
+
+        if (view.Rows.Count > 0)
+        {
+            var table = new Grid { ColumnSpacing = 16, RowSpacing = 4 };
+            var columns = Math.Max(view.Columns.Count, view.Rows.Max(row => row.Count));
+            for (var column = 0; column < columns; column++)
+            {
+                table.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            }
+
+            var line = 0;
+            void Add(IReadOnlyList<string> cells, bool head)
+            {
+                table.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                for (var column = 0; column < cells.Count && column < columns; column++)
+                {
+                    var cell = new TextBlock { Text = cells[column], IsTextSelectionEnabled = true };
+                    if (head)
+                    {
+                        cell.FontWeight = Microsoft.UI.Text.FontWeights.SemiBold;
+                    }
+
+                    Grid.SetRow(cell, line);
+                    Grid.SetColumn(cell, column);
+                    table.Children.Add(cell);
+                }
+
+                line++;
+            }
+
+            if (view.Columns.Count > 0)
+            {
+                Add(view.Columns, head: true);
+            }
+
+            foreach (var row in view.Rows)
+            {
+                Add(row, head: false);
+            }
+
+            content.Children.Add(new ScrollViewer { Content = table, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollMode = ScrollMode.Auto });
+        }
+
+        var dialog = new ContentDialog
+        {
+            Title = view.Title.Length > 0 ? L.Get("PluginViewTitle", plugin, view.Title) : plugin,
+            Content = new ScrollViewer { Content = content, MaxHeight = 520, VerticalScrollBarVisibility = ScrollBarVisibility.Auto },
+            CloseButtonText = L.Get("Close"),
+            DefaultButton = ContentDialogButton.Close,
+        };
+        await ShowAsync(dialog, CancellationToken.None);
+    }
+
+    /// <summary>„Als Paket speichern“: Name, Autor und was hinein soll. <c>null</c> bei Abbruch.</summary>
+    public async Task<(string Name, string Author, bool Themes, bool Snippets, bool Highlights)?> AskOwnPackageAsync()
+    {
+        var name = new TextBox { Header = L.Get("ExtensionName"), Text = L.Get("ExtensionNameSuggestion"), IsSpellCheckEnabled = false };
+        var author = new TextBox { Header = L.Get("ExtensionAuthor"), IsSpellCheckEnabled = false };
+        var themes = new CheckBox { Content = L.Get("ExtensionThemes"), IsChecked = App.Shell.Settings.CustomThemes.Count > 0, IsEnabled = App.Shell.Settings.CustomThemes.Count > 0 };
+        var snippets = new CheckBox { Content = L.Get("ExtensionSnippets"), IsChecked = App.Shell.Settings.Snippets.Count > 0, IsEnabled = App.Shell.Settings.Snippets.Count > 0 };
+        var highlights = new CheckBox { Content = L.Get("ExtensionHighlights"), IsChecked = App.Shell.HighlightRules.Count > 0, IsEnabled = App.Shell.HighlightRules.Count > 0 };
+        var content = new StackPanel { Width = 400, Spacing = 8 };
+        content.Children.Add(name);
+        content.Children.Add(author);
+        content.Children.Add(themes);
+        content.Children.Add(snippets);
+        content.Children.Add(highlights);
+        content.Children.Add(new TextBlock
+        {
+            Text = L.Get("ExtensionSaveHint"),
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+        });
+
+        var dialog = new ContentDialog
+        {
+            Title = L.Get("ExtensionSaveOwn"),
+            Content = content,
+            PrimaryButtonText = L.Get("ExtensionSaveAction"),
+            CloseButtonText = L.Get("Cancel"),
+            DefaultButton = ContentDialogButton.Primary,
+        };
+        void Check() => dialog.IsPrimaryButtonEnabled = name.Text.Trim().Length > 0 && (themes.IsChecked == true || snippets.IsChecked == true || highlights.IsChecked == true);
+        name.TextChanged += (_, _) => Check();
+        themes.Click += (_, _) => Check();
+        snippets.Click += (_, _) => Check();
+        highlights.Click += (_, _) => Check();
+        Check();
+
+        return await ShowAsync(dialog, CancellationToken.None) == ContentDialogResult.Primary
+            ? (name.Text.Trim(), author.Text.Trim(), themes.IsChecked == true, snippets.IsChecked == true, highlights.IsChecked == true)
+            : null;
+    }
+
+    /// <summary>
+    /// Ein gespeicherter Befehl aus einem Erweiterungspaket soll ins Terminal: erst fragen, mit dem ganzen Text, jedes
+    /// Zeichen sichtbar. Vorgabe ist „Abbrechen“; „Immer erlauben“ gibt genau diesen Text aus diesem Paket frei.
+    /// </summary>
+    public async Task<CommandAnswer> ConfirmPackCommandAsync(string package, string name, string command)
+    {
+        var dialog = new ContentDialog
+        {
+            Title = L.Get("ExtensionCommandTitle", package),
+            Content = new StackPanel
+            {
+                Spacing = 8,
+                MaxWidth = 460,
+                Children =
+                {
+                    new TextBlock { Text = L.Get("ExtensionCommandText", name), TextWrapping = TextWrapping.Wrap },
+                    new TextBlock
+                    {
+                        Text = string.Join('\n', command.Split('\n').Select(Format.Visible)),
+                        TextWrapping = TextWrapping.Wrap,
+                        IsTextSelectionEnabled = true,
+                        FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Cascadia Mono, Consolas"),
+                    },
+                },
+            },
+            PrimaryButtonText = L.Get("ExtensionCommandRun"),
+            SecondaryButtonText = L.Get("ExtensionCommandAlways"),
+            CloseButtonText = L.Get("Cancel"),
+            DefaultButton = ContentDialogButton.Close,
+        };
+        return await ShowAsync(dialog, CancellationToken.None) switch
+        {
+            ContentDialogResult.Primary => CommandAnswer.Run,
+            ContentDialogResult.Secondary => CommandAnswer.Always,
+            _ => CommandAnswer.Decline,
+        };
     }
 
     /// <summary>

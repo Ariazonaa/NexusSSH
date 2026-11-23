@@ -62,6 +62,8 @@
     let images = false;
     let pasteClean = true;
     let pasteTabs = false;
+    // Vor mehreren Zeilen immer fragen, auch wenn die Shell geschützt einfügt (Einstellung des Benutzers).
+    let pasteAlwaysAsk = false;
 
     // Was über einer anklickbaren Adresse als Hinweis steht (übersetzt, von der App).
     let linkHint = '';
@@ -1143,15 +1145,17 @@
 
     // Mehrere Zeilen in eine Shell, die das eingeklammerte Einfügen nicht eingeschaltet hat (oder der ein Programm
     // es abgeschaltet hat): Dort führt sie jede Zeile sofort aus. Davor fragt die App den Benutzer – die Seite
-    // zeigt selbst keine Dialoge – und schickt den Text mit `confirmed` zurück, wenn er zustimmt.
+    // zeigt selbst keine Dialoge – und schickt den Text mit `confirmed` zurück, wenn er zustimmt. Hat der Benutzer
+    // „immer fragen“ eingestellt, fragt sie auch bei eingeklammertem Einfügen; `bracketed` sagt ihr, welcher Fall es ist.
     function pasteInto(term, text, id, confirmed) {
         const clean = cleanPaste(text);
         if (clean.length === 0) {
             return;
         }
 
-        if (!confirmed && clean.includes('\n') && !term.modes.bracketedPasteMode) {
-            post({ type: 'confirmPaste', id, data: clean });
+        const bracketed = term.modes.bracketedPasteMode === true;
+        if (!confirmed && clean.includes('\n') && (pasteAlwaysAsk || !bracketed)) {
+            post({ type: 'confirmPaste', id, data: clean, bracketed });
             return;
         }
 
@@ -1208,6 +1212,10 @@
 
         if (typeof message.pasteTabs === 'boolean') {
             pasteTabs = message.pasteTabs;
+        }
+
+        if (typeof message.pasteAlwaysAsk === 'boolean') {
+            pasteAlwaysAsk = message.pasteAlwaysAsk;
         }
 
         if (typeof message.linkHint === 'string') {

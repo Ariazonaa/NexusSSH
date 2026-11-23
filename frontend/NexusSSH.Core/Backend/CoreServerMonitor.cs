@@ -127,6 +127,40 @@ internal sealed class CoreServerMonitor(CoreBackend backend, ulong session) : IS
     public Task InstallKeyAsync(string publicKey)
         => backend.SftpAsync(new RequestDto("key.install") { Session = session, PublicKey = publicKey });
 
+    public async Task<IReadOnlyList<ServerKeyFile>> AuthorizedKeysAsync()
+    {
+        var result = await backend.SftpAsync(new RequestDto("authorized.list") { Session = session });
+        return [.. (result.ServerKeys ?? [])
+            .Where(file => file is { Path: not null, Version: not null })
+            .Select(file => new ServerKeyFile(
+                file.Path!,
+                file.Exists,
+                file.Shared,
+                file.Version!,
+                [.. (file.Keys ?? []).Select(key => new ServerKey(
+                    key.Line,
+                    key.Algorithm ?? string.Empty,
+                    key.Bits,
+                    key.Fingerprint ?? string.Empty,
+                    Format.Visible(key.Comment ?? string.Empty),
+                    Format.Visible(key.Options ?? string.Empty),
+                    Format.Visible(key.Unreadable ?? string.Empty)))],
+                file.Error ?? string.Empty))];
+    }
+
+    public Task AddAuthorizedKeyAsync(ServerKeyFile file, string publicKey)
+        => backend.SftpAsync(new RequestDto("authorized.add") { Session = session, Path = file.Path, Version = file.Version, PublicKey = publicKey });
+
+    public Task RemoveAuthorizedKeyAsync(ServerKeyFile file, ServerKey key)
+        => backend.SftpAsync(new RequestDto("authorized.remove")
+        {
+            Session = session,
+            Path = file.Path,
+            Version = file.Version,
+            Line = key.Line,
+            Fingerprint = key.Fingerprint,
+        });
+
     internal void OnEvent(EventDto message)
     {
         if (message.Event == "monitor.unavailable")

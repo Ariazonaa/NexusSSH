@@ -161,8 +161,10 @@ public static class TerminalMessages
     /// <param name="look">Cursor und Abstände; ohne Angabe bleibt die Seite bei dem, was sie hat.</param>
     /// <param name="pasteClean">Eingefügten Text bereinigen (Steuerzeichen, unsichtbare Zeichen, Zeilenumbruch am Ende).</param>
     /// <param name="pasteTabs">Beim Einfügen Tabulatoren durch Leerzeichen ersetzen.</param>
+    /// <param name="pasteAlwaysAsk">Vor dem Einfügen mehrerer Zeilen immer fragen, auch wenn die Shell geschützt einfügt.</param>
+    /// <param name="packTables">Tabellen zum Ergänzen aus Erweiterungspaketen; sie kommen hinter die eingebauten.</param>
     /// <param name="images">Bilder zeichnen, die der Server schickt (Sixel, iTerm2) – nur auf Wunsch des Benutzers.</param>
-    public static string Options(TerminalTheme theme, int fontSize, IReadOnlyList<TerminalShortcut> shortcuts, string? font = null, bool mouseCopyPaste = false, IReadOnlyList<HighlightRule>? highlights = null, IReadOnlyList<Snippet>? suggestions = null, string? linkHint = null, TerminalLook? look = null, bool pasteClean = true, bool pasteTabs = false, bool images = false, bool optionSuggestions = false, bool pathSuggestions = false, IReadOnlyList<string>? hosts = null, bool tabCompletes = false)
+    public static string Options(TerminalTheme theme, int fontSize, IReadOnlyList<TerminalShortcut> shortcuts, string? font = null, bool mouseCopyPaste = false, IReadOnlyList<HighlightRule>? highlights = null, IReadOnlyList<Snippet>? suggestions = null, string? linkHint = null, TerminalLook? look = null, bool pasteClean = true, bool pasteTabs = false, bool images = false, bool optionSuggestions = false, bool pathSuggestions = false, IReadOnlyList<string>? hosts = null, bool tabCompletes = false, bool pasteAlwaysAsk = false, IReadOnlyList<CommandTable>? packTables = null)
         => ToJson(new HostMessage("options")
         {
             FontSize = fontSize,
@@ -173,10 +175,11 @@ public static class TerminalMessages
             Look = look,
             PasteClean = pasteClean,
             PasteTabs = pasteTabs,
+            PasteAlwaysAsk = pasteAlwaysAsk,
             Images = images,
             // Immer dabei, auch leer: So schaltet die Seite ab, was in den Einstellungen abgeschaltet wurde.
             Completions = new CompletionMessage(
-                optionSuggestions ? Terminals.Completions.Tables : [],
+                optionSuggestions ? [.. Terminals.Completions.Tables, .. packTables ?? []] : [],
                 pathSuggestions ? Terminals.Completions.PathCommands : [],
                 pathSuggestions ? Terminals.Completions.DirectoryCommands : []),
             Hosts = [.. (hosts ?? []).Take(Terminals.Completions.MaxWords)],
@@ -291,7 +294,7 @@ public static class TerminalMessages
             { Type: "move", Id: { Length: > 0 } id, Target: { Length: > 0 } target, Side: { } side }
                 when SideOf(side) is { } edge => new WebMessage.Moved(id, target, edge),
             { Type: "paste", Id: { Length: > 0 } id } => new WebMessage.PasteRequested(id),
-            { Type: "confirmPaste", Id: { Length: > 0 } id, Data: { Length: > 0 and <= MaxPasteLength } text } => new WebMessage.PasteNeedsConsent(id, text),
+            { Type: "confirmPaste", Id: { Length: > 0 } id, Data: { Length: > 0 and <= MaxPasteLength } text } => new WebMessage.PasteNeedsConsent(id, text, raw.Bracketed == true),
             { Type: "bell", Id: { Length: > 0 } id } => new WebMessage.Bell(id),
             { Type: "notify", Id: { Length: > 0 } id } when Notice(raw.Title, raw.Body) is { } notice => new WebMessage.Notice(id, notice.Title, notice.Body),
             { Type: "title", Id: { Length: > 0 } id, Data: { Length: <= MaxTitleLength } title } => new WebMessage.TitleChanged(id, title),
@@ -479,10 +482,11 @@ public abstract record WebMessage
     public sealed record PasteRequested(string Id) : WebMessage;
 
     /// <summary>
-    /// Die Seite soll mehrere Zeilen in eine Shell einfügen, die jede sofort ausführt (kein eingeklammertes
-    /// Einfügen) – das geschieht erst, wenn der Benutzer zustimmt.
+    /// Die Seite soll mehrere Zeilen einfügen – das geschieht erst, wenn der Benutzer zustimmt. Ohne eingeklammertes
+    /// Einfügen führt die Shell jede Zeile sofort aus; mit (<paramref name="Bracketed"/>) fragt die App nur, weil der
+    /// Benutzer es so eingestellt hat, und erst Enter führt aus.
     /// </summary>
-    public sealed record PasteNeedsConsent(string Id, string Content) : WebMessage;
+    public sealed record PasteNeedsConsent(string Id, string Content, bool Bracketed = false) : WebMessage;
 
     /// <summary>Das Programm im Terminal dieser Sitzung hat die Glocke geläutet (BEL).</summary>
     public sealed record Bell(string Id) : WebMessage;
@@ -588,6 +592,8 @@ internal sealed record HostMessage(string Type)
 
     public bool? PasteTabs { get; init; }
 
+    public bool? PasteAlwaysAsk { get; init; }
+
     public bool? Images { get; init; }
 
     public IReadOnlyList<TerminalShortcut>? Shortcuts { get; init; }
@@ -666,7 +672,8 @@ internal sealed record RawWebMessage(
     string? Target = null,
     string? Side = null,
     string? Title = null,
-    string? Body = null);
+    string? Body = null,
+    bool? Bracketed = null);
 
 [JsonSourceGenerationOptions(
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,

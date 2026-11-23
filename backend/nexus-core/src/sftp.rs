@@ -1034,20 +1034,28 @@ pub(crate) async fn read_dir(
     };
 
     // Die Frist begrenzt die Zeit, der Zähler die Menge: Die Bibliothek sammelt, bis der Server „Ende“ sagt, und
-    // ein Server, der schnell genug immer weiter Einträge nennt, füllte bis dahin den Speicher. Gezählt wird, was
-    // seit dem Beginn dieser Liste auf der Sitzung ankam – laufen mehrere Listen zugleich, zählen sie zusammen.
-    let (start, limit) = (meter.entries(), MAX_ENTRIES.load(std::sync::atomic::Ordering::Relaxed));
+    // ein Server, der schnell genug immer weiter Einträge nennt, füllte bis dahin den Speicher. Gezählt wird nur,
+    // was auf Anfragen antwortet, die nach dem Beginn dieser Liste hinausgingen ([`crate::metered::Meter::watch`]):
+    // Späte Antworten einer aufgegebenen Liste gehören nicht dazu. Vorher zählte alles, was seit dem Beginn auf der
+    // Sitzung ankam, und eine Liste gleich nach einer aufgegebenen scheiterte in der CI einmal mit „too_many“
+    // (2026-11-21, `list_limit`). Laufen mehrere Listen zugleich, zählen sie weiter zusammen.
+    let (watch, limit) = (meter.watch(), MAX_ENTRIES.load(std::sync::atomic::Ordering::Relaxed));
     tokio::pin!(listing);
     loop {
+        // Erst anmelden, dann nachsehen: Wüchse die Zahl zwischen dem Nachsehen und dem Anmelden, ginge die
+        // Meldung sonst verloren, und die Liste liefe weiter, bis die nächste kommt.
+        let grew = meter.grew();
+        tokio::pin!(grew);
+        grew.as_mut().enable();
+        if watch.entries() > limit {
+            // Die Liste wird fallen gelassen; ihre Antworten, die noch kommen, gehören dann zu keiner Anfrage
+            // mehr, und der Griff bleibt am Server offen, bis die Sitzung endet.
+            return Err(Error::Limited(TOO_MANY.to_owned()));
+        }
+
         tokio::select! {
             listed = &mut listing => return listed.unwrap_or(Err(Error::Timeout)),
-            () = meter.grew() => {
-                if meter.entries().saturating_sub(start) > limit {
-                    // Die Liste wird fallen gelassen; ihre Antworten, die noch kommen, gehören dann zu keiner
-                    // Anfrage mehr, und der Griff bleibt am Server offen, bis die Sitzung endet.
-                    return Err(Error::Limited(TOO_MANY.to_owned()));
-                }
-            }
+            () = grew => {}
         }
     }
 }

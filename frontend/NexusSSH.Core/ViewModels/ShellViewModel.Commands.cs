@@ -204,7 +204,7 @@ public sealed partial class ShellViewModel
         // Gespeicherte Befehle gehen an das aktive Terminal – ohne verbundene Sitzung gibt es sie nicht.
         if (ActiveSession is { State: ConnectionState.Connected })
         {
-            items.AddRange(Snippets.Select(snippet => new PaletteItem(
+            items.AddRange(AllSnippets.Select(snippet => new PaletteItem(
                 PaletteKind.Snippet,
                 L.Get("CmdSnippet", snippet.Name),
                 FirstLine(snippet.Text),
@@ -309,7 +309,10 @@ public sealed partial class ShellViewModel
             new("session.attachMux", L.Get("CmdAttachMux"), () => _ = FindMuxAsync(), CanRun: () => ActiveSession is { State: ConnectionState.Connected, IsFilesOnly: false, Profile.IsLocal: false }),
             new("tmux.newWindow", L.Get("CmdTmuxNewWindow"), NewTmuxWindow, CanRun: () => IsInTmux),
             new("session.disconnect", L.Get("CmdDisconnect"), () => ActiveSession?.Disconnect(), CanRun: () => ActiveSession is { State: not (ConnectionState.Idle or ConnectionState.Closed) }),
+            new("session.watchSilence", L.Get("CmdWatchSilence"), () => ToggleSilenceWatch(ActiveSession!), CanRun: () => ActiveSession is { WatchesSilence: false, IsFilesOnly: false }),
+            new("session.unwatchSilence", L.Get("CmdUnwatchSilence"), () => ToggleSilenceWatch(ActiveSession!), CanRun: () => ActiveSession is { WatchesSilence: true }),
             new("session.createKey", L.Get("CmdCreateKey"), () => Ask(UiRequest.CreateKey), CanRun: () => ActiveSession is { State: ConnectionState.Connected, IsFilesOnly: false, Profile.IsSsh: true }),
+            new("session.authorizedKeys", L.Get("CmdAuthorizedKeys"), () => Ask(UiRequest.AuthorizedKeys), CanRun: () => ActiveSession is { State: ConnectionState.Connected, Profile.IsSsh: true }),
             new("session.duplicate", L.Get("CmdDuplicate"), () => OpenSession(ActiveSession!.Profile), CanRun: HasSession),
             new("session.close", L.Get("CmdCloseTab"), () => CloseSession(ActiveSession!), new KeyChord("KeyW"), HasSession),
             new("session.closeOthers", L.Get("CmdCloseOtherTabs"), () => CloseOthers(ActiveSession!), CanRun: () => HasOthersToClose(ActiveSession)),
@@ -358,6 +361,10 @@ public sealed partial class ShellViewModel
 
         commands.AddRange(Themes.Select(theme =>
             new ShellCommand($"theme.{theme.Id}", L.Get("CmdTheme", theme.Name), () => TerminalTheme = theme)));
+
+        // Die Befehle der eingeschalteten Plugins: „<Plugin>: <Befehl>“.
+        commands.AddRange(Plugins.Where(plugin => !plugin.IsDisabled).SelectMany(plugin => plugin.Manifest.Commands.Select(command =>
+            new ShellCommand($"plugin.{plugin.Manifest.Id}.{command.Id}", L.Get("CmdPlugin", plugin.Manifest.Name, command.Title), () => _ = RunPluginCommandAsync(plugin, command)))));
         return commands;
     }
 }

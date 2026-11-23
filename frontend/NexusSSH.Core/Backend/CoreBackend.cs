@@ -145,6 +145,10 @@ public sealed class CoreBackend : INexusBackend, IProfileStore, IDisposable
 
     public ITransferQueue Transfers => TransferQueue;
 
+    public IPluginRuntime Plugins => _plugins ??= new CorePlugins(this);
+
+    private CorePlugins? _plugins;
+
     internal CoreTransferQueue TransferQueue { get; }
 
     public IReadOnlyList<ServerProfile> GetProfiles() => _profiles;

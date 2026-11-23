@@ -30,11 +30,14 @@ public sealed partial class ShellViewModel
     [NotifyPropertyChangedFor(nameof(HasNoSnippetMatch))]
     public partial IReadOnlyList<SnippetItem> SnippetItems { get; private set; } = BindableList.Of<SnippetItem>([]);
 
+    /// <summary>Die eigenen Befehle, dahinter die der eingeschalteten Erweiterungspakete (nur lesbar).</summary>
+    public IReadOnlyList<Snippet> AllSnippets => [.. Settings.Snippets, .. PackSnippets];
+
     /// <summary>Es gibt noch keinen gespeicherten Befehl.</summary>
-    public bool HasNoSnippets => Snippets.Count == 0;
+    public bool HasNoSnippets => AllSnippets.Count == 0;
 
     /// <summary>Es gibt Befehle, aber keiner passt zur Suche.</summary>
-    public bool HasNoSnippetMatch => Snippets.Count > 0 && SnippetItems.Count == 0;
+    public bool HasNoSnippetMatch => AllSnippets.Count > 0 && SnippetItems.Count == 0;
 
     /// <summary>Klappt einen Ordner der Spalte ein oder aus; gemerkt in den Einstellungen dieses Rechners.</summary>
     public void ToggleSnippetFolder(string folder)
@@ -86,6 +89,14 @@ public sealed partial class ShellViewModel
     /// </summary>
     public void EditSnippet(Snippet? snippet)
     {
+        // Einer aus einem Paket bleibt, wie er ist: Bearbeitet wird eine eigene Kopie (ohne Ordner des Pakets).
+        if (snippet is { IsFromPack: true })
+        {
+            var copy = snippet with { Pack = string.Empty, Folder = string.Empty };
+            SetSnippets([.. Settings.Snippets, copy]);
+            snippet = Settings.Snippets[^1];
+        }
+
         _snippetToEdit = snippet is null ? -1 : Settings.Snippets.IndexOf(snippet);
         ShowHome(HomePage.Snippets);
         SnippetEditRequested?.Invoke();
@@ -96,7 +107,7 @@ public sealed partial class ShellViewModel
     private void FilterSnippets()
     {
         var words = SnippetFilter.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var matches = SnippetFolders.Ordered(Settings.Snippets.Where(snippet => words.All(word =>
+        var matches = SnippetFolders.Ordered(AllSnippets.Where(snippet => words.All(word =>
             snippet.Name.Contains(word, StringComparison.CurrentCultureIgnoreCase)
             || snippet.Text.Contains(word, StringComparison.CurrentCultureIgnoreCase))), snippet => snippet.Folder);
 

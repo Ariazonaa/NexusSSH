@@ -43,6 +43,14 @@ public sealed partial class MainWindow : Window
 
         Shell.PropertyChanged += OnShellPropertyChanged;
         Shell.UiRequested += OnUiRequested;
+        // Ein Plugin will ein Ergebnis zeigen (geprüft in Core).
+        Shell.PluginViewRequested += (plugin, view) => DispatcherQueue.TryEnqueue(() => _ = Logged(App.Dialogs.ShowPluginViewAsync(plugin, view)));
+        Shell.ExitForUpdate += () =>
+        {
+            // Das Setup läuft und ersetzt die App: schließen, ohne zu fragen (gefragt hat die Rückfrage zum Update).
+            _closeConfirmed = true;
+            Close();
+        };
 
         // Die Vorschau eines gemerkten Abgleichs ist dieselbe wie beim ersten Mal.
         Shell.ConfirmSync = plan => App.Dialogs.ConfirmSyncAsync(plan);
@@ -53,7 +61,9 @@ public sealed partial class MainWindow : Window
         // Nicht mit Beispieldaten und nicht im Selbsttest: Deren Transfers laufen von selbst und würden melden.
         if (!App.IsDemo)
         {
-            Interop.Attention.Register();
+            // Ein Klick auf einen Hinweis holt das Fenster nach vorn: Der Benutzer hat darum gebeten. Der Empfänger
+            // läuft in einem Faden von Windows, nicht in dem der Oberfläche.
+            Interop.Attention.Register(() => DispatcherQueue.TryEnqueue(BringToFrontAfterClick));
             Shell.AttentionRequested += (title, text) => DispatcherQueue.TryEnqueue(() =>
                 Interop.Attention.Show(Microsoft.UI.Win32Interop.GetWindowFromWindowId(AppWindow.Id), title, text));
             Closed += (_, _) => Interop.Attention.Unregister();
@@ -171,6 +181,19 @@ public sealed partial class MainWindow : Window
         }
 
         Activate();
+    }
+
+    // Der Benutzer hat auf einen Hinweis von Windows geklickt: wie BringToFront, nur ohne weitergegebenes Recht auf
+    // den Vordergrund (Interop.Attention.ToFrontAfterClick).
+    private void BringToFrontAfterClick()
+    {
+        if (App.IsNoActivate)
+        {
+            return;
+        }
+
+        BringToFront();
+        Interop.Attention.ToFrontAfterClick(Microsoft.UI.Win32Interop.GetWindowFromWindowId(AppWindow.Id));
     }
 
     // Strg+Mausrad außerhalb des Terminals. Über dem Terminal gehört es der Seite (sie ändert dessen Schrift) –
@@ -538,6 +561,11 @@ public sealed partial class MainWindow : Window
     // Der Hinweis auf eine neue Version: X schließt ihn, der Knopf öffnet die Release-Seite im Browser.
     private void OnUpdateDismissed(InfoBar sender, object args) => Shell.DismissUpdate();
 
+    // „Jetzt aktualisieren“: fragen, laden, prüfen, Setup starten – das tut Core; schiefgehen zeigt das Banner.
+    private void OnInstallUpdateClicked(object sender, RoutedEventArgs e) => _ = Logged(Shell.InstallUpdateAsync());
+
+    private void OnCancelUpdateClicked(object sender, RoutedEventArgs e) => Shell.CancelUpdate();
+
     private void OnOpenReleaseClicked(object sender, RoutedEventArgs e)
     {
         // Die Adresse kommt aus einer Antwort aus dem Netz: geöffnet wird nur eine Seite bei GitHub, über https.
@@ -668,6 +696,13 @@ public sealed partial class MainWindow : Window
 
             case UiRequest.CreateKey:
                 _ = Logged(CreateKeyAsync());
+                break;
+            case UiRequest.AuthorizedKeys:
+                if (Shell.ActiveSession is { } keysSession && Shell.AuthorizedKeysFor(keysSession) is { } authorized)
+                {
+                    _ = Logged(App.Dialogs.ShowAuthorizedKeysAsync(authorized));
+                }
+
                 break;
 
             case UiRequest.ImportData:

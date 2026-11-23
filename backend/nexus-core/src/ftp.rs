@@ -791,53 +791,25 @@ fn guarded<T>(read: impl FnOnce() -> Option<T>) -> Option<T> {
         .flatten()
 }
 
-/// Eine Zeile von `MLSD`, so hergerichtet, dass die Bibliothek sie liest, und daneben der Name: Die Angaben
-/// stehen vor dem ersten Leerzeichen, danach kommt der Name – mit allem, was darin steht (die Bibliothek nähme
-/// von `a;b` nur `b`). Zeiten dürfen Bruchteile einer Sekunde nennen (`modify=20261013212530.123`, RFC 3659 –
-/// so schreibt FileZilla Server); die Bibliothek liest nur ganze Sekunden und verwürfe die ganze Zeile, die
-/// Liste bliebe leer (gefunden 2026-10-13).
-fn mlsd_facts(line: &str) -> Option<(String, &str)> {
-    let (facts, name) = line.split_once(' ')?;
-    let mut read = String::with_capacity(facts.len() + 2);
-    for fact in facts.split(';').filter(|fact| !fact.is_empty()) {
-        let whole = match fact.split_once('=') {
-            Some((key, value)) if key.eq_ignore_ascii_case("modify") || key.eq_ignore_ascii_case("create") => {
-                &fact[..key.len() + 1 + value.find('.').unwrap_or(value.len())]
-            }
-            _ => fact,
-        };
-        read.push_str(whole);
-        read.push(';');
-    }
-    read.push_str(" -");
-
-    Some((read, name))
-}
-
 /// Liest die Zeilen einer Liste – `MLSD` oder `LIST` in der Schreibweise von Unix oder DOS; was sich nicht lesen
 /// lässt, und `.`/`..`, bleibt aus. Das Ziel eines Links nennt nur `LIST` (`name -> ziel`); `MLSD` kennt es nicht.
+/// `MLSD`-Zeilen von FileZilla Server nennen Bruchteile von Sekunden (`modify=20261013212530.123`), und ein Name
+/// darf `;` enthalten: Bis suppaftp 12.2.1 (unser PR #196) verwarf die Bibliothek solche Zeilen bzw. kürzte den
+/// Namen, und der Kern richtete sie selbst her (`mlsd_facts`, gefunden 2026-10-13). Jetzt liest sie die Bibliothek.
 pub(crate) fn parse_listing(lines: &[String], machine: bool) -> Vec<Listed> {
     lines
         .iter()
         .filter_map(|line| {
             // Eine Liste in der Schreibweise von DOS nennt keine Rechte – dort gilt das Übliche.
-            let mut own_name = None;
             let (file, has_rights) = if machine {
-                let facts = match mlsd_facts(line) {
-                    Some((facts, name)) => {
-                        own_name = Some(name);
-                        facts
-                    }
-                    None => line.clone(),
-                };
-                (guarded(|| list::ListParser::parse_mlsd(&facts).ok())?, true)
+                (guarded(|| list::ListParser::parse_mlsd(line).ok())?, true)
             } else {
                 match guarded(|| list::ListParser::parse_posix(line).ok()) {
                     Some(file) => (file, true),
                     None => (guarded(|| list::ListParser::parse_dos(line).ok())?, false),
                 }
             };
-            let name = own_name.map_or_else(|| file.name().to_owned(), str::to_owned);
+            let name = file.name().to_owned();
             let mut attributes = attributes_of(&file);
             if !has_rights {
                 attributes.permissions = Some(if file.is_directory() { 0o040_755 } else { 0o100_644 });
@@ -1225,6 +1197,8 @@ impl FtpFiles {
             // etwas (Scheine für die Wiederaufnahme), das beim Schreiben niemand liest; wird die Verbindung mit
             // Ungelesenem geschlossen, bricht Windows sie ab, statt sie zu beenden – der Server verliert dann das
             // Ende der Datei und meldet den Upload als gescheitert (vsftpd: „426 Failure reading network stream“).
+            // Seit suppaftp 13 tut `finish` der Bibliothek das auch, wartet aber nur eine Sekunde – an einer
+            // langsamen Leitung (VPN) zu knapp. Deshalb bleibt es hier, mit fünf; danach findet sie nichts mehr.
             let _ = tokio::time::timeout(Duration::from_secs(5), async {
                 let mut rest = [0u8; 256];
                 while matches!(stream.read(&mut rest).await, Ok(count) if count > 0) {}

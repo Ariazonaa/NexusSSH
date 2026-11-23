@@ -4,7 +4,17 @@ using System.Text.Json.Serialization;
 namespace NexusSSH.Core.Services;
 
 /// <summary>Eine Version, die neuer ist als die laufende. <see cref="Url"/> führt zur Release-Seite.</summary>
-public sealed record UpdateInfo(string Version, string Name, string Url);
+public sealed record UpdateInfo(string Version, string Name, string Url)
+{
+    /// <summary>Das Tag des Releases, wie GitHub es nennt (<c>v0.7.0</c>) – Teil der Adresse seiner Dateien.</summary>
+    public string Tag { get; init; } = string.Empty;
+
+    /// <summary>Die Dateien des Releases, soweit GitHub Größe und SHA-256 nennt (<see cref="UpdateSetup.Choose"/> wählt).</summary>
+    public IReadOnlyList<UpdateAsset> Assets { get; init; } = [];
+}
+
+/// <summary>Eine Datei eines Releases: Name, Größe, SHA-256 (Hex, klein) und Adresse – alles aus der Antwort von GitHub.</summary>
+public sealed record UpdateAsset(string Name, long Size, string Sha256, Uri Url);
 
 /// <summary>
 /// Sucht an einer Release-Quelle nach einer neueren Version. Wirft nie: Offline, Zeitüberschreitung oder eine
@@ -79,7 +89,26 @@ public static class UpdateCheck
         }
 
         var name = string.IsNullOrWhiteSpace(release.Name) ? release.TagName : release.Name;
-        return new UpdateInfo(latest.ToString(3), name, release.HtmlUrl ?? string.Empty);
+        return new UpdateInfo(latest.ToString(3), name, release.HtmlUrl ?? string.Empty)
+        {
+            Tag = release.TagName,
+            Assets = [.. (release.Assets ?? []).Select(Asset).OfType<UpdateAsset>()],
+        };
+    }
+
+    // Eine Datei nur mit Name, Größe, SHA-256 und einer absoluten Adresse; ob sie taugt, entscheidet UpdateSetup.
+    private static UpdateAsset? Asset(GitHubAsset? asset)
+    {
+        const string Prefix = "sha256:";
+        if (asset is not { Name: { Length: > 0 } name, Size: > 0, Digest: { } digest, DownloadUrl: { } address }
+            || !digest.StartsWith(Prefix, StringComparison.Ordinal)
+            || !Uri.TryCreate(address, UriKind.Absolute, out var url))
+        {
+            return null;
+        }
+
+        var sha = digest[Prefix.Length..];
+        return sha.Length == 64 && sha.All(char.IsAsciiHexDigitLower) ? new UpdateAsset(name, asset.Size, sha, url) : null;
     }
 
     /// <summary>Liest die Version aus einem Tag wie <c>v0.21.0</c> oder <c>0.21</c>; <c>null</c> ohne <c>X.Y</c> davor.</summary>
@@ -122,6 +151,25 @@ internal sealed class GitHubRelease
 
     [JsonPropertyName("prerelease")]
     public bool Prerelease { get; set; }
+
+    [JsonPropertyName("assets")]
+    public List<GitHubAsset?>? Assets { get; set; }
+}
+
+/// <summary>Eine Datei eines Releases: was GitHub zum Herunterladen und Prüfen nennt.</summary>
+internal sealed class GitHubAsset
+{
+    [JsonPropertyName("name")]
+    public string? Name { get; set; }
+
+    [JsonPropertyName("size")]
+    public long Size { get; set; }
+
+    [JsonPropertyName("digest")]
+    public string? Digest { get; set; }
+
+    [JsonPropertyName("browser_download_url")]
+    public string? DownloadUrl { get; set; }
 }
 
 [JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true)]

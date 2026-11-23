@@ -158,6 +158,33 @@
             <InfoBar.ActionButton>
                 <Button Click="OnOpenReleaseClicked" Content="{loc:Loc Key=UpdateDownload}" />
             </InfoBar.ActionButton>
+            <!--  Selbst-Update: nur aus einer Installation und mit einem Setup, das zu GitHubs Angaben passt  -->
+            <StackPanel Margin="0,0,0,12" Spacing="6">
+                <Button
+                    x:Name="InstallUpdateButton"
+                    Click="OnInstallUpdateClicked"
+                    Content="{loc:Loc Key=UpdateInstall}"
+                    Style="{StaticResource AccentButtonStyle}"
+                    Visibility="{x:Bind Shell.CanInstallUpdate, Mode=OneWay}" />
+                <StackPanel
+                    Orientation="Horizontal"
+                    Spacing="8"
+                    Visibility="{x:Bind Shell.IsUpdating, Mode=OneWay}">
+                    <ProgressBar
+                        Width="220"
+                        VerticalAlignment="Center"
+                        AutomationProperties.Name="{loc:Loc Key=UpdateDownloading}"
+                        Maximum="100"
+                        Value="{x:Bind Shell.UpdateProgress, Mode=OneWay}" />
+                    <TextBlock VerticalAlignment="Center" Text="{loc:Loc Key=UpdateDownloading}" />
+                    <Button Click="OnCancelUpdateClicked" Content="{loc:Loc Key=Cancel}" />
+                </StackPanel>
+                <TextBlock
+                    Foreground="{ThemeResource SystemFillColorCautionBrush}"
+                    Text="{x:Bind Shell.UpdateProblem, Mode=OneWay}"
+                    TextWrapping="Wrap"
+                    Visibility="{x:Bind app:Ui.VisibleIfText(Shell.UpdateProblem), Mode=OneWay}" />
+            </StackPanel>
         </InfoBar>
 
         <!--  Die Bereiche als Karten; die Trenner dazwischen sind die Lücken  -->

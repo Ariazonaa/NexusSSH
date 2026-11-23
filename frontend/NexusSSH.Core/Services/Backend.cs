@@ -13,6 +13,9 @@ public interface INexusBackend
 
     ITransferQueue Transfers { get; }
 
+    /// <summary>Führt Plugins aus; <c>null</c>, wo es keine gibt (Beispieldaten, Tests).</summary>
+    IPluginRuntime? Plugins => null;
+
     /// <summary>
     /// Bereitet eine Verbindung vor. Aufgebaut wird sie erst mit <see cref="ITerminalSession.Start"/>.
     /// <paramref name="share"/> nennt eine stehende Verbindung zum selben Profil, die mitbenutzt werden soll
@@ -372,13 +375,21 @@ public interface IUserPrompts
     /// fragen kann, antwortet mit „nein“; fällt <paramref name="cancellation"/>, schließt die Frage.
     /// </summary>
     Task<CommandAnswer> ConfirmCommandAsync(CommandQuestion question, CancellationToken cancellation) => Task.FromResult(CommandAnswer.Decline);
+
+    /// <summary>
+    /// Fragt, ob ein gespeicherter Befehl aus einem Erweiterungspaket ins Terminal darf – mit dem ganzen Text, jedes
+    /// Zeichen sichtbar. <see cref="CommandAnswer.Always"/> gibt genau diesen Text aus diesem Paket frei. Wer nicht fragen
+    /// kann, antwortet mit „nein“.
+    /// </summary>
+    Task<CommandAnswer> ConfirmPackCommandAsync(string package, string name, string command) => Task.FromResult(CommandAnswer.Decline);
 }
 
 /// <summary>
-/// Die Frage nach einem Befehl eines KI-Programms. <see cref="InTerminal"/> sagt, ob er in ein Terminal getippt wird;
-/// bis <see cref="Until"/> steht die Frage, danach gilt sie als abgelehnt.
+/// Die Frage nach einem Befehl eines KI-Programms oder eines Plugins (<see cref="Plugin"/>, sein Name; dann ohne
+/// „Immer erlauben“). <see cref="InTerminal"/> sagt, ob er in ein Terminal getippt wird; bis <see cref="Until"/> steht
+/// die Frage, danach gilt sie als abgelehnt.
 /// </summary>
-public sealed record CommandQuestion(string Server, string Command, bool InTerminal, DateTimeOffset Until);
+public sealed record CommandQuestion(string Server, string Command, bool InTerminal, DateTimeOffset Until, string? Plugin = null);
 
 /// <summary>Die Antwort auf <see cref="CommandQuestion"/>. Vorgabe und jedes „nicht geantwortet“ ist <see cref="Decline"/>.</summary>
 public enum CommandAnswer
@@ -683,6 +694,27 @@ public interface IServerMonitor
     /// <c>ssh-copy-id</c>); steht er schon dort, geschieht nichts. Wirft <see cref="RemoteFileException"/>.
     /// </summary>
     Task InstallKeyAsync(string publicKey);
+
+    /// <summary>
+    /// Die Dateien <c>authorized_keys</c> des angemeldeten Kontos samt ihren Schlüsseln – gelesen über SFTP. Wirft
+    /// <see cref="RemoteFileException"/>.
+    /// </summary>
+    Task<IReadOnlyList<ServerKeyFile>> AuthorizedKeysAsync()
+        => Task.FromException<IReadOnlyList<ServerKeyFile>>(new RemoteFileException("not supported", "no_sftp"));
+
+    /// <summary>
+    /// Entfernt die Zeile von <paramref name="key"/> aus <paramref name="file"/> – nur, wenn die Datei seit dem Lesen
+    /// dieselbe ist (sonst <see cref="RemoteFileException"/> mit <c>changed</c>). Alles andere bleibt, wie es war.
+    /// </summary>
+    Task RemoveAuthorizedKeyAsync(ServerKeyFile file, ServerKey key)
+        => Task.FromException(new RemoteFileException("not supported", "no_sftp"));
+
+    /// <summary>
+    /// Hängt einen öffentlichen Schlüssel an <paramref name="file"/> an – über SFTP, ohne Befehl; steht er schon dort,
+    /// geschieht nichts. Nur, wenn die Datei seit dem Lesen dieselbe ist (sonst <c>changed</c>).
+    /// </summary>
+    Task AddAuthorizedKeyAsync(ServerKeyFile file, string publicKey)
+        => Task.FromException(new RemoteFileException("not supported", "no_sftp"));
 
     /// <summary>Schaltet das Messen ein oder aus.</summary>
     void SetActive(bool active);

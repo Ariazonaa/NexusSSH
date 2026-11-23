@@ -37,6 +37,9 @@ public partial class App : Application
     /// <summary>Ein wiederverwendeter HttpClient für die Update-Prüfung.</summary>
     private static readonly System.Net.Http.HttpClient UpdateHttp = new() { Timeout = TimeSpan.FromSeconds(10) };
 
+    // Für das Setup eines Updates: Weiterleitungen folgt der UpdateDownloader selbst (jeder Sprung wird geprüft).
+    private static readonly System.Net.Http.HttpClient DownloadHttp = new(new System.Net.Http.SocketsHttpHandler { AllowAutoRedirect = false }) { Timeout = TimeSpan.FromMinutes(15) };
+
     /// <summary>
     /// Selbsttest für die ausgelieferte Fassung: startet mit Beispieldaten in einem Fenster außerhalb des
     /// Bildschirms, lädt die Ansichten, und beendet sich nach ein paar Sekunden – mit 0, wenn bis dahin keine
@@ -146,24 +149,40 @@ public partial class App : Application
         IsDemo = full || Environment.GetCommandLineArgs().Contains(DemoArgument, StringComparer.OrdinalIgnoreCase);
         var showcase = IsDemo && !full;
 
-        // Ein Start mit Ziel (Link, Kommandozeile, Sprungliste): Läuft die App schon, bekommt sie das Ziel, und
-        // dieser Start endet hier – vor dem Kern, der sonst ein zweites Mal liefe.
+        // Je Datenordner eine App: Läuft schon eine, bekommt sie diesen Start (mit Ziel öffnet sie es, ohne holt sie
+        // ihr Fenster nach vorn), und er endet hier – vor dem Kern, der sonst ein zweites Mal liefe. Zwei Apps
+        // überschrieben sich beim Beenden die Einstellungen, und MCP bliebe bei der ersten (LaunchPipe).
         var launch = IsUnattended || IsDemo ? null : LaunchRequest.FromArguments(given);
-        if (launch is not null && Interop.LaunchPipe.TryHandOver(given))
-        {
-            Exit();
-            return;
-        }
-
-        // Ab hier nimmt diese App weitere Starts mit Ziel an – so früh wie möglich, damit ein zweiter Klick
-        // während des Starts nicht eine zweite App öffnet. Behandelt wird erst, wenn das Fenster steht (die
-        // Aufträge laufen über den Thread der Oberfläche, also nach OnLaunched).
         if (!IsUnattended && !IsDemo)
         {
+            if (!Interop.LaunchPipe.Claim())
+            {
+                if (Interop.LaunchPipe.TryHandOver(given))
+                {
+                    Exit();
+                    return;
+                }
+
+                // Keine Antwort: Meist beendet sich die andere gerade (eben geschlossen) – dann übernimmt dieser
+                // Start, sobald sie weg ist. Hängt sie, sagt er das, statt eine zweite daneben zu öffnen.
+                if (!Interop.LaunchPipe.AwaitClaim(TimeSpan.FromSeconds(15)))
+                {
+                    MessageBoxW(0, L.Get("AlreadyRunning"), "NexusSSH", 0x30 /* MB_ICONWARNING */);
+                    Exit();
+                    return;
+                }
+            }
+
+            // Ab hier nimmt diese App weitere Starts an – so früh wie möglich, damit ein zweiter Klick während des
+            // Starts nicht ins Leere geht. Behandelt wird erst, wenn das Fenster steht (die Aufträge laufen über
+            // den Thread der Oberfläche, also nach OnLaunched).
             Interop.LaunchPipe.Listen(DispatcherQueue.GetForCurrentThread(), request => _window?.WhenLoaded(() =>
             {
                 _window.BringToFront();
-                OpenLaunch(request);
+                if (request is not null)
+                {
+                    OpenLaunch(request);
+                }
             }));
         }
 
@@ -208,6 +227,21 @@ public partial class App : Application
         if (!IsUnattended)
         {
             Shell.UseTransferLog(AppDataLocation.TransferLogFile);
+        }
+
+        // Selbst-Update: nur, wo auch geprüft wird. Ein Setup vom letzten Mal ist gelaufen – weg damit.
+        if (updates is not null)
+        {
+            var updateDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "NexusSSH.update");
+            UpdateDownloader.RemoveStale(updateDirectory);
+            Shell.ConfigureUpdates(new Interop.UpdateInstaller(updateDirectory), new UpdateDownloader(DownloadHttp), UpdateRepository);
+        }
+
+        // Erweiterungspakete (.nxext) im Datenordner – nicht mit Beispieldaten und nicht im Selbsttest.
+        if (!IsDemo && !IsUnattended)
+        {
+            Shell.UseExtensions(new Core.Extensions.ExtensionStore(Path.Combine(AppDataLocation.Root, "extensions")));
+            Shell.UsePlugins(new Core.Plugins.PluginStore(Path.Combine(AppDataLocation.Root, "plugins")));
         }
 
         // Erreichbarkeit auf der Startseite: nur im echten Betrieb, und nur wenn sie eingeschaltet ist.
@@ -268,6 +302,9 @@ public partial class App : Application
         }
         _window.Closed += (_, _) =>
         {
+            // Ein Start, der jetzt kommt, ginge an ein Fenster, das es nicht mehr gibt – er wartet, bis dieser
+            // Prozess weg ist, und übernimmt dann.
+            Interop.LaunchPipe.Stop();
             Shell.StopMcp();
 
             // Mit Beispieldaten bleibt in den Einstellungen nichts zurück, was auf Profile verweist.

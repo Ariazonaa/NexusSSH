@@ -1,0 +1,10 @@
+[package]
+name = "nexus-plugin"
+description = "Baukasten für Plugins von NexusSSH (WebAssembly, ohne Imports)"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+license = "MIT"
+
+[dependencies]
+serde_json = { workspace = true }

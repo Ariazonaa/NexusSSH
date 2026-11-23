@@ -100,6 +100,7 @@
                 <ListViewItem x:Name="NavFiles" Content="{loc:Loc Key=SettingsFiles}" Tag="Files" />
                 <ListViewItem x:Name="NavShortcuts" Content="{loc:Loc Key=SettingsShortcuts}" Tag="Shortcuts" />
                 <ListViewItem x:Name="NavData" Content="{loc:Loc Key=DataSection}" Tag="Data" />
+                <ListViewItem x:Name="NavExtensions" Content="{loc:Loc Key=SettingsExtensions}" Tag="Extensions" />
                 <ListViewItem x:Name="NavMcp" Content="{loc:Loc Key=SettingsMcp}" Tag="Mcp" />
                 <ListViewItem x:Name="NavAbout" Content="{loc:Loc Key=SettingsAbout}" Tag="About" />
             </ListView>
@@ -431,6 +432,27 @@
                                     TextWrapping="Wrap" />
                             </StackPanel>
                         </StackPanel>
+                        <StackPanel Style="{StaticResource SectionStyle}">
+                            <!--  Aktivität und Stille am Reiter  -->
+                            <CheckBox Tag="set:ActivityTab" Content="{loc:Loc Key=SettingActivityTab}" IsChecked="{x:Bind Shell.ActivityTab, Mode=TwoWay}" />
+                            <StackPanel Tag="set:SilenceSeconds" Spacing="4">
+                                <NumberBox
+                                    Width="220"
+                                    HorizontalAlignment="Left"
+                                    AutomationProperties.Name="{loc:Loc Key=SettingSilenceSeconds}"
+                                    Header="{loc:Loc Key=SettingSilenceSeconds}"
+                                    LargeChange="30"
+                                    Maximum="600"
+                                    Minimum="5"
+                                    SmallChange="5"
+                                    SpinButtonPlacementMode="Inline"
+                                    Value="{x:Bind app:Ui.ToDouble(Shell.SilenceSeconds), BindBack=SetSilenceSeconds, Mode=TwoWay}" />
+                                <TextBlock
+                                    Style="{StaticResource HintStyle}"
+                                    Text="{loc:Loc Key=SettingSilenceHint}"
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
+                        </StackPanel>
                     </StackPanel>
 
                     <StackPanel x:Name="PageTerminal" Spacing="8">
@@ -629,6 +651,14 @@
                                     Content="{loc:Loc Key=SettingPasteTabs}"
                                     IsChecked="{x:Bind Shell.PasteTabs, Mode=TwoWay}"
                                     IsEnabled="{x:Bind Shell.PasteClean, Mode=OneWay}" />
+                            </StackPanel>
+                            <StackPanel Tag="set:PasteAlwaysAsk" Spacing="2">
+                                <CheckBox Content="{loc:Loc Key=SettingPasteAlwaysAsk}" IsChecked="{x:Bind Shell.PasteAlwaysAsk, Mode=TwoWay}" />
+                                <TextBlock
+                                    Margin="28,0,0,0"
+                                    Style="{StaticResource HintStyle}"
+                                    Text="{loc:Loc Key=SettingPasteAlwaysAskHint}"
+                                    TextWrapping="Wrap" />
                             </StackPanel>
                             <StackPanel Tag="set:SnippetSuggestions" Spacing="2">
                                 <CheckBox Content="{loc:Loc Key=SettingSnippetSuggestions}" IsChecked="{x:Bind Shell.SnippetSuggestions, Mode=TwoWay}" />
@@ -893,6 +923,56 @@
                                 <Button Click="OnImportDataClicked" Content="{loc:Loc Key=DataImport}" />
                             </StackPanel>
                             <TextBlock Style="{StaticResource HintStyle}" Text="{loc:Loc Key=DataHint}" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <StackPanel x:Name="PageExtensions" Spacing="8">
+                        <!--  Erweiterungspakete (.nxext): Schemata, Befehle, Regeln, Ergänzen – ohne Code  -->
+                        <StackPanel Style="{StaticResource SectionStyle}">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Button Click="OnAddExtensionClicked" Content="{loc:Loc Key=ExtensionAdd}" />
+                                <Button Click="OnSaveExtensionClicked" Content="{loc:Loc Key=ExtensionSaveOwn}" />
+                            </StackPanel>
+                            <TextBlock
+                                Style="{StaticResource HintStyle}"
+                                Text="{loc:Loc Key=ExtensionHint}"
+                                TextWrapping="Wrap" />
+                            <TextBlock
+                                x:Name="ExtensionStatus"
+                                TextWrapping="Wrap"
+                                Visibility="Collapsed" />
+                        </StackPanel>
+                        <StackPanel Style="{StaticResource SectionStyle}">
+                            <TextBlock
+                                Style="{StaticResource HintStyle}"
+                                Text="{loc:Loc Key=ExtensionNone}"
+                                Visibility="{x:Bind Shell.HasNoExtensions, Mode=OneWay}" />
+                            <!--  Die Pakete, je eines mit Schalter und „Entfernen“ (im Code gebaut)  -->
+                            <StackPanel x:Name="ExtensionList" Spacing="14" />
+                        </StackPanel>
+                        <!--  Plugins mit Code (WebAssembly im Kern): nur mit den Rechten, die angehakt sind  -->
+                        <TextBlock Style="{StaticResource SectionTitleStyle}" Text="{loc:Loc Key=PluginsHeader}" />
+                        <StackPanel Style="{StaticResource SectionStyle}">
+                            <Button
+                                Click="OnAddPluginClicked"
+                                Content="{loc:Loc Key=PluginAdd}"
+                                IsEnabled="{x:Bind Shell.CanUsePlugins, Mode=OneWay}" />
+                            <TextBlock
+                                Style="{StaticResource HintStyle}"
+                                Text="{loc:Loc Key=PluginHint}"
+                                TextWrapping="Wrap" />
+                            <TextBlock
+                                x:Name="PluginStatus"
+                                TextWrapping="Wrap"
+                                Visibility="Collapsed" />
+                        </StackPanel>
+                        <StackPanel Style="{StaticResource SectionStyle}">
+                            <TextBlock
+                                Style="{StaticResource HintStyle}"
+                                Text="{loc:Loc Key=PluginNone}"
+                                Visibility="{x:Bind Shell.HasNoPlugins, Mode=OneWay}" />
+                            <!--  Die Plugins, je eines mit Rechten, Schalter und „Entfernen“ (im Code gebaut)  -->
+                            <StackPanel x:Name="PluginList" Spacing="14" />
                         </StackPanel>
                     </StackPanel>
 

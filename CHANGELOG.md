@@ -2,6 +2,49 @@
 
 Newest version first. For everything NexusSSH can do, see [FEATURES.md](FEATURES.md).
 
+## 0.7.0 – 2026-11-23
+
+- **Plugins** (`.nxplugin`, Settings → Extensions): code as WebAssembly, run sealed off in the core without access to
+  files, network or passwords. You tick which permissions a plugin gets; its commands show up in the command palette
+  and their results as text and tables. With permission it can read files of the active session and suggest
+  commands on its server – each command only runs after you approve it. Plugins can react when a session connects
+  or disconnects and watch the output for their patterns. A plugin that misbehaves is switched off. To write one:
+  a Rust SDK, an example plugin and a guide in [`docs/plugins.md`](docs/plugins.md)
+- **Extension packages** (`.nxext`, Settings → Extensions): install color schemes, saved commands, highlighting rules
+  and completion for more programs from one file – no code. A preview shows everything first; commands from a
+  package only run after you allow them. "Save as package" passes your own on
+- **Update from the app:** "Update now" in the notice about a new version downloads the setup from GitHub, checks it
+  against the size and SHA-256 GitHub names, closes NexusSSH, installs the new version and starts it again – after
+  asking, and only for an installed app
+- **Authorized keys on the server** (command palette, on a connected SSH session): see which keys may sign in to
+  the account – type, fingerprint, comment and options, with your own key files recognised and the profile's key
+  marked – remove one, or add one of your own keys. Both go over SFTP, so they also work on Windows servers and on
+  accounts without a shell; removing takes out exactly that one line, and if the file changed since it was shown,
+  nothing is removed
+- **Activity and silence on the tab:** a dot on a tab whose session printed something while you looked elsewhere;
+  "Watch for silence" in the tab menu tells you – with a clock on the tab and a Windows notification – when a
+  session has been quiet for a set time, e.g. when a long build is done
+- **Always ask before pasting several lines** (Settings → Terminal, off by default): until now the app only asked
+  when the shell would run each pasted line at once; with the switch it also asks when the shell waits for Enter
+- **Clicking a Windows notification brings NexusSSH to the front.** Until now the click did nothing: the Windows
+  App SDK could not register the app for it (fixed in the SDK), and Windows did not let the window come forward
+- **Fixed:** starting NexusSSH while it was already running opened a second app next to the first. The two
+  overwrote each other's settings when closed – a server released for MCP in one window could be gone again – and
+  AI tools kept talking to the first one, so a server released in the new window never showed up there. Now only
+  one NexusSSH runs per data folder: starting it again brings the running window to the front. If NexusSSH was
+  just closed and is still shutting down, the new start waits for it and then opens; if the running one does not
+  respond at all, the new start says so instead of opening a second one
+- **Fixed:** switching a tunnel off and on again quickly could leave it in the wrong state – running although it was
+  switched off, or "port already in use" because the old listener had not let go of the port yet. The last switch
+  now always wins, and a tunnel that is off has freed its port
+- **Fixed:** right after the app gave up listing a huge folder on the server, the next folder could fail with
+  "the directory lists more entries than this app reads" (seen once in a test run). Each listing now counts only
+  the answers to its own requests
+- **Fixed:** on a Windows server whose SSH login shell is Windows PowerShell, a command run by an AI tool
+  (`run_command`) reported exit code 1 whenever it failed, instead of its real code
+- **Updated:** Windows App SDK 2.7.0, russh 0.65.3, suppaftp 13.0.0 (FTP). FileZilla Server's directory listings
+  are now read by the FTP library itself
+
 ## 0.6.1 – 2026-11-20
 
 - **Fixed:** dropping files from the server list onto a ZIP file in Explorer showed an Explorer error ("The

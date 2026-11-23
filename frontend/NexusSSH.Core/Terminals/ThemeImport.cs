@@ -338,6 +338,9 @@ public static partial class ThemeImport
 
     private static string Hex(int red, int green, int blue) => $"#{red:x2}{green:x2}{blue:x2}";
 
+    /// <summary>Eine Farbe, wie die Terminal-Seite sie bekommen darf: <c>#rrggbb</c>.</summary>
+    public static bool IsColor(string? value) => value is not null && HexColor().IsMatch(value);
+
     [GeneratedRegex("^#[0-9a-fA-F]{6}$")]
     private static partial Regex HexColor();
 

@@ -407,9 +407,11 @@ try {
         Assert-Shown '~^nginx\.conf, web01' 'ListItem'
     }
 
-    Step 'Die Zeile unten: „Transfers n“ blendet die Transfers aus und wieder ein, „Details“ steht da' {
+    # Am Namen ist der Knopf nicht zu finden: Seit 2026-11-18 nennt er, was gerade läuft (Name und Prozent), und mit
+    # den Beispieldaten laufen Transfers von selbst.
+    Step 'Die Zeile unten: der Knopf der Transfers blendet sie aus und wieder ein, „Details“ steht da' {
         Assert-Shown '#DetailsButton'
-        Assert-Shown '~^Transfers [0-9]+$' 'Button'
+        Assert-Shown '#TransfersPill'
         Invoke-Element '#TransfersPill'
         Assert-Gone '#TransfersTab'
         Invoke-Element '#TransfersPill'

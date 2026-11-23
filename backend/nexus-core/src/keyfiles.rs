@@ -129,6 +129,20 @@ fn shown(text: &str) -> String {
     text.chars().filter(|c| !c.is_control()).take(200).collect()
 }
 
+/// Länge in Bit, wo die Art sie nicht schon nennt (bei ed25519 immer 256).
+pub(crate) fn bits_of(public: &PublicKey) -> Option<u32> {
+    match public.key_data() {
+        KeyData::Rsa(rsa) => Some(rsa.key_size()),
+        KeyData::Ed25519(_) => Some(256),
+        KeyData::Ecdsa(ecdsa) => Some(match ecdsa.curve() {
+            EcdsaCurve::NistP256 => 256,
+            EcdsaCurve::NistP384 => 384,
+            EcdsaCurve::NistP521 => 521,
+        }),
+        _ => None,
+    }
+}
+
 /// Was sich über die Datei sagen lässt, ohne sie zu entsperren. `None`, wenn sie kein privater Schlüssel ist.
 pub(crate) fn inspect(path: &Path) -> Option<KeyFile> {
     let text = read(path)?;
@@ -172,16 +186,7 @@ pub(crate) fn inspect(path: &Path) -> Option<KeyFile> {
         }
     }
 
-    let bits = public.as_ref().and_then(|public| match public.key_data() {
-        KeyData::Rsa(rsa) => Some(rsa.key_size()),
-        KeyData::Ed25519(_) => Some(256),
-        KeyData::Ecdsa(ecdsa) => Some(match ecdsa.curve() {
-            EcdsaCurve::NistP256 => 256,
-            EcdsaCurve::NistP384 => 384,
-            EcdsaCurve::NistP521 => 521,
-        }),
-        _ => None,
-    });
+    let bits = public.as_ref().and_then(bits_of);
     Some(KeyFile {
         path: path.display().to_string(),
         name: path

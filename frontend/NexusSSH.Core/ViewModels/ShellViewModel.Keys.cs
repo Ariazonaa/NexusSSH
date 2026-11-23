@@ -97,6 +97,23 @@ public sealed partial class ShellViewModel
         return true;
     }
 
+    /// <summary>
+    /// „Hinterlegte Schlüssel“ der Verbindung von <paramref name="session"/>: Die eigenen Schlüsseldateien werden dafür
+    /// neu gelesen (so erkennt der Dialog sie wieder); <c>null</c>, wenn die Sitzung nicht verbunden ist.
+    /// </summary>
+    public AuthorizedKeysViewModel? AuthorizedKeysFor(SessionViewModel session)
+    {
+        if (session.State != ConnectionState.Connected || !session.Profile.IsSsh || session.Connection.Monitor is not { } server)
+        {
+            return null;
+        }
+
+        LoadKeyFiles();
+        var profile = _profiles.FirstOrDefault(candidate => candidate.Id == session.Profile.Id) ?? session.Profile;
+        var keyPath = profile.KeyPath is { Length: > 0 } own ? own : IdentityOf(profile)?.KeyPath;
+        return new AuthorizedKeysViewModel(server, session.Profile.Name, [.. KeyFiles], keyPath, Log);
+    }
+
     /// <summary>Die Identität, von der ein Profil Benutzer und Schlüssel bezieht; <c>null</c>, wenn es eigene Angaben hat.</summary>
     public Identity? IdentityOf(ServerProfile profile)
         => profile.IdentityId is { } id ? Settings.Identities.FirstOrDefault(identity => identity.Id == id) : null;

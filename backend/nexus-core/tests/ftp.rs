@@ -412,6 +412,38 @@ fn over_ipv6_the_data_connections_use_extended_passive_mode() {
     }
 }
 
+/// Der aktive Modus über IPv6: Die Bibliothek nennt dem Server mit `EPRT` ihre IPv6-Adresse und muss dort auch
+/// lauschen. Bis suppaftp 12.2.0 lauschte sie nur auf `0.0.0.0` – der Server kam nicht an, jede Liste scheiterte
+/// (gefunden 2026-10-15 an IIS; behoben mit unserem PR #198, in 12.2.1).
+#[test]
+fn over_ipv6_active_mode_listens_where_it_tells_the_server_to_come() {
+    if std::net::TcpListener::bind("[::1]:0").is_err() {
+        eprintln!("kein IPv6 auf diesem Rechner – übersprungen");
+        return;
+    }
+    for tls in [None, Some(certificate())] {
+        let secure = tls.is_some();
+        let ftp = Ftp::start_like(tls, false, true, false, false, false, true);
+        ftp.fixture
+            .secrets
+            .set(&password_key(&ftp.profile), "demo", "geheim")
+            .unwrap();
+        ftp.open(1);
+        if secure {
+            let asked = ftp.fixture.recorder.event("prompt.host_key");
+            ftp.fixture.answer(&asked, json!({ "accept": true }));
+        }
+        let state = ftp.connected();
+        assert_eq!(state["state"], "connected", "tls {secure}: {state}");
+
+        assert_eq!(ftp.names("/"), ["readme.txt", "www"], "tls {secure}");
+        let read = ftp.sftp(json!({ "op": "sftp.read", "path": "/readme.txt", "offset": 0, "length": 5 }));
+        assert_eq!(read["data"], "aGVsbG8=", "tls {secure}: {read}");
+        ftp.done(json!({ "op": "sftp.write", "path": "/six.txt", "data": "c2l4" }));
+        assert_eq!(std::fs::read(ftp.remote.join("six.txt")).unwrap(), b"six");
+    }
+}
+
 /// Ein Server, der die Stelle von `REST` vergisst, sobald `PASV` dazwischenkommt (FileZilla Server): Gelesen wird
 /// trotzdem ab der richtigen Stelle, und an eine Datei wird angehängt, statt sie durch ihr Ende zu ersetzen.
 /// Seit suppaftp 12.2.1 schickt die Bibliothek `REST` erst unmittelbar vor dem Befehl der Übertragung – dann kommt

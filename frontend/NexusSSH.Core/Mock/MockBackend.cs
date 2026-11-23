@@ -272,6 +272,9 @@ public sealed class MockBackend : INexusBackend, IProfileStore, IDisposable
 
     public ITransferQueue Transfers => _transfers;
 
+    /// <summary>Für Tests: eine Laufzeit für Plugins; ohne sie gibt es keine (wie mit Beispieldaten).</summary>
+    public IPluginRuntime? Plugins { get; set; }
+
     public IReadOnlyList<ServerProfile> GetProfiles() => [.. _profiles.Where(profile => !profile.IsTransient)];
 
     /// <summary>Auch die vorläufigen Profile (Schnellverbinden), die in keiner Liste stehen – für Tests.</summary>
@@ -402,14 +405,17 @@ public sealed class MockBackend : INexusBackend, IProfileStore, IDisposable
         return _profiles.Count - before;
     }
 
-    // Drei Beispiele, damit die Seite „Schlüssel“ etwas zeigt; daneben die Passphrase jedes verschlüsselten.
-    private readonly List<KeyFile> _keyFiles =
+    /// <summary>Drei Beispiele, damit die Seite „Schlüssel“ etwas zeigt; der Server der Beispiele kennt den ersten.</summary>
+    internal static readonly KeyFile[] SampleKeys =
     [
         new("~/.ssh/id_ed25519", "id_ed25519", KeyFormat.OpenSsh, "ssh-ed25519", 256, "SHA256:Zk3m8Qv0x1ZgT7dCm0kKqv3s4bqk0mWcVqk2m9o0y3o", "me@workstation", false, "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMockOwnKey me@workstation"),
         new("~/.ssh/id_rsa_work", "id_rsa_work", KeyFormat.OpenSsh, "ssh-rsa", 4096, "SHA256:0kKqv3s4bqk0mWcVqk2m9o0y3o6m8m0k1xQ1ZgT7dCm", "work", true, "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQMockWorkKey work"),
         new("~/.ssh/legacy.ppk", "legacy.ppk", KeyFormat.Ppk, "ecdsa-sha2-nistp256", 256, "SHA256:m9o0y3o6m8m0k1xQ1ZgT7dCm0kKqv3s4bqk0mWcVqk2", "putty", false, "ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYMockOldKey putty"),
     ];
 
+    private readonly List<KeyFile> _keyFiles = [.. SampleKeys];
+
+    // Die Passphrase jedes verschlüsselten Beispiels.
     private readonly Dictionary<string, string> _keyPassphrases = new(StringComparer.Ordinal) { ["~/.ssh/id_rsa_work"] = "demo" };
 
     public IReadOnlyList<KeyFile> KeyFiles(IReadOnlyList<string> otherPaths) => [.. _keyFiles];

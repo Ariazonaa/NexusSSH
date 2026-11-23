@@ -29,6 +29,8 @@ Farbschemata und Befehlspalette.
 | `frontend/NexusSSH.Core.Tests` | C#, xunit.v3 | Tests für alles in Core |
 | `backend/nexus-core` | Rust | Der Kern. Alles mit Netz und Geheimnissen. |
 | `backend/nexus-testserver` | Rust | Kleiner SSH-Server mit nachgespielter Shell – Gegenstelle für Tests und zum Ausprobieren |
+| `backend/plugin-sdk` | Rust | Baukasten `nexus-plugin` für Plugins (WebAssembly ohne Imports), Anleitung in [`plugins.md`](plugins.md) |
+| `backend/plugin-example` | Rust | Beispiel-Plugin (Plattenbelegung), baut für `wasm32-unknown-unknown` |
 
 **Warum diese Teilung:** WinUI 3 gibt es nur für Windows, eine Linux-Version ist aber denkbar (§9). Deshalb
 liegt so wenig wie möglich im WinUI-Projekt: Protokolle und Geheimnisse in Rust, Bedienlogik im plattformfreien

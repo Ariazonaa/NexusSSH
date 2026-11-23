@@ -118,3 +118,17 @@ path = "fuzz_targets/mosh_state_transitions.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "authorized_keys"
+path = "fuzz_targets/authorized_keys.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "plugin"
+path = "fuzz_targets/plugin.rs"
+test = false
+doc = false
+bench = false

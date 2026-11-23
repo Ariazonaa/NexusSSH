@@ -461,6 +461,10 @@ pub(crate) enum Answer {
     Line(String),
     /// Was ein Befehl der App hinterlassen hat (`exec.run`).
     Run(RunOutput),
+    /// Die Dateien `authorized_keys` des Kontos (`authorized.list`).
+    ServerKeys(Vec<crate::authkeys::ServerKeyFile>),
+    /// Die Antwort eines Plugins (`plugin.call`).
+    PluginOutput(String),
 }
 
 /// Fragt nach den laufenden Sitzungen von tmux und screen. Fester Text, nichts vom Benutzer oder vom Server darin.

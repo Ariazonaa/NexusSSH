@@ -4,7 +4,9 @@ using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.Windows.Storage.Pickers;
+using NexusSSH.Core;
 using NexusSSH.Core.Backend.Native;
+using NexusSSH.Core.Extensions;
 using NexusSSH.Core.Localization;
 using NexusSSH.Core.Models;
 using NexusSSH.Core.Settings;
@@ -33,6 +35,8 @@ public sealed partial class SettingsView : UserControl
         FontSizeBox.Minimum = TerminalThemes.MinFontSize;
         FontSizeBox.Maximum = TerminalThemes.MaxFontSize;
         FontSizeBox.Value = Shell.TerminalFontSize;
+        ShowExtensions();
+        ShowPlugins();
         UiZoomBox.Minimum = AppSettings.MinUiZoom;
         UiZoomBox.Maximum = AppSettings.MaxUiZoom;
         UiZoomBox.Value = Shell.UiZoom;
@@ -80,7 +84,7 @@ public sealed partial class SettingsView : UserControl
         [
             ("General", PageGeneral), ("Look", PageLook), ("Connections", PageConnections), ("Alerts", PageAlerts),
             ("Terminal", PageTerminal), ("Files", PageFiles), ("Shortcuts", PageShortcuts), ("Data", PageData),
-            ("Mcp", PageMcp), ("About", PageAbout),
+            ("Extensions", PageExtensions), ("Mcp", PageMcp), ("About", PageAbout),
         ];
         foreach (var (name, page) in pages)
         {
@@ -223,6 +227,14 @@ public sealed partial class SettingsView : UserControl
                 ShowMcpServers();
                 break;
 
+            case nameof(ShellViewModel.Extensions):
+                ShowExtensions();
+                break;
+
+            case nameof(ShellViewModel.Plugins):
+                ShowPlugins();
+                break;
+
             case nameof(ShellViewModel.Themes):
                 ThemeBox.ItemsSource = Shell.Themes;
                 ThemeBox.SelectedItem = Shell.TerminalTheme;
@@ -324,6 +336,8 @@ public sealed partial class SettingsView : UserControl
     private void SetKeepAliveSeconds(double value) => Shell.KeepAliveSeconds = double.IsFinite(value) ? (int)Math.Clamp(value, 0, 3600) : AppSettings.DefaultKeepAliveSeconds;
 
     private void SetKeepAliveMissed(double value) => Shell.KeepAliveMissed = double.IsFinite(value) ? (int)Math.Clamp(value, 1, AppSettings.MaxKeepAliveMissed) : AppSettings.DefaultKeepAliveMissed;
+
+    private void SetSilenceSeconds(double value) => Shell.SilenceSeconds = double.IsFinite(value) ? (int)Math.Round(value) : AppSettings.DefaultSilenceSeconds;
 
     private void OnCloseClicked(object sender, RoutedEventArgs e) => Shell.IsSettingsOpen = false;
 
@@ -521,6 +535,210 @@ public sealed partial class SettingsView : UserControl
     }
 
     private async void OnNewThemeClicked(object sender, RoutedEventArgs e) => await EditThemeAsync(Shell.NewTheme());
+
+    // --- Erweiterungspakete ---
+
+    // Ein Paket von außen: lesen, prüfen, zeigen, was drin ist, erst dann installieren.
+    private async void OnAddExtensionClicked(object sender, RoutedEventArgs e)
+    {
+        var picker = new FileOpenPicker(XamlRoot.ContentIslandEnvironment.AppWindowId) { SuggestedStartLocation = PickerLocationId.Downloads };
+        picker.FileTypeFilter.Add(ExtensionFormat.FileExtension);
+        if (await picker.PickSingleFileAsync() is not { } file)
+        {
+            return;
+        }
+
+        string? text = null;
+        try
+        {
+            text = new FileInfo(file.Path).Length <= ExtensionFormat.MaxLength ? await File.ReadAllTextAsync(file.Path) : null;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            App.WriteCrashLog(exception);
+        }
+
+        if (ShellViewModel.ReadExtension(text, out var problem) is not { } package)
+        {
+            ShowExtensionStatus(L.Get("ExtensionUnreadable", Format.Visible(Path.GetFileName(file.Path)), problem ?? string.Empty));
+            return;
+        }
+
+        if (await App.Dialogs.ConfirmExtensionAsync(package, Shell.InstalledExtension(package.Id)))
+        {
+            ShowExtensionStatus(Shell.InstallExtension(package) ? L.Get("ExtensionInstalled", package.Name) : L.Get("ExtensionNotInstalled", package.Name));
+        }
+    }
+
+    // Eigene Schemata, Befehle und Regeln als Paket, zum Weitergeben.
+    private async void OnSaveExtensionClicked(object sender, RoutedEventArgs e)
+    {
+        if (await App.Dialogs.AskOwnPackageAsync() is not { } choice)
+        {
+            return;
+        }
+
+        if (Shell.OwnPackage(choice.Name, choice.Author, choice.Themes, choice.Snippets, choice.Highlights) is not { } package)
+        {
+            ShowExtensionStatus(L.Get("ExtensionNothingToSave"));
+            return;
+        }
+
+        var picker = new FileSavePicker(XamlRoot.ContentIslandEnvironment.AppWindowId)
+        {
+            SuggestedStartLocation = PickerLocationId.DocumentsLibrary,
+            SuggestedFileName = package.Id,
+            DefaultFileExtension = ExtensionFormat.FileExtension,
+        };
+        picker.FileTypeChoices.Add(L.Get("ExtensionFiles"), [ExtensionFormat.FileExtension]);
+        if (await picker.PickSaveFileAsync() is not { } file)
+        {
+            return;
+        }
+
+        try
+        {
+            await File.WriteAllTextAsync(file.Path, ExtensionFormat.Write(package));
+            ShowExtensionStatus(L.Get("ExtensionSaved", Format.Visible(Path.GetFileName(file.Path)), package.Summary));
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            ShowExtensionStatus(L.Get("ExtensionNotSaved", exception.Message));
+        }
+    }
+
+    // Ein Plugin von außen: der Kern liest und prüft es, die Vorschau zeigt seine Rechte zum Anhaken.
+    private async void OnAddPluginClicked(object sender, RoutedEventArgs e)
+    {
+        var picker = new FileOpenPicker(XamlRoot.ContentIslandEnvironment.AppWindowId) { SuggestedStartLocation = PickerLocationId.Downloads };
+        picker.FileTypeFilter.Add(Core.Plugins.PluginStore.FileExtension);
+        if (await picker.PickSingleFileAsync() is not { } file)
+        {
+            return;
+        }
+
+        if (Shell.InspectPlugin(file.Path, out var problem) is not { } found)
+        {
+            ShowPluginStatus(L.Get("PluginUnreadable", Format.Visible(Path.GetFileName(file.Path)), problem));
+            return;
+        }
+
+        if (await App.Dialogs.ConfirmPluginAsync(found.Manifest, found.Inspection, Shell.InstalledPlugin(found.Manifest.Id)) is { } granted)
+        {
+            ShowPluginStatus(Shell.InstallPlugin(file.Path, found.Manifest, found.Inspection, granted)
+                ? L.Get("PluginInstalled", found.Manifest.Name)
+                : L.Get("PluginNotInstalled", found.Manifest.Name));
+        }
+    }
+
+    private void ShowPluginStatus(string text)
+    {
+        PluginStatus.Text = text;
+        PluginStatus.Visibility = Visibility.Visible;
+    }
+
+    // Die Plugins: Name, Version, Autor, Befehle; die erbetenen Rechte zum An- und Abhaken; An/Aus und „Entfernen“.
+    private void ShowPlugins()
+    {
+        PluginList.Children.Clear();
+        var secondary = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"];
+        foreach (var plugin in Shell.Plugins)
+        {
+            var manifest = plugin.Manifest;
+            var info = new StackPanel { Spacing = 2 };
+            var title = manifest.Author.Length > 0 ? L.Get("ExtensionTitleBy", manifest.Name, manifest.Version, manifest.Author) : L.Get("ExtensionTitle", manifest.Name, manifest.Version);
+            info.Children.Add(new TextBlock { Text = title, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
+            foreach (var line in Dialogs.DialogService.PluginLines(manifest))
+            {
+                info.Children.Add(new TextBlock { Text = line, Foreground = secondary, TextWrapping = TextWrapping.Wrap });
+            }
+
+            if (manifest.Description.Length > 0)
+            {
+                info.Children.Add(new TextBlock { Text = manifest.Description, Foreground = secondary, TextWrapping = TextWrapping.Wrap });
+            }
+
+            foreach (var permission in manifest.Permissions)
+            {
+                var box = new CheckBox { Content = ShellViewModel.PermissionName(permission), IsChecked = plugin.Has(permission) };
+                AutomationProperties.SetName(box, $"{manifest.Name}: {ShellViewModel.PermissionName(permission)}");
+                box.Click += (_, _) => Shell.SetPluginPermission(plugin, permission, box.IsChecked == true);
+                info.Children.Add(box);
+            }
+
+            var toggle = new ToggleSwitch { IsOn = !plugin.IsDisabled, OnContent = L.Get("ExtensionOn"), OffContent = L.Get("ExtensionOff"), MinWidth = 0 };
+            AutomationProperties.SetName(toggle, L.Get("ExtensionToggle", manifest.Name));
+            toggle.Toggled += (_, _) => Shell.SetPluginEnabled(plugin, toggle.IsOn);
+            var remove = new Button { Content = L.Get("ExtensionRemove"), VerticalAlignment = VerticalAlignment.Top };
+            AutomationProperties.SetName(remove, L.Get("ExtensionRemoveNamed", manifest.Name));
+            remove.Click += async (_, _) =>
+            {
+                if (await App.Dialogs.ConfirmAsync(L.Get("ExtensionRemoveTitle", manifest.Name), L.Get("PluginRemoveText"), L.Get("ExtensionRemove")))
+                {
+                    Shell.RemovePlugin(plugin);
+                }
+            };
+
+            var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Top };
+            actions.Children.Add(toggle);
+            actions.Children.Add(remove);
+            var row = new Grid { ColumnSpacing = 16 };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.Children.Add(info);
+            Grid.SetColumn(actions, 1);
+            row.Children.Add(actions);
+            PluginList.Children.Add(row);
+        }
+    }
+
+    private void ShowExtensionStatus(string text)
+    {
+        ExtensionStatus.Text = text;
+        ExtensionStatus.Visibility = Visibility.Visible;
+    }
+
+    // Die Pakete, je eines: Name, Version, Autor, was drin ist, die Beschreibung; daneben An/Aus und „Entfernen“.
+    private void ShowExtensions()
+    {
+        ExtensionList.Children.Clear();
+        var secondary = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"];
+        foreach (var package in Shell.Extensions)
+        {
+            var info = new StackPanel { Spacing = 2 };
+            var title = package.Author.Length > 0 ? L.Get("ExtensionTitleBy", package.Name, package.Version, package.Author) : L.Get("ExtensionTitle", package.Name, package.Version);
+            info.Children.Add(new TextBlock { Text = title, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
+            info.Children.Add(new TextBlock { Text = package.Summary, Foreground = secondary, TextWrapping = TextWrapping.Wrap });
+            if (package.Description.Length > 0)
+            {
+                info.Children.Add(new TextBlock { Text = package.Description, Foreground = secondary, TextWrapping = TextWrapping.Wrap });
+            }
+
+            var toggle = new ToggleSwitch { IsOn = !package.IsDisabled, OnContent = L.Get("ExtensionOn"), OffContent = L.Get("ExtensionOff"), MinWidth = 0 };
+            AutomationProperties.SetName(toggle, L.Get("ExtensionToggle", package.Name));
+            toggle.Toggled += (_, _) => Shell.SetExtensionEnabled(package, toggle.IsOn);
+            var remove = new Button { Content = L.Get("ExtensionRemove"), VerticalAlignment = VerticalAlignment.Top };
+            AutomationProperties.SetName(remove, L.Get("ExtensionRemoveNamed", package.Name));
+            remove.Click += async (_, _) =>
+            {
+                if (await App.Dialogs.ConfirmAsync(L.Get("ExtensionRemoveTitle", package.Name), L.Get("ExtensionRemoveText"), L.Get("ExtensionRemove")))
+                {
+                    Shell.RemoveExtension(package);
+                }
+            };
+
+            var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Top };
+            actions.Children.Add(toggle);
+            actions.Children.Add(remove);
+            var row = new Grid { ColumnSpacing = 16 };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.Children.Add(info);
+            Grid.SetColumn(actions, 1);
+            row.Children.Add(actions);
+            ExtensionList.Children.Add(row);
+        }
+    }
 
     private async void OnEditThemeClicked(object sender, RoutedEventArgs e)
     {

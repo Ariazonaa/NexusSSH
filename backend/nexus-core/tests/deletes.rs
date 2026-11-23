@@ -84,8 +84,10 @@ fn a_folder_goes_away_entry_by_entry_while_the_count_climbs() {
     // Dateien, Ordner darunter, die Ordner `slow`, `many` und `big` selbst – und die einzelne Datei.
     let total = 40 + 100 + 10 + 3 + 1;
 
+    let began = std::time::Instant::now();
     start(&fixture, 7, &["/big", "/single.txt"]);
     let end = ended(&fixture, 7);
+    let took = began.elapsed();
 
     assert_eq!(end["state"], "done", "{end}");
     assert_eq!(end["removed"], total, "{end}");
@@ -108,8 +110,15 @@ fn a_folder_goes_away_entry_by_entry_while_the_count_climbs() {
     assert_eq!(ends, 1, "{states:#?}");
     assert_eq!(states.last().unwrap()["state"], "done");
 
-    // Nicht öfter als etwa alle 250 ms: Bei gut einer Sekunde sind das wenige Meldungen, nicht eine je Eintrag.
-    assert!(states.len() < 20, "{} Meldungen", states.len());
+    // Nicht öfter als alle 250 ms (`DELETE_REPORT`), nie eine je Eintrag. Gemessen an der Dauer, nicht an einer festen
+    // Zahl: Auf einem ausgelasteten Runner dauerte es länger, und die Grenze 20 riss mit 21 Meldungen (2026-11-21).
+    // Dazu die Meldung zu Beginn, die am Ende und eine angefangene Spanne.
+    let most = (took.as_millis() / nexus_core::core::DELETE_REPORT.as_millis()) as usize + 3;
+    assert!(
+        states.len() <= most && states.len() < total as usize,
+        "{} Meldungen in {took:?} (höchstens {most})",
+        states.len()
+    );
 }
 
 #[test]

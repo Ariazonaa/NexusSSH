@@ -371,7 +371,7 @@ public sealed partial class TerminalHost : UserControl
                 break;
 
             case WebMessage.PasteNeedsConsent ask when _attached.ContainsKey(ask.Id):
-                _ = ConfirmPasteAsync(ask.Id, ask.Content);
+                _ = ConfirmPasteAsync(ask.Id, ask.Content, ask.Bracketed);
                 break;
 
             case WebMessage.Acknowledged acknowledged:
@@ -740,10 +740,13 @@ public sealed partial class TerminalHost : UserControl
 
     // Mehrere Zeilen in eine Shell, die jede sofort ausführt: erst fragen. Der Text geht danach mit dem Vermerk
     // zurück an die Seite, die ihn wie jedes Einfügen behandelt.
-    private async Task ConfirmPasteAsync(string id, string text)
+    // Mit eingeklammertem Einfügen fragt die App nur, weil der Benutzer es eingestellt hat (PasteAlwaysAsk) – dort führt
+    // erst Enter aus, und das sagt die Rückfrage dann auch.
+    private async Task ConfirmPasteAsync(string id, string text, bool bracketed)
     {
         var (lines, preview) = TerminalMessages.PastePreview(text);
-        if (await App.Dialogs.ConfirmAsync(L.Get("PasteLinesTitle", lines), $"{L.Get("PasteLinesText")}\n\n{preview}", L.Get("PasteLinesConfirm"))
+        var why = bracketed ? L.Get("PasteLinesTextBracketed") : L.Get("PasteLinesText");
+        if (await App.Dialogs.ConfirmAsync(L.Get("PasteLinesTitle", lines), $"{why}\n\n{preview}", L.Get("PasteLinesConfirm"))
             && _attached.ContainsKey(id))
         {
             Post(TerminalMessages.Paste(id, text, confirmed: true));
@@ -789,7 +792,7 @@ public sealed partial class TerminalHost : UserControl
 
     private void PostOptions()
     {
-        Post(TerminalMessages.Options(Shell.TerminalTheme, Shell.TerminalFontSize, Shell.TerminalShortcuts, Shell.TerminalFont, Shell.MouseCopyPaste, Shell.HighlightRules, Shell.TerminalSuggestions, L.Get("TerminalLinkHint"), Shell.TerminalLook, Shell.PasteClean, Shell.PasteTabs, Shell.TerminalImages, Shell.OptionSuggestions, Shell.PathSuggestions, Shell.TerminalHosts, Shell.TabCompletes));
+        Post(TerminalMessages.Options(Shell.TerminalTheme, Shell.TerminalFontSize, Shell.TerminalShortcuts, Shell.TerminalFont, Shell.MouseCopyPaste, Shell.HighlightRules, Shell.TerminalSuggestions, L.Get("TerminalLinkHint"), Shell.TerminalLook, Shell.PasteClean, Shell.PasteTabs, Shell.TerminalImages, Shell.OptionSuggestions, Shell.PathSuggestions, Shell.TerminalHosts, Shell.TabCompletes, Shell.PasteAlwaysAsk, Shell.PackCompletions));
         ApplyCardBackground();
     }
 

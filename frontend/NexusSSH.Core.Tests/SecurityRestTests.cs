@@ -20,7 +20,11 @@ public sealed class SecurityRestTests
     {
         // Die Seite bittet, statt einzufügen; die App fragt und schickt den Text mit dem Vermerk zurück.
         var ask = Assert.IsType<WebMessage.PasteNeedsConsent>(TerminalMessages.Parse("""{"type":"confirmPaste","id":"s1","data":"ls\nrm -rf ~"}"""));
-        Assert.Equal(("s1", "ls\nrm -rf ~"), (ask.Id, ask.Content));
+        Assert.Equal(("s1", "ls\nrm -rf ~", false), (ask.Id, ask.Content, ask.Bracketed));
+
+        // Mit „immer fragen“ bittet die Seite auch bei eingeklammertem Einfügen – und sagt, dass es eines ist.
+        var always = Assert.IsType<WebMessage.PasteNeedsConsent>(TerminalMessages.Parse("""{"type":"confirmPaste","id":"s1","data":"a\nb","bracketed":true}"""));
+        Assert.True(always.Bracketed);
         Assert.Null(TerminalMessages.Parse("""{"type":"confirmPaste","id":"s1","data":""}"""));
         Assert.Null(TerminalMessages.Parse("""{"type":"confirmPaste","data":"x"}"""));
 

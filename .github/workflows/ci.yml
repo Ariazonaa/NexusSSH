@@ -42,9 +42,12 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+          targets: wasm32-unknown-unknown
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: cargo test --workspace --locked
+      # Das Beispiel-Plugin muss sich so bauen lassen, wie die Anleitung (docs/plugins.md) es sagt.
+      - run: cargo build -p nexus-plugin-example --release --locked --target wasm32-unknown-unknown
 
   core:
     name: Core-Tests (Linux)

@@ -19,7 +19,7 @@ use crate::protocol::{Answer, CloseReason, Entry, Event, ProfileInfo, Request, R
 use crate::secrets::{SecretStore, passphrase_key};
 use crate::session::{self, Command, Link, Route};
 use crate::transfers::{self, Halt, Job};
-use crate::{exec, keys, sftp, sftp::Failure, sshconfig};
+use crate::{authkeys, exec, keys, plugins, sftp, sftp::Failure, sshconfig};
 
 /// Was eine `sftp.*`-Anfrage außer „gelungen“ zurückgibt: die Einträge eines Verzeichnisses oder einen Baum.
 type SftpAnswer = (Option<Vec<Entry>>, Option<Vec<TreeEntry>>);
@@ -99,6 +99,13 @@ impl TransferEntry {
     }
 }
 
+/// Die Reihe der An- und Aus-Anfragen eines Tunnels ([`Shared::tunnel_turn`]).
+#[derive(Default)]
+struct TunnelTurn {
+    latest: u64,
+    gate: Arc<tokio::sync::Mutex<()>>,
+}
+
 /// Was sich Kern und Sitzungen teilen.
 pub(crate) struct Shared {
     pub(crate) sink: Arc<dyn EventSink>,
@@ -143,6 +150,9 @@ pub(crate) struct Shared {
     /// Welche Tunnel gerade laufen, als (Profil, Tunnel): Jeder steht nur einmal, auch bei zwei Verbindungen zum
     /// selben Profil – der zweite könnte an demselben Port nie lauschen.
     tunnels: Mutex<std::collections::HashSet<(String, String)>>,
+    /// An und Aus je Tunnel (Profil, Tunnel), in der Reihenfolge der Anfragen: die Nummer der letzten und ein Schloss,
+    /// unter dem eine nach der anderen läuft ([`Shared::tunnel_turn`]).
+    tunnel_turns: Mutex<HashMap<(String, String), TunnelTurn>>,
     /// Sitzungen, deren Verbindung gerade still neu entsteht (unter einem Mosh-Terminal): Für die App bleiben sie
     /// verbunden, also keine Zustandsmeldungen ([`Shared::quiet`]).
     quiet: Mutex<std::collections::HashSet<u64>>,
@@ -176,6 +186,23 @@ impl Shared {
 
     pub(crate) fn release_tunnel(&self, profile: &str, tunnel: &str) {
         lock(&self.tunnels).remove(&(profile.to_owned(), tunnel.to_owned()));
+    }
+
+    /// Nimmt eine Anfrage, einen Tunnel an- oder auszuschalten, in die Reihe: ihre Nummer und das Schloss des Tunnels.
+    /// Synchron beim Eingang aufgerufen – so zählt die Reihenfolge der Anfragen, nicht die der Tasks, die sie
+    /// ausführen (die laufen nebeneinander: Ein spätes „an“ schaltete den Tunnel nach einem „aus“ wieder ein).
+    pub(crate) fn tunnel_turn(&self, profile: &str, tunnel: &str) -> (u64, Arc<tokio::sync::Mutex<()>>) {
+        let mut turns = lock(&self.tunnel_turns);
+        let turn = turns.entry((profile.to_owned(), tunnel.to_owned())).or_default();
+        turn.latest += 1;
+        (turn.latest, Arc::clone(&turn.gate))
+    }
+
+    /// Ob diese Anfrage noch die letzte zu ihrem Tunnel ist – sonst entscheidet eine spätere.
+    pub(crate) fn is_latest_tunnel_turn(&self, profile: &str, tunnel: &str, number: u64) -> bool {
+        lock(&self.tunnel_turns)
+            .get(&(profile.to_owned(), tunnel.to_owned()))
+            .is_some_and(|turn| turn.latest == number)
     }
 
     /// Die Verbindung einer Sitzung, falls sie eine hat.
@@ -391,6 +418,8 @@ impl Shared {
                 line: None,
                 commands: None,
                 run: None,
+                server_keys: None,
+                output: None,
                 limited: false,
                 tree: Some(tree),
                 size: None,
@@ -418,6 +447,8 @@ impl Shared {
         let (mut logs, mut limited) = (None, false);
         let mut line = None;
         let (mut commands, mut target, mut run) = (None, None, None);
+        let mut server_keys = None;
+        let mut output = None;
         let (ok, error, message) = match result {
             Ok(answer) => {
                 match answer {
@@ -432,6 +463,8 @@ impl Shared {
                     exec::Answer::Data(part, whole) => (data, size) = (Some(part), Some(whole)),
                     exec::Answer::Target(text) => target = Some(text),
                     exec::Answer::Run(output) => run = Some(output),
+                    exec::Answer::ServerKeys(files) => server_keys = Some(files),
+                    exec::Answer::PluginOutput(text) => output = Some(text),
                 }
                 (true, None, None)
             }
@@ -446,6 +479,8 @@ impl Shared {
             line,
             commands,
             run,
+            server_keys,
+            output,
             limited,
             tree: None,
             size,
@@ -470,6 +505,8 @@ impl Shared {
                 line: None,
                 commands: None,
                 run: None,
+                server_keys: None,
+                output: None,
                 limited: false,
                 tree,
                 size: None,
@@ -490,6 +527,8 @@ impl Shared {
                 line: None,
                 commands: None,
                 run: None,
+                server_keys: None,
+                output: None,
                 limited: false,
                 tree: None,
                 size: None,
@@ -662,6 +701,7 @@ impl Core {
             next_prompt: AtomicU64::new(1),
             traced: Mutex::default(),
             tunnels: Mutex::default(),
+            tunnel_turns: Mutex::default(),
             quiet: Mutex::default(),
             mosh_threads: crate::mosh::Threads::default(),
         });
@@ -1349,6 +1389,63 @@ impl Core {
                 Err(failure) => Response::error(failure.code, failure.message),
             },
 
+            Request::AuthorizedList { session, request } => self.file(session, request, move |sftp| async move {
+                authkeys::list(&sftp).await.map(exec::Answer::ServerKeys)
+            }),
+
+            Request::PluginInspect { path } => match plugins::inspect(&path) {
+                Ok(inspection) => Response {
+                    ok: true,
+                    manifest: Some(inspection.manifest),
+                    sha256: Some(inspection.sha256),
+                    ..Response::default()
+                },
+                Err(failure) => Response::error(failure.code, failure.message),
+            },
+
+            Request::PluginCall {
+                request,
+                path,
+                sha256,
+                input,
+            } => {
+                let Some(runtime) = &self.runtime else {
+                    return Response::error("no_runtime", "the core is not running");
+                };
+                // Der Interpreter rechnet bis zu ein, zwei Sekunden: nicht auf einem Faden der Verbindungen.
+                let shared = Arc::clone(&self.shared);
+                runtime.spawn_blocking(move || {
+                    let result = plugins::call(&path, &sha256, &input).map(exec::Answer::PluginOutput);
+                    shared.exec_result(request, result);
+                });
+                Response::ok()
+            }
+
+            Request::AuthorizedAdd {
+                session,
+                request,
+                path,
+                version,
+                public_key,
+            } => self.file(session, request, move |sftp| async move {
+                authkeys::add(&sftp, &path, &version, &public_key)
+                    .await
+                    .map(|()| exec::Answer::Nothing)
+            }),
+
+            Request::AuthorizedRemove {
+                session,
+                request,
+                path,
+                version,
+                line,
+                fingerprint,
+            } => self.file(session, request, move |sftp| async move {
+                authkeys::remove(&sftp, &path, &version, line, &fingerprint)
+                    .await
+                    .map(|()| exec::Answer::Nothing)
+            }),
+
             Request::SftpDelete { session, request, path } => self.sftp(session, request, move |sftp| async move {
                 sftp::delete(&sftp, &path).await.map(|()| None)
             }),
@@ -1529,18 +1626,30 @@ impl Core {
                 let wanted = lock(&shared.profiles)
                     .get(&link.profile_id)
                     .and_then(|profile| profile.tunnels.iter().find(|candidate| candidate.id == tunnel).cloned());
-                match (wanted, on) {
-                    (Some(wanted), true) => {
-                        runtime.spawn(async move { link.tunnels.start(&link, &wanted).await });
-                    }
-                    (None, true) => return Response::error("unknown_tunnel", tunnel),
-                    // Anhalten geht auch, wenn der Tunnel inzwischen aus dem Profil gelöscht ist. Stehen zwei
-                    // Verbindungen zum selben Profil, trägt ihn vielleicht die andere – dann dort.
-                    (_, false) => {
-                        let owner = shared.tunnel_owner(&link.profile_id, &tunnel).unwrap_or(link);
-                        runtime.spawn(async move { owner.tunnels.stop(&owner, &tunnel).await });
-                    }
+                if wanted.is_none() && on {
+                    return Response::error("unknown_tunnel", tunnel);
                 }
+
+                // Eine Anfrage nach der anderen, in der Reihenfolge, in der sie kamen; ist inzwischen eine neuere da,
+                // entfällt diese – es gilt immer die letzte.
+                let (number, gate) = shared.tunnel_turn(&link.profile_id, &tunnel);
+                let shared = Arc::clone(shared);
+                runtime.spawn(async move {
+                    let _turn = gate.lock().await;
+                    if !shared.is_latest_tunnel_turn(&link.profile_id, &tunnel, number) {
+                        return;
+                    }
+
+                    match wanted.filter(|_| on) {
+                        Some(wanted) => link.tunnels.start(&link, &wanted).await,
+                        // Anhalten geht auch, wenn der Tunnel inzwischen aus dem Profil gelöscht ist. Stehen zwei
+                        // Verbindungen zum selben Profil, trägt ihn vielleicht die andere – dann dort.
+                        None => {
+                            let owner = shared.tunnel_owner(&link.profile_id, &tunnel).unwrap_or(link);
+                            owner.tunnels.stop(&owner, &tunnel).await;
+                        }
+                    }
+                });
 
                 Response::ok()
             }

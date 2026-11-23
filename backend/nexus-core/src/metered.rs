@@ -3,7 +3,8 @@
 //! `russh-sftp` sammelt eine Liste, bis der Server „Ende“ sagt – wie viel das wird, bestimmt der Server, und an die
 //! einzelnen Antworten kommt man von außen nicht heran. Deshalb liest hier der Strom unter der SFTP-Sitzung mit:
 //! Er erkennt die Antworten mit Namen (`SSH_FXP_NAME`) an ihrem Kopf und zählt deren Einträge. Wer eine Liste
-//! abwartet ([`crate::sftp::read_dir`]), sieht daran, wenn sie über jedes Maß wächst, und gibt sie auf.
+//! abwartet ([`crate::sftp::read_dir`]), sieht daran, wenn sie über jedes Maß wächst, und gibt sie auf. Damit er nur
+//! Antworten auf seine eigenen Anfragen zählt, liest der Strom auch mit, was hinausgeht: die Nummer jeder Anfrage.
 //!
 //! Zweitens hält der Strom die Sitzung am Leben, wenn ein Server einen Statuscode nennt, den das Protokoll nicht
 //! kennt: `russh-sftp` liest nur die Codes 0 bis 8 und beendet bei jedem anderen die ganze Sitzung – danach endete
@@ -13,7 +14,7 @@
 
 use std::collections::HashMap;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, Weak};
 use std::task::{Context, Poll};
 
@@ -31,10 +32,17 @@ const KNOWN_STATUS: u8 = 8;
 /// Was an die Stelle eines unbekannten Codes tritt: `SSH_FX_FAILURE`.
 const FX_FAILURE: u8 = 4;
 
+/// Die einzige Anfrage ohne Nummer (`SSH_FXP_INIT`): Hinter ihrer Art steht die Version.
+const FXP_INIT: u8 = 1;
+
 /// Was der Strom einer Sitzung bisher an Einträgen gesehen hat.
 #[derive(Default)]
 pub(crate) struct Meter {
     entries: AtomicU64,
+    /// Die Nummer der Anfrage, die zuletzt hinausging. Die Bibliothek vergibt sie aufsteigend.
+    sent: AtomicU32,
+    /// Wer gerade Einträge zählt ([`Meter::watch`]).
+    watches: Mutex<Vec<Weak<Watch>>>,
     grew: Notify,
     few: std::sync::atomic::AtomicBool,
     by_commands: std::sync::atomic::AtomicBool,
@@ -90,15 +98,53 @@ impl Drop for Patience<'_> {
     }
 }
 
-impl Meter {
-    /// So viele Einträge haben die Antworten des Servers bisher genannt, über alle Listen der Sitzung.
+/// Die Einträge, die eine Liste bisher gesehen hat: nur aus Antworten auf Anfragen, die nach ihrem Beginn
+/// hinausgingen. Was davor hinausging – etwa die Anfrage einer eben aufgegebenen Liste, deren Antwort noch
+/// unterwegs ist –, zählt nicht mit.
+pub(crate) struct Watch {
+    /// Die Nummer der Anfrage, die zuletzt vor dem Beginn hinausging.
+    floor: u32,
+    entries: AtomicU64,
+}
+
+impl Watch {
     pub(crate) fn entries(&self) -> u64 {
         self.entries.load(Ordering::Relaxed)
     }
 
-    /// Kehrt zurück, sobald der Server weitere Einträge genannt hat.
-    pub(crate) async fn grew(&self) {
-        self.grew.notified().await;
+    /// Ob `id` nach dem Beginn hinausging. Die Nummern laufen über, nach 2^32 Anfragen – verglichen wird deshalb
+    /// der Abstand, nicht die Zahl.
+    fn counts(&self, id: u32) -> bool {
+        id.wrapping_sub(self.floor).cast_signed() > 0
+    }
+}
+
+impl Meter {
+    /// So viele Einträge haben die Antworten des Servers bisher genannt, über alle Listen der Sitzung (für die
+    /// Zufallstests, [`exercise`]).
+    pub(crate) fn entries(&self) -> u64 {
+        self.entries.load(Ordering::Relaxed)
+    }
+
+    /// Beginnt zu zählen: Von nun an zählen die Einträge der Antworten auf Anfragen, die ab jetzt hinausgehen. Die
+    /// eigenen Anfragen einer Liste gehen erst nach diesem Aufruf hinaus und haben, weil die Bibliothek aufsteigend
+    /// zählt, höhere Nummern. Eine fremde Anfrage, deren Nummer schon vergeben, die aber noch nicht geschrieben war,
+    /// zählt mit – zu viel gezählt, nie zu wenig. Zählt, solange der Rückgabewert lebt.
+    pub(crate) fn watch(&self) -> Arc<Watch> {
+        let watch = Arc::new(Watch {
+            floor: self.sent.load(Ordering::Relaxed),
+            entries: AtomicU64::new(0),
+        });
+        let mut watches = self.watches.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        watches.retain(|watch| watch.strong_count() > 0);
+        watches.push(Arc::downgrade(&watch));
+        watch
+    }
+
+    /// Meldet sich, sobald der Server weitere Einträge genannt hat. Wer zuerst nachsehen will, meldet die Zukunft
+    /// vorher an (`Notified::enable`), sonst geht eine Meldung dazwischen verloren.
+    pub(crate) fn grew(&self) -> tokio::sync::futures::Notified<'_> {
+        self.grew.notified()
     }
 
     /// Hinter dieser Sitzung braucht jede Datei, die gerade übertragen wird, eine eigene Verbindung zum Server
@@ -123,9 +169,94 @@ impl Meter {
         self.by_commands.load(Ordering::Relaxed)
     }
 
-    fn add(&self, count: u32) {
+    /// Eine Antwort mit Namen auf die Anfrage `id`.
+    fn add(&self, id: u32, count: u32) {
         self.entries.fetch_add(u64::from(count), Ordering::Relaxed);
+        {
+            let mut watches = self.watches.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            watches.retain(|watch| match watch.upgrade() {
+                Some(watch) => {
+                    if watch.counts(id) {
+                        watch.entries.fetch_add(u64::from(count), Ordering::Relaxed);
+                    }
+                    true
+                }
+                None => false,
+            });
+        }
         self.grew.notify_waiters();
+    }
+
+    /// Eine Anfrage mit der Nummer `id` ging hinaus.
+    fn sent(&self, id: u32) {
+        self.sent.store(id, Ordering::Relaxed);
+    }
+}
+
+/// Wo der Leser im Strom der Anfragen steht: vier Bytes Länge, ein Byte Art, dann (außer bei `SSH_FXP_INIT`) die
+/// Nummer der Anfrage, dann der Rest. Geändert wird hier nichts.
+enum Out {
+    Length { got: [u8; 4], have: usize },
+    Kind { left: u32 },
+    Id { left: u32, got: [u8; 4], have: usize },
+    Skip { left: u32 },
+}
+
+impl Out {
+    fn feed(&mut self, bytes: &[u8], meter: &Meter) {
+        let mut at = 0;
+        while at < bytes.len() {
+            match self {
+                Self::Length { got, have } => {
+                    got[*have] = bytes[at];
+                    *have += 1;
+                    at += 1;
+                    if *have == 4 {
+                        *self = match u32::from_be_bytes(*got) {
+                            0 => Self::Length { got: [0; 4], have: 0 },
+                            left => Self::Kind { left },
+                        };
+                    }
+                }
+                Self::Kind { left } => {
+                    let kind = bytes[at];
+                    at += 1;
+                    let left = *left - 1;
+                    *self = if kind != FXP_INIT && left >= 4 {
+                        Self::Id {
+                            left,
+                            got: [0; 4],
+                            have: 0,
+                        }
+                    } else {
+                        Self::skip(left)
+                    };
+                }
+                Self::Id { left, got, have } => {
+                    got[*have] = bytes[at];
+                    *have += 1;
+                    *left -= 1;
+                    at += 1;
+                    if *have == 4 {
+                        meter.sent(u32::from_be_bytes(*got));
+                        *self = Self::skip(*left);
+                    }
+                }
+                Self::Skip { left } => {
+                    let taken = (bytes.len() - at).min(*left as usize);
+                    at += taken;
+                    *self = Self::skip(*left - taken as u32);
+                }
+            }
+        }
+    }
+
+    fn skip(left: u32) -> Self {
+        if left == 0 {
+            Self::Length { got: [0; 4], have: 0 }
+        } else {
+            Self::Skip { left }
+        }
     }
 }
 
@@ -203,7 +334,10 @@ impl Scan {
                     *left -= 1;
                     at += 1;
                     if *have == 8 {
-                        meter.add(u32::from_be_bytes([got[4], got[5], got[6], got[7]]));
+                        meter.add(
+                            u32::from_be_bytes([got[0], got[1], got[2], got[3]]),
+                            u32::from_be_bytes([got[4], got[5], got[6], got[7]]),
+                        );
                         *self = Self::skip(*left);
                     }
                 }
@@ -247,6 +381,7 @@ impl Scan {
 pub(crate) struct Counted<S> {
     inner: S,
     scan: Scan,
+    out: Out,
     meter: Arc<Meter>,
 }
 
@@ -257,6 +392,7 @@ pub(crate) fn counted<S>(inner: S) -> (Counted<S>, Arc<Meter>) {
     let stream = Counted {
         inner,
         scan: Scan::Length { got: [0; 4], have: 0 },
+        out: Out::Length { got: [0; 4], have: 0 },
         meter: Arc::clone(&meter),
     };
     (stream, meter)
@@ -281,7 +417,14 @@ impl<S: AsyncRead + Unpin> AsyncRead for Counted<S> {
 
 impl<S: AsyncWrite + Unpin> AsyncWrite for Counted<S> {
     fn poll_write(mut self: Pin<&mut Self>, context: &mut Context<'_>, data: &[u8]) -> Poll<std::io::Result<usize>> {
-        Pin::new(&mut self.inner).poll_write(context, data)
+        let this = &mut *self;
+        let outcome = Pin::new(&mut this.inner).poll_write(context, data);
+        // Nur, was der Strom genommen hat: Der Rest kommt mit dem nächsten Aufruf noch einmal.
+        if let Poll::Ready(Ok(written)) = &outcome {
+            this.out.feed(&data[..*written], &this.meter);
+        }
+
+        outcome
     }
 
     fn poll_flush(mut self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<std::io::Result<()>> {
@@ -387,6 +530,65 @@ mod tests {
             assert_eq!(seen, expected, "Stücke zu {size}");
             assert_eq!(entries, 2, "Stücke zu {size}");
         }
+    }
+
+    /// Eine Anfrage, wie die Bibliothek sie schreibt: Art und Nummer, dann ein Rest.
+    fn request(kind: u8, id: u32, rest: &[u8]) -> Vec<u8> {
+        let mut body = id.to_be_bytes().to_vec();
+        body.extend_from_slice(rest);
+        packet(kind, &body)
+    }
+
+    #[test]
+    fn a_list_counts_only_answers_to_requests_sent_after_it_began() {
+        let meter = Meter::default();
+        let mut out = Out::Length { got: [0; 4], have: 0 };
+        let mut scan = Scan::Length { got: [0; 4], have: 0 };
+
+        // INIT trägt keine Nummer, sondern die Version: Sie zählt nicht als Anfrage 3.
+        let mut sent = packet(FXP_INIT, &3u32.to_be_bytes());
+        // Die Liste, die gleich aufgegeben wird: READDIR (12) mit den Nummern 9 und 10.
+        sent.extend(request(12, 9, b"\0\0\0\x01h"));
+        sent.extend(request(12, 10, b"\0\0\0\x01h"));
+        for piece in sent.chunks(3) {
+            out.feed(piece, &meter);
+        }
+
+        let watch = meter.watch();
+        // Die nächste Liste: OPENDIR 11, READDIR 12.
+        for piece in [request(11, 11, b"\0\0\0\x01/"), request(12, 12, b"\0\0\0\x01h")]
+            .concat()
+            .chunks(5)
+        {
+            out.feed(piece, &meter);
+        }
+
+        // Die späte Antwort auf 10 zählt nicht, die auf 12 schon.
+        let mut answers = names(10, 200, b"");
+        answers.extend(names(12, 100, b""));
+        scan.feed(&mut answers, &meter);
+        assert_eq!(watch.entries(), 100);
+        assert_eq!(meter.entries(), 300);
+
+        // Eine Liste, die später beginnt, zählt eine frühere nicht mit; eine, die vorher begann, zählt die spätere.
+        let later = meter.watch();
+        out.feed(&request(12, 13, b"\0\0\0\x01h"), &meter);
+        scan.feed(&mut names(13, 7, b""), &meter);
+        assert_eq!((watch.entries(), later.entries()), (107, 7));
+    }
+
+    #[test]
+    fn request_numbers_that_wrap_around_still_count_as_later() {
+        let meter = Meter::default();
+        let mut out = Out::Length { got: [0; 4], have: 0 };
+        out.feed(&request(12, u32::MAX, b""), &meter);
+        let watch = meter.watch();
+        let mut scan = Scan::Length { got: [0; 4], have: 0 };
+        // u32::MAX ging vor dem Beginn hinaus und zählt nicht; 0 und 1 danach, nach dem Überlauf.
+        scan.feed(&mut names(u32::MAX, 5, b""), &meter);
+        scan.feed(&mut names(0, 6, b""), &meter);
+        scan.feed(&mut names(1, 7, b""), &meter);
+        assert_eq!(watch.entries(), 6 + 7);
     }
 
     #[test]

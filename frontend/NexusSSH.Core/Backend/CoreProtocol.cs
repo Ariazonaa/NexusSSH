@@ -275,6 +275,21 @@ internal sealed record RequestDto(string Op)
     /// <summary><c>key.install</c>: die Zeile des öffentlichen Schlüssels.</summary>
     public string? PublicKey { get; init; }
 
+    /// <summary><c>authorized.remove</c>: der Stand der Datei, wie <c>authorized.list</c> ihn nannte.</summary>
+    public string? Version { get; init; }
+
+    /// <summary><c>authorized.remove</c>: Nummer der Zeile, ab 1.</summary>
+    public uint? Line { get; init; }
+
+    /// <summary><c>authorized.remove</c>: Fingerabdruck des Schlüssels in dieser Zeile.</summary>
+    public string? Fingerprint { get; init; }
+
+    /// <summary><c>plugin.call</c>: SHA-256 der installierten Fassung des Plugins.</summary>
+    public string? Sha256 { get; init; }
+
+    /// <summary><c>plugin.call</c>: was das Plugin bekommt (JSON).</summary>
+    public string? Input { get; init; }
+
     /// <summary><c>transfer.start</c> (neuer Versuch): so viele Bytes hatte der abgebrochene übertragen.</summary>
     public long? Resume { get; init; }
 
@@ -371,6 +386,12 @@ internal sealed record TransferJobDto(string Direction, string Local, string Rem
 
 internal sealed record ResponseDto(bool Ok, string? Error = null, string? Message = null)
 {
+    /// <summary><c>plugin.inspect</c>: die Beschreibung des Plugins (JSON, wie sie im Modul steht).</summary>
+    public string? Manifest { get; init; }
+
+    /// <summary><c>plugin.inspect</c>: SHA-256 der Datei.</summary>
+    public string? Sha256 { get; init; }
+
     public List<ProfileDto>? Profiles { get; init; }
 
     public ProfileDto? Profile { get; init; }
@@ -444,6 +465,12 @@ internal sealed record LogLineDto(long Time, int? Priority, string? Source, stri
 internal sealed record MuxDto(string? Kind, string? Name, int? Windows, bool Attached, string? Command);
 
 internal sealed record RunDto(int? Status, string? Stdout, string? Stderr, bool Cut, bool TimedOut);
+
+/// <summary>Eine Zeile aus <c>authorized_keys</c> des Servers (<c>authorized.list</c>); alles Text vom Server oder daraus errechnet.</summary>
+internal sealed record ServerKeyDto(uint Line, string? Algorithm, int? Bits, string? Fingerprint, string? Comment, string? Options, string? Unreadable);
+
+/// <summary>Eine Datei <c>authorized_keys</c> des Servers samt ihren Schlüsseln.</summary>
+internal sealed record ServerKeyFileDto(string? Path, bool Exists, bool Shared, string? Version, List<ServerKeyDto>? Keys, string? Error);
 
 internal sealed record PairDto(string From, string To);
 
@@ -594,6 +621,12 @@ internal sealed record EventDto
 
     /// <summary><c>sftp.result</c> zu <c>exec.run</c>: was der Befehl hinterlassen hat.</summary>
     public RunDto? Run { get; init; }
+
+    /// <summary><c>sftp.result</c> zu <c>authorized.list</c>: die Dateien mit Schlüsseln, die sich am Konto anmelden dürfen.</summary>
+    public List<ServerKeyFileDto>? ServerKeys { get; init; }
+
+    /// <summary><c>sftp.result</c> zu <c>plugin.call</c>: die Antwort des Plugins (JSON, fremd).</summary>
+    public string? Output { get; init; }
 
     /// <summary><c>sftp.result</c> zu <c>mux.list</c>: laufende Sitzungen von tmux und screen.</summary>
     public List<MuxDto>? Mux { get; init; }

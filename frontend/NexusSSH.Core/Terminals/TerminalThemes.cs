@@ -147,6 +147,9 @@ public static class TerminalThemes
     /// <summary>Ein Schema, das der Benutzer importiert hat – nur solche lassen sich entfernen.</summary>
     public static bool IsCustom(TerminalTheme? theme) => theme is not null && theme.Id.StartsWith("custom-", StringComparison.Ordinal);
 
+    /// <summary>Ein Schema aus einem Erweiterungspaket (<c>pack-…</c>) – es kommt und geht mit seinem Paket.</summary>
+    public static bool IsFromPack(string? id) => id is not null && id.StartsWith("pack-", StringComparison.Ordinal);
+
     /// <summary>So viele eigene Schemata merkt sich die App.</summary>
     public const int MaxCustom = 50;
 }

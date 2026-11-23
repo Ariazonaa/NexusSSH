@@ -149,7 +149,87 @@ public sealed class MockServerMonitor : IServerMonitor, IDisposable
             InstalledKeys.Add(publicKey);
         }
 
+        _authorizedVersion++;
         return Task.CompletedTask;
+    }
+
+    /// <summary>Beispiel: Schlüssel, die schon in <c>authorized_keys</c> stehen; <see cref="InstalledKeys"/> kommen dahinter.</summary>
+    public List<ServerKey> AuthorizedSamples { get; } =
+    [
+        new(1, "ssh-ed25519", 256, "SHA256:Zk3m8Qv0x1ZgT7dCm0kKqv3s4bqk0mWcVqk2m9o0y3o", "me@workstation", string.Empty, string.Empty),
+        new(2, "ssh-rsa", 4096, "SHA256:Qe0m4b9y1T6cX2s8VvJk3rP5nL7aZ0dW1uH9gF4iO2E", "backup@nas", "from=\"10.0.0.0/8\",no-pty", string.Empty),
+    ];
+
+    private int _authorizedVersion;
+
+    public Task<IReadOnlyList<ServerKeyFile>> AuthorizedKeysAsync()
+    {
+        var keys = AuthorizedSamples.Select((key, index) => key with { Line = (uint)index + 1 }).ToList();
+        foreach (var line in InstalledKeys)
+        {
+            var parts = line.Split(' ', 3);
+            keys.Add(new ServerKey((uint)keys.Count + 1, parts[0], null, FingerprintOfLine(line), parts.ElementAtOrDefault(2) ?? string.Empty, string.Empty, string.Empty));
+        }
+
+        IReadOnlyList<ServerKeyFile> files = [new ServerKeyFile("/home/demo/.ssh/authorized_keys", true, false, $"v{_authorizedVersion}", keys, string.Empty)];
+        return Task.FromResult(files);
+    }
+
+    public Task RemoveAuthorizedKeyAsync(ServerKeyFile file, ServerKey key)
+    {
+        if (file.Version != $"v{_authorizedVersion}")
+        {
+            throw new RemoteFileException("the file changed since it was read", "changed");
+        }
+
+        _authorizedVersion++;
+        if (AuthorizedSamples.FindIndex(sample => sample.Fingerprint == key.Fingerprint) is >= 0 and var index)
+        {
+            AuthorizedSamples.RemoveAt(index);
+        }
+        else
+        {
+            InstalledKeys.RemoveAll(line => FingerprintOfLine(line) == key.Fingerprint);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task AddAuthorizedKeyAsync(ServerKeyFile file, string publicKey)
+    {
+        if (file.Version != $"v{_authorizedVersion}")
+        {
+            throw new RemoteFileException("the file changed since it was read", "changed");
+        }
+
+        // Über SFTP: Auch ein Konto ohne Befehle darf das.
+        if (!InstalledKeys.Contains(publicKey))
+        {
+            InstalledKeys.Add(publicKey);
+        }
+
+        _authorizedVersion++;
+        return Task.CompletedTask;
+    }
+
+    /// <summary>Für Tests: Jemand anderes ändert die Datei, nachdem sie gelesen wurde.</summary>
+    public void ChangeAuthorizedKeysElsewhere() => _authorizedVersion++;
+
+    // Fingerabdruck wie bei OpenSSH: SHA-256 der Bytes des Schlüssels, Base64 ohne Füllzeichen. Die Beispielschlüssel
+    // (kein echtes Base64) tragen ihren eigenen.
+    private static string FingerprintOfLine(string line)
+        => MockBackend.SampleKeys.FirstOrDefault(sample => sample.PublicKey == line)?.Fingerprint ?? FingerprintOf(line.Split(' ').ElementAtOrDefault(1));
+
+    private static string FingerprintOf(string? blob)
+    {
+        try
+        {
+            return blob is null ? string.Empty : "SHA256:" + Convert.ToBase64String(System.Security.Cryptography.SHA256.HashData(Convert.FromBase64String(blob))).TrimEnd('=');
+        }
+        catch (FormatException)
+        {
+            return string.Empty;
+        }
     }
 
     public ServerStats? Current => _current;

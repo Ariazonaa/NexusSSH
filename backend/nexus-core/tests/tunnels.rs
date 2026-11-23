@@ -66,7 +66,9 @@ fn connect(fixture: &Fixture, session: u64, profile: &str) {
     });
 }
 
-/// Wartet, bis die letzte Meldung zu diesem Tunnel den Zustand nennt, und liefert sie.
+/// Wartet, bis die letzte Meldung zu diesem Tunnel den Zustand nennt, und liefert sie. Scheitert es, nennt die
+/// Meldung die Zeile des Aufrufers (`track_caller`), nicht diese.
+#[track_caller]
 fn wait_state(fixture: &Fixture, tunnel: &str, state: &str) -> Value {
     let deadline = Instant::now() + Duration::from_secs(15);
     loop {
@@ -183,6 +185,21 @@ fn a_tunnel_is_switched_on_and_off_and_says_why_it_cannot_listen() {
     fixture.ok(json!({ "op": "tunnel.set", "session": 1, "tunnel": "db", "on": true }));
     fixture.ok(json!({ "op": "tunnel.set", "session": 1, "tunnel": "db", "on": false }));
     wait_state(&fixture, "db", "stopped");
+    assert!(is_closed(here));
+    fixture.ok(json!({ "op": "tunnel.set", "session": 1, "tunnel": "db", "on": true }));
+    wait_state(&fixture, "db", "listening");
+    assert_eq!(talk(TcpStream::connect(("127.0.0.1", here)).unwrap()), "echo:hello");
+
+    // Schnell hintereinander: Es gilt die letzte Anfrage, auch wenn die Tasks, die sie ausführen, sich überholen
+    // (CI 2026-11-22 unter Windows: ein spätes „an“ schaltete den Tunnel nach dem „aus“ wieder ein).
+    for _ in 0..5 {
+        fixture.ok(json!({ "op": "tunnel.set", "session": 1, "tunnel": "db", "on": false }));
+        fixture.ok(json!({ "op": "tunnel.set", "session": 1, "tunnel": "db", "on": true }));
+    }
+    fixture.ok(json!({ "op": "tunnel.set", "session": 1, "tunnel": "db", "on": false }));
+    wait_state(&fixture, "db", "stopped");
+    std::thread::sleep(Duration::from_millis(500));
+    assert_eq!(wait_state(&fixture, "db", "stopped")["state"], "stopped");
     assert!(is_closed(here));
     fixture.ok(json!({ "op": "tunnel.set", "session": 1, "tunnel": "db", "on": true }));
     wait_state(&fixture, "db", "listening");

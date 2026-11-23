@@ -151,12 +151,36 @@ pub(crate) fn script(body: &str) -> String {
 /// nicht jeder endet das Skript –, und der Rückgabewert sagt, wie die letzte Anweisung ausging (`$?` gleich danach
 /// merken: Jede weitere Abfrage überschreibt es). Die Zeilenumbrüche halten einen Kommentar am Ende des Textes vom
 /// Schluss des Skripts fern.
+///
+/// **Der Rückgabewert steht zusätzlich am Ende der Ausgabe** ([`STATUS_MARK`], gelesen von [`take_status`]): Ist die
+/// Anmelde-Shell von OpenSSH Windows PowerShell 5.1 (`DefaultShell`), läuft die Zeile in `powershell -c`, und das
+/// meldet nach einem gescheiterten Programm nur 1, nicht dessen Wert – aus `cmd /c exit 3` wurde 1 (gefunden
+/// 2026-11-21 an der Windows-VM auf dem Dedi). Unter `cmd.exe` stimmte der Wert schon vorher.
 pub(crate) fn user_command(text: &str) -> String {
     command(&format!(
         "$ProgressPreference='SilentlyContinue';[Console]::OutputEncoding=[Text.Encoding]::UTF8;\n\
          {text}\n\
-         $nxOk=$?;if($nxOk){{exit 0}};if($LASTEXITCODE){{exit $LASTEXITCODE}};exit 1"
+         $nxOk=$?;$nxCode=if($nxOk){{0}}elseif($LASTEXITCODE){{$LASTEXITCODE}}else{{1}};\
+         [Console]::Out.Write(\"`n\"+[char]30+'{STATUS_WORD}'+$nxCode);exit $nxCode"
     ))
+}
+
+/// Davor steht der Rückgabewert am Ende der Ausgabe eines Befehls der App ([`user_command`]): ein Zeilenumbruch, das
+/// Zeichen 30 (Record Separator) und dieses Wort.
+const STATUS_WORD: &str = "nexus-status:";
+
+/// Die Marke samt Zeilenumbruch, wie sie in der Ausgabe steht.
+const STATUS_MARK: &str = "\n\u{1e}nexus-status:";
+
+/// Nimmt den Rückgabewert, den [`user_command`] ans Ende der Ausgabe schreibt, aus `stdout` heraus; die Ausgabe ist
+/// danach, wie der Befehl sie schrieb. `None`, wenn keiner dasteht (der Befehl endete selbst mit `exit`, oder die
+/// Frist lief ab) – dann gilt, was der Server meldet. Wie jeder Rückgabewert eine Angabe der Gegenseite.
+pub(crate) fn take_status(stdout: &mut String) -> Option<u32> {
+    let at = stdout.rfind(STATUS_MARK)?;
+    let code: i64 = stdout[at + STATUS_MARK.len()..].trim_end().parse().ok()?;
+    stdout.truncate(at);
+    // Wie Windows ihn meldet: als vorzeichenloser Wert (aus -1073741819 wird 3221225477).
+    Some(code as i32 as u32)
 }
 
 /// Womit Windows PowerShell seine Fehlerausgabe als CLIXML beginnt.
@@ -498,7 +522,9 @@ mod tests {
         );
     }
 
-    /// Führt das echte PowerShell dieses Rechners aus, über `cmd` wie bei OpenSSH unter Windows.
+    /// Führt das echte PowerShell dieses Rechners aus – über `cmd` wie bei OpenSSH unter Windows, und über
+    /// `powershell -c` wie mit Windows PowerShell als Anmelde-Shell (`DefaultShell`). Dort meldet der Prozess nach
+    /// einem gescheiterten Programm nur 1; der Wert am Ende der Ausgabe stimmt in beiden Fällen.
     #[cfg(windows)]
     #[test]
     fn a_command_of_the_app_ends_with_the_status_powershell_gives() {
@@ -509,11 +535,51 @@ mod tests {
             ("Write-Output 'a' # ein Kommentar am Ende", 0),
             ("cmd /c exit 3; Write-Output 'a'", 0),
         ] {
-            let ran = std::process::Command::new("cmd")
-                .args(["/c", &user_command(text)])
+            let line = user_command(text);
+            let ran = std::process::Command::new("cmd").args(["/c", &line]).output().unwrap();
+            assert_eq!(ran.status.code(), Some(status), "{text}");
+            let mut stdout = String::from_utf8_lossy(&ran.stdout).into_owned();
+            assert_eq!(take_status(&mut stdout), Some(status as u32), "{text}");
+
+            let ran = std::process::Command::new("powershell")
+                .args(["-NoProfile", "-c", &line])
                 .output()
                 .unwrap();
-            assert_eq!(ran.status.code(), Some(status), "{text}");
+            let mut stdout = String::from_utf8_lossy(&ran.stdout).into_owned();
+            assert_eq!(
+                take_status(&mut stdout),
+                Some(status as u32),
+                "PowerShell als Anmelde-Shell: {text}"
+            );
+            assert!(!stdout.contains("nexus-status"), "{stdout}");
+        }
+    }
+
+    #[test]
+    fn the_status_at_the_end_of_the_output_is_taken_and_the_output_stays_as_written() {
+        let mut stdout = "über\r\n\n\u{1e}nexus-status:3".to_owned();
+        assert_eq!(take_status(&mut stdout), Some(3));
+        assert_eq!(stdout, "über\r\n");
+
+        // Ohne Zeilenende davor, mit Zeilenende danach, negativ wie ein Absturz unter Windows.
+        let mut stdout = "a\n\u{1e}nexus-status:-1073741819\r\n".to_owned();
+        assert_eq!(take_status(&mut stdout), Some(3_221_225_477));
+        assert_eq!(stdout, "a");
+
+        // Nur die letzte Marke zählt; was der Befehl selbst so schrieb, bleibt Ausgabe.
+        let mut stdout = "\n\u{1e}nexus-status:7\nmehr\n\u{1e}nexus-status:0".to_owned();
+        assert_eq!(take_status(&mut stdout), Some(0));
+        assert_eq!(stdout, "\n\u{1e}nexus-status:7\nmehr");
+
+        // Keine Marke (der Befehl endete selbst mit `exit`), oder keine Zahl dahinter: nichts genommen.
+        for text in [
+            "nur Ausgabe\n",
+            "x\n\u{1e}nexus-status:",
+            "x\n\u{1e}nexus-status:3 und mehr",
+        ] {
+            let mut stdout = text.to_owned();
+            assert_eq!(take_status(&mut stdout), None, "{text}");
+            assert_eq!(stdout, text);
         }
     }
 

@@ -79,6 +79,8 @@ public sealed partial class ShellViewModel
         ["SoundTransferDone"] = (() => SoundTransferDone == Defaults.SoundTransferDone, () => SoundTransferDone = Defaults.SoundTransferDone),
         ["SoundsOnlyInBackground"] = (() => SoundsOnlyInBackground == Defaults.SoundsOnlyInBackground, () => SoundsOnlyInBackground = Defaults.SoundsOnlyInBackground),
         ["BellTab"] = (() => BellTab == Defaults.BellTab, () => BellTab = Defaults.BellTab),
+        ["ActivityTab"] = (() => ActivityTab == Defaults.ActivityTab, () => ActivityTab = Defaults.ActivityTab),
+        ["SilenceSeconds"] = (() => SilenceSeconds == Defaults.SilenceSeconds, () => SilenceSeconds = Defaults.SilenceSeconds),
         ["BellSound"] = (() => BellSound == Defaults.BellSound, () => BellSound = Defaults.BellSound),
         ["BellTaskbar"] = (() => BellTaskbar == Defaults.BellTaskbar, () => BellTaskbar = Defaults.BellTaskbar),
         ["TerminalNotices"] = (() => TerminalNotices == Defaults.TerminalNotices, () => TerminalNotices = Defaults.TerminalNotices),
@@ -126,6 +128,7 @@ public sealed partial class ShellViewModel
                 PasteTabs = Defaults.PasteTabs;
             }
         ),
+        ["PasteAlwaysAsk"] = (() => PasteAlwaysAsk == Defaults.PasteAlwaysAsk, () => PasteAlwaysAsk = Defaults.PasteAlwaysAsk),
         ["SnippetSuggestions"] = (() => SnippetSuggestions == Defaults.SnippetSuggestions, () => SnippetSuggestions = Defaults.SnippetSuggestions),
         ["OptionSuggestions"] = (() => OptionSuggestions == Defaults.OptionSuggestions, () => OptionSuggestions = Defaults.OptionSuggestions),
         ["PathSuggestions"] = (() => PathSuggestions == Defaults.PathSuggestions, () => PathSuggestions = Defaults.PathSuggestions),

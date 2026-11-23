@@ -119,22 +119,30 @@ impl Tunnels {
         }
     }
 
-    /// Hält einen Tunnel an. Verbindungen, die schon durch ihn laufen, bleiben bestehen, bis sie selbst enden.
+    /// Hält einen Tunnel an. Verbindungen, die schon durch ihn laufen, bleiben bestehen, bis sie selbst enden. Meldet
+    /// „stopped“ auch, wenn er gar nicht lief (gescheitert, schon aus) – die App soll nicht auf einem alten Zustand
+    /// stehen bleiben.
     pub(crate) async fn stop(&self, link: &Link, id: &str) {
-        let Some(running) = lock(&self.running).remove(id) else {
-            return;
-        };
-        for task in &running.tasks {
-            task.abort();
-        }
+        let running = lock(&self.running).remove(id);
+        if let Some(running) = running {
+            for task in &running.tasks {
+                task.abort();
+            }
 
-        if let Some((address, port)) = running.remote {
-            lock(&self.remotes).remove(&port);
-            let _ = timeout(OPEN_TIMEOUT, link.cancel_forward(address, port)).await;
-        }
+            // Den Port gibt erst das Ende der Task frei, die den Lauscher hält – nicht schon `abort`. Ohne das Warten
+            // fand ein gleich folgendes „an“ ihn noch belegt (CI 2026-11-22: „port … is already in use“).
+            for task in running.tasks {
+                let _ = task.await;
+            }
 
-        if let Some(shared) = self.shared.upgrade() {
-            shared.release_tunnel(&self.profile, id);
+            if let Some((address, port)) = running.remote {
+                lock(&self.remotes).remove(&port);
+                let _ = timeout(OPEN_TIMEOUT, link.cancel_forward(address, port)).await;
+            }
+
+            if let Some(shared) = self.shared.upgrade() {
+                shared.release_tunnel(&self.profile, id);
+            }
         }
 
         self.emit(id, "stopped", None);

@@ -206,7 +206,7 @@ public sealed partial class SessionTabsView : UserControl
 
         Shell.ActiveSession = session;
         var menu = new MenuFlyout();
-        foreach (var id in (string[])["terminal.splitRight", "terminal.splitDown", "terminal.unsplit", "session.rename", "session.duplicate", "session.pin", "session.unpin", "session.detach", "session.reattach", "session.disconnect", "session.reconnect", "session.keep", "session.disconnectAll", "session.reconnectAll", "terminal.save", "terminal.log", "terminal.broadcast", "session.moveLeft", "session.moveRight", "session.close", "session.closeOthers"])
+        foreach (var id in (string[])["terminal.splitRight", "terminal.splitDown", "terminal.unsplit", "session.rename", "session.duplicate", "session.pin", "session.unpin", "session.detach", "session.reattach", "session.disconnect", "session.reconnect", "session.keep", "session.disconnectAll", "session.reconnectAll", "terminal.save", "terminal.log", "terminal.broadcast", "session.watchSilence", "session.unwatchSilence", "session.moveLeft", "session.moveRight", "session.close", "session.closeOthers"])
         {
             if (Shell.Commands.FirstOrDefault(command => command.Id == id) is not { IsAvailable: true } command)
             {

@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using NexusSSH.Core.Localization;
 using NexusSSH.Core.Models;
+using NexusSSH.Core.Plugins;
 using NexusSSH.Core.Services;
 using NexusSSH.Core.Settings;
 
@@ -101,6 +102,8 @@ public sealed partial class ShellViewModel
             return;
         }
 
+        PluginSessionEvent(session, PluginEvent.Disconnected);
+
         var seconds = (int)Math.Clamp((Now() - since).TotalSeconds, 0, int.MaxValue);
         var record = new ConnectionRecord(session.Profile.Name, session.Profile.Address, since, seconds, end);
         History.Insert(0, record);
@@ -117,6 +120,7 @@ public sealed partial class ShellViewModel
         if (session.State == ConnectionState.Connected && !_connectedSince.ContainsKey(session))
         {
             NoteConnected(session);
+            PluginSessionEvent(session, PluginEvent.Connected);
             if (!session.IsVirtual)
             {
                 Sound(SoundEvent.Connected);

@@ -116,6 +116,12 @@ public sealed class AppSettings
     /// <summary>Beim Einfügen Tabulatoren durch Leerzeichen ersetzen – sonst lösen sie in der Shell die Vervollständigung aus.</summary>
     public bool PasteTabs { get; set; }
 
+    /// <summary>
+    /// Vor dem Einfügen mehrerer Zeilen immer fragen. Sonst fragt die App nur, wenn die Shell das eingeklammerte
+    /// Einfügen nicht eingeschaltet hat (dort führt sie jede Zeile sofort aus); von Haus aus aus.
+    /// </summary>
+    public bool PasteAlwaysAsk { get; set; }
+
     /// <summary>Regeln zum Hervorheben im Terminal, eine je Zeile (<see cref="TerminalHighlights"/>). Leer: keine.</summary>
     public string Highlights { get; set; } = string.Empty;
 
@@ -268,6 +274,17 @@ public sealed class AppSettings
 
     /// <summary>Die Glocke kennzeichnet den Reiter, bis er angesehen wird.</summary>
     public bool BellTab { get; set; } = true;
+
+    /// <summary>Neue Ausgabe in einem Tab, der nicht zu sehen ist, kennzeichnet den Reiter mit einem Punkt.</summary>
+    public bool ActivityTab { get; set; } = true;
+
+    /// <summary>
+    /// So lange (Sekunden) muss eine Sitzung, auf deren Stille der Benutzer achten lässt, nichts ausgegeben haben, bis
+    /// die App es meldet (<see cref="ViewModels.ShellViewModel.SilenceSeconds"/>: 5 bis 600).
+    /// </summary>
+    public int SilenceSeconds { get; set; } = DefaultSilenceSeconds;
+
+    public const int DefaultSilenceSeconds = 15;
 
     /// <summary>Die Glocke lässt die Taskleiste blinken, wenn das Fenster nicht vorn ist.</summary>
     public bool BellTaskbar { get; set; }
@@ -544,7 +561,10 @@ public sealed class AppSettings
 
         // Die Datei kann von Hand geändert sein: Ein eigenes Schema gilt nur, wenn jede seiner Farben eine ist.
         CustomThemes = [.. (CustomThemes ?? []).Where(ThemeImport.IsValid).DistinctBy(theme => theme.Id).Take(TerminalThemes.MaxCustom)];
-        TerminalTheme = TerminalThemes.Find(TerminalTheme, CustomThemes).Id;
+        // Ein Schema aus einem Paket (pack-…) prüft erst die App, wenn sie die Pakete gelesen hat.
+        TerminalTheme = TerminalThemes.IsFromPack(TerminalTheme) && TerminalTheme.Length <= 96 && TerminalTheme.All(c => char.IsAsciiLetterLower(c) || char.IsAsciiDigit(c) || c == '-')
+            ? TerminalTheme
+            : TerminalThemes.Find(TerminalTheme, CustomThemes).Id;
         Accent = AccentColors.Find(Accent).Id;
         TerminalFont = TerminalThemes.Font(TerminalFont);
         Highlights = TerminalHighlights.Limit(Highlights);
@@ -722,6 +742,18 @@ public sealed record SavedWindow(int Tab, WindowBounds? Bounds);
 /// </summary>
 public sealed record Snippet(string Name, string Text, bool Run, string Folder = "")
 {
+    /// <summary>
+    /// Die Kennung des Erweiterungspakets, aus dem der Befehl stammt; leer bei einem eigenen. Ein Befehl aus einem
+    /// Paket ist nur lesbar und läuft erst nach Freigabe (<see cref="ViewModels.ShellViewModel.RunSnippet"/>). Wird
+    /// nie gespeichert – die Befehle der Pakete stehen in den Paketen.
+    /// </summary>
+    [JsonIgnore]
+    public string Pack { get; init; } = string.Empty;
+
+    /// <summary>Ob der Befehl aus einem Paket stammt.</summary>
+    [JsonIgnore]
+    public bool IsFromPack => Pack.Length > 0;
+
     public override string ToString() => Name;
 }
 

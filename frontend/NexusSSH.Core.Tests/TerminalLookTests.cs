@@ -19,6 +19,7 @@ public sealed class TerminalLookTests
         Assert.Equal(new TerminalLook("block", true, 1.0, 0, true), TerminalLook.From(settings));
         Assert.True(settings.PasteClean);
         Assert.False(settings.PasteTabs);
+        Assert.False(settings.PasteAlwaysAsk);
     }
 
     [Theory]
@@ -79,7 +80,7 @@ public sealed class TerminalLookTests
     {
         var look = new TerminalLook("underline", false, 1.4, 2, true);
 
-        var message = JsonDocument.Parse(TerminalMessages.Options(TerminalThemes.All[0], 14, [], look: look, pasteClean: false, pasteTabs: true)).RootElement;
+        var message = JsonDocument.Parse(TerminalMessages.Options(TerminalThemes.All[0], 14, [], look: look, pasteClean: false, pasteTabs: true, pasteAlwaysAsk: true)).RootElement;
 
         var sent = message.GetProperty("look");
         Assert.Equal("underline", sent.GetProperty("cursorStyle").GetString());
@@ -89,6 +90,7 @@ public sealed class TerminalLookTests
         Assert.True(sent.GetProperty("ligatures").GetBoolean());
         Assert.False(message.GetProperty("pasteClean").GetBoolean());
         Assert.True(message.GetProperty("pasteTabs").GetBoolean());
+        Assert.True(message.GetProperty("pasteAlwaysAsk").GetBoolean());
 
         // Ohne Angabe schickt die App keine Form: Die Seite bleibt bei dem, was sie hat.
         Assert.False(JsonDocument.Parse(TerminalMessages.Options(TerminalThemes.All[0], 14, [])).RootElement.TryGetProperty("look", out _));

@@ -273,6 +273,31 @@ fn the_key_file_reader_survives_anything() {
 }
 
 #[test]
+fn the_reader_of_plugins_survives_anything() {
+    let module = wat::parse_str(
+        r#"(module (memory (export "memory") 1)
+            (func (export "nx_alloc") (param i32) (result i32) i32.const 0)
+            (func (export "nx_call") (param i32 i32) (result i64) i64.const 0))"#,
+    )
+    .unwrap();
+    hammer(
+        "plugin",
+        &[
+            module.as_slice(),
+            b"\0asm\x01\0\0\0",
+            b"\0asm\x01\0\0\0\0\x0d\x0cnexus-plugin{}",
+        ],
+    );
+}
+
+#[test]
+fn the_reader_of_authorized_keys_survives_anything() {
+    let samples = fuzzing::authorized_keys_samples();
+    let seeds: Vec<&[u8]> = samples.iter().map(Vec::as_slice).collect();
+    hammer("authorized_keys", &seeds);
+}
+
+#[test]
 fn the_reader_of_what_mosh_server_says_survives_anything() {
     hammer(
         "mosh_bootstrap",

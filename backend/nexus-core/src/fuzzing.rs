@@ -5,10 +5,10 @@
 //! werden sie von `tests/fuzz.rs` (läuft bei jedem `cargo test` mit) und von den Zielen unter `backend/fuzz`
 //! (`cargo fuzz`, nur unter Linux). Die App ruft nichts davon auf.
 
-use crate::{exec, ftp, keyfiles, metered, monitor, shellfs, sshconfig, telnet, tunnels, x11};
+use crate::{authkeys, exec, ftp, keyfiles, metered, monitor, plugins, shellfs, sshconfig, telnet, tunnels, x11};
 
 /// Die Namen aller Eingänge, wie [`run`] sie kennt.
-pub const TARGETS: [&str; 11] = [
+pub const TARGETS: [&str; 13] = [
     "sshconfig",
     "telnet",
     "monitor",
@@ -20,6 +20,8 @@ pub const TARGETS: [&str; 11] = [
     "keyfile",
     "sftp_stream",
     "mosh_bootstrap",
+    "authorized_keys",
+    "plugin",
 ];
 
 /// Reicht `data` an den Eingang mit diesem Namen; ein unbekannter Name tut nichts.
@@ -36,6 +38,8 @@ pub fn run(target: &str, data: &[u8]) {
         "keyfile" => key_file(data),
         "sftp_stream" => sftp_stream(data),
         "mosh_bootstrap" => mosh_bootstrap(data),
+        "authorized_keys" => authorized_keys(data),
+        "plugin" => plugin(data),
         _ => {}
     }
 }
@@ -194,6 +198,22 @@ pub fn socks_request(data: &[u8]) {
 /// Passphrase entsperren – auch mit dem eigenen Leser für PuTTYs Format.
 pub fn key_file(data: &[u8]) {
     keyfiles::exercise(&String::from_utf8_lossy(data));
+}
+
+/// Eine Datei `authorized_keys` vom Server: Zeilen lesen (Optionen mit Anführungszeichen, Kommentare, Kaputtes) und
+/// jede gefundene wieder entfernen.
+pub fn authorized_keys(data: &[u8]) {
+    authkeys::exercise(data);
+}
+
+/// Ein Plugin (WebAssembly mit Beschreibung): lesen und prüfen, ohne es auszuführen.
+pub fn plugin(data: &[u8]) {
+    plugins::exercise(data);
+}
+
+/// Echte Eingaben für [`authorized_keys`]: frisch erzeugte Schlüssel, nichts eingecheckt.
+pub fn authorized_keys_samples() -> Vec<Vec<u8>> {
+    authkeys::samples()
 }
 
 /// Echte Eingaben für [`key_file`]: ein frisch erzeugter Schlüssel in beiden Formaten. Erzeugt statt eingecheckt –
